@@ -34,15 +34,14 @@ int main(void){
   assert(out==sample(tables[t][row],phase)&&o.phase==phase+12345);checks++;
   o.phase=phase;calcFmBlock(&o,tables[t],&mod,&out,1,1);
   assert(out==sample(tables[t][row],phase+(1u<<19))&&o.phase==phase+12345);checks++;
-  if(t==0 && !(f==2 && (i==511 || i==1023))){
-   /* Zero PWM tests both reads at wrap; half-cycle offset tests the second
-      saw near wrap without the existing out-of-range float->uint case. */
-   float pwm=i<512?1.f:0.f;
-   uint32_t p2=phase+pwm*(UINT32_MAX/2);
+  if(t==0) for(unsigned setting=0;setting<128;setting++){
+   float pwm=setting/127.f;
+   uint32_t offset=(uint32_t)((double)pwm*2147483648.0);
+   uint32_t p2=phase+offset;
    o.phase=phase;calcPwmBlock(&o,&out,1,1,pwm);
    assert(out==__QSUB16(sample(sawTable[row],phase),sample(sawTable[row],p2)));checks++;
-   o.phase=phase;mod=0;calcPwmFmBlock(&o,&mod,&out,1,1,pwm);
-   assert(out==__QSUB16(sample(sawTable[row],phase),sample(sawTable[row],p2)));checks++;
+   o.phase=phase;mod=1;calcPwmFmBlock(&o,&mod,&out,1,1,pwm);
+   assert(out==__QSUB16(sample(sawTable[row],phase+(1u<<19)),sample(sawTable[row],phase+(1u<<19)+offset)));checks++;
   }
  }
  printf("Wavetable wrap: %u sample comparisons across all rows, normal/FM/PWM paths pass.\n",checks);

@@ -185,13 +185,16 @@ IN_ITCM_RAM void calcFmBlock(OscInfo* osc, const int16_t table[][1024], int16_t*
 //-----------------------------------------------------------
 void calcPwmFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain, const float pwm)
 {
+	// PWM is normalized to [0,1] by normal control paths. Convert only the
+	// offset, then use unsigned addition for defined modulo-2^32 phase wrap.
+	const uint32_t pwmOffset = (uint32_t)(pwm * (UINT32_MAX/2));
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
 		const uint32_t oscPhase = osc->phase;
 		int16_t oscOut ;
 		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<19);
-		const uint32_t index2 = index + pwm * (UINT32_MAX/2);
+		const uint32_t index2 = index + pwmOffset;
 
 		 uint32_t  itg	 = index>>22;
 		 uint32_t  itg2 = index2>>22;
@@ -655,6 +658,9 @@ void calcSampleOscBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const fl
 //-----------------------------------------------------------
 IN_ITCM_RAM void calcPwmBlock(OscInfo* osc, int16_t* buf, uint8_t size ,const float gain, const float pwm)
 {
+	// PWM is normalized to [0,1] by normal control paths. Convert only the
+	// offset, then use unsigned addition for defined modulo-2^32 phase wrap.
+	const uint32_t pwmOffset = (uint32_t)(pwm * (UINT32_MAX/2));
 
 
 
@@ -662,7 +668,7 @@ IN_ITCM_RAM void calcPwmBlock(OscInfo* osc, int16_t* buf, uint8_t size ,const fl
 	for(i=0;i<size;i++)
 	{
 		const uint32_t oscPhase = osc->phase;
-		const uint32_t oscPhase2 = osc->phase + pwm * (UINT32_MAX/2);
+		const uint32_t oscPhase2 = oscPhase + pwmOffset;
 		int16_t oscOut ;
 		uint32_t  itg	= oscPhase>>22;
 		uint32_t  itg2	= oscPhase2>>22;
