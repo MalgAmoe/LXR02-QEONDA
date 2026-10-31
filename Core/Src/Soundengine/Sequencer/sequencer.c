@@ -47,6 +47,20 @@ void seq_setPendingPatternActive();
 uint8_t seq_prescaleCounter = 0;
 
 uint8_t seq_masterStepCnt=0;				/** keeps track of the played steps between 0 and 127 independent from the track counters*/
+static volatile uint8_t seq_performanceBreak = 0;
+
+uint8_t seq_isPerformanceBreak(void)
+{
+	return seq_performanceBreak;
+}
+
+void seq_setPerformanceBreak(uint8_t held)
+{
+	if(seq_performanceBreak == (held != 0)) return;
+	seq_performanceBreak = held != 0;
+	led_setValue(seq_performanceBreak, led_idx2StepLed(7));
+}
+
 uint8_t seq_rollRate = 1;				//start with roll rate = 1/16
 uint8_t seq_rollState = 0;					/**< each bit represents a voice. if bit is set, roll is active*/
 
@@ -1125,7 +1139,7 @@ void seq_processFlam(uint8_t idx)
 			uint8_t currentActive 	= (currentStepPattern 	& (1UL<<(23-idx)) ) != 0;
 			uint8_t nextActive 		= (nextStepPattern 		& (1UL<<(23-idx)) ) != 0;
 
-			if(nextActive)
+			if(nextActive && !seq_performanceBreak)
 			{
 				lastWasNoteOn[track] = 1;
 				chokeNext = 1;
@@ -1133,7 +1147,7 @@ void seq_processFlam(uint8_t idx)
 				const uint8_t note = seq_patternSet.seq_subStepPattern[seq_activePattern][track][nextStep].note;
 				seq_triggerVoice(track,vol,note);
 			}
-			else if((currentActive) && (chokeNext == 0))
+			else if((currentActive) && (chokeNext == 0) && !seq_performanceBreak)
 			{
 				lastWasNoteOn[track] = 1;
 				chokeCurrent = 1;
@@ -1141,7 +1155,7 @@ void seq_processFlam(uint8_t idx)
 				const uint8_t note = seq_patternSet.seq_subStepPattern[seq_activePattern][track][currentStep].note;
 				seq_triggerVoice(track,vol,note);
 			}
-			else if((prevActive) && (chokeNext == 0) && (chokeCurrent == 0))
+			else if((prevActive) && (chokeNext == 0) && (chokeCurrent == 0) && !seq_performanceBreak)
 			{
 				lastWasNoteOn[track] = 1;
 				const uint8_t vol = seq_patternSet.seq_subStepPattern[seq_activePattern][track][prevStep].volume&STEP_VOLUME_MASK;
@@ -1955,6 +1969,7 @@ void seq_resetPosition()
 //------------------------------------------------------------------------------
 void seq_setRunning(uint8_t isRunning)
 {
+	if(!isRunning) seq_setPerformanceBreak(0);
 	seq_running = isRunning;
 	//jump to 1st step if sequencer is stopped
 	if(!seq_running)

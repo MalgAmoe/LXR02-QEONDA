@@ -79,3 +79,7 @@ lxr_add_host_test(test_play_debounce
     SOURCES test_play_debounce.c
     FIRMWARE_SOURCES Core/Src/IO/DIO.c
 )
+
+add_test(NAME test_performance_break
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_performance_break.py)

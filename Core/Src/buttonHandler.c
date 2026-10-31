@@ -31,6 +31,8 @@
 //needed to return to the previously shown page when seq mode button is released
 //static uint8_t lastActivePage = 0;
 static uint8_t lastActiveSubPage = 0;
+// Own the eventual release even if modifiers/mode change while held.
+static uint8_t performanceBreakButtonHeld = 0;
 /** selected step for sequencer mode*/
 uint8_t buttonHandler_selectedStep = 0; //TODO is this the same as parameter PAR_ACTIVE_STEP
 static uint8_t selectedStepLed = LED_STEP1;
@@ -398,10 +400,10 @@ static void buttonHandler_handleModeButtons(uint8_t mode) {
 	{
 		if (buttonHandler_getShift()) {
 			//set the new mode
-			buttonHandler_stateMemory.selectButtonMode = (uint8_t) ((mode + 4) & 0x07);
+			buttonHandler_setMode((uint8_t) ((mode + 4) & 0x07));
 		} else {
 			//set the new mode
-			buttonHandler_stateMemory.selectButtonMode = (uint8_t) (mode & 0x07);
+			buttonHandler_setMode((uint8_t) (mode & 0x07));
 		}
 
 		//kind of ugly...
@@ -425,6 +427,7 @@ static void buttonHandler_handleModeButtons(uint8_t mode) {
 		led_setMode2(buttonHandler_stateMemory.selectButtonMode);
 
 		led_clearSequencerLeds();
+		led_setValue(seq_isPerformanceBreak(), led_idx2StepLed(7));
 		led_clearSelectLeds();
 //		led_initPatternSelectLeds();
 
@@ -449,7 +452,7 @@ static void buttonHandler_handleModeButtons(uint8_t mode) {
 
 		if(menu_activePage < 7) //already in voice/edit mode
 		{
-			buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_STEP;
+			buttonHandler_setMode(SELECT_MODE_STEP);
 			//update the status LED
 			led_setMode2(buttonHandler_stateMemory.selectButtonMode);
 
@@ -848,7 +851,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			break;
 
 		case SEQ_FX:
-			buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_FX;
+			buttonHandler_setMode(SELECT_MODE_FX);
 			led_clearAllBlinkLeds();
 			led_setBlinkLed(LED_STEP15,1);
 			menu_switchPage(FX_MODE_PAGE);
@@ -862,13 +865,13 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 
 		case SEQ_SONG:
 			//--> enter song mode
-			buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_SONG;
+			buttonHandler_setMode(SELECT_MODE_SONG);
 			menu_switchPage(SONG_MODE_PAGE);
 			break;
 		case SEQ_PATTERN: //Pattern
 
 			//--> pattern select mode
-			buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_PATTERN;
+			buttonHandler_setMode(SELECT_MODE_PATTERN);
 			menu_switchPage(PATTERN_LOAD_PAGE);
 
 			break;
@@ -898,7 +901,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			break;
 
 		case SEQ_CONFIG: //config
-			buttonHandler_stateMemory.selectButtonMode = SEQ_CONFIG;
+			buttonHandler_setMode(SEQ_CONFIG);
 			led_clearAllBlinkLeds();
 			led_setBlinkLed(LED_STEP12,1);
 			menu_switchPage(MENU_MIDI_PAGE);
@@ -919,7 +922,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			}
 			if(buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_LAST_STEP_TRACK) buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_LAST_STEP_ALL;
 			//else if(buttonHandler_stateMemory.selectButtonMode == SEQ_LAST_STEP_ALL) buttonHandler_stateMemory.selectButtonMode = SEQ_LAST_STEP_SINGLE_TRACK;
-			else buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_LAST_STEP_TRACK;
+			else buttonHandler_setMode(SELECT_MODE_LAST_STEP_TRACK);
 			menu_switchPage(MENU_LAST_STEP_PAGE);
 
 
@@ -964,7 +967,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				led_setMode2(2);
 				led_clearAllBlinkLeds();
 				led_setBlinkLed(LED_STEP8,1);
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_LOAD;
+				buttonHandler_setMode(SELECT_MODE_LOAD);
 				menu_switchPage(LOAD_PAGE);
 				break;
 			case SEQ_MORPH: //morph
@@ -973,7 +976,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				led_setMode2(2);
 				led_clearAllBlinkLeds();
 				led_setBlinkLed(LED_STEP9,1);
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_LOAD;
+				buttonHandler_setMode(SELECT_MODE_LOAD);
 				menu_switchPage(LOAD_PAGE);
 				break;
 
@@ -981,14 +984,14 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 
 #if 1
 				//--> pattern select mode
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_PATTERN;
+				buttonHandler_setMode(SELECT_MODE_PATTERN);
 				menu_switchPage(PATTERN_LOAD_PAGE);
 #else
 				//update the status LED
 				led_setMode2(2);
 				led_clearAllBlinkLeds();
 				led_setBlinkLed(LED_STEP16,1);
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_LOAD;
+				buttonHandler_setMode(SELECT_MODE_LOAD);
 				menu_switchPage(LOAD_PAGE);
 				menu_setLoadSaveCategory(SAVE_TYPE_PATTERN);
 #endif
@@ -1000,7 +1003,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				led_setMode2(2);
 				led_clearAllBlinkLeds();
 				led_setBlinkLed(LED_STEP10,1);
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_LOAD;
+				buttonHandler_setMode(SELECT_MODE_LOAD);
 				menu_switchPage(LOAD_PAGE);
 				break;
 			case SEQ_PROJECT: //Performance
@@ -1010,7 +1013,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				led_setMode2(2);
 				led_clearAllBlinkLeds();
 				led_setBlinkLed(LED_STEP11,1);
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_LOAD;
+				buttonHandler_setMode(SELECT_MODE_LOAD);
 				menu_switchPage(LOAD_PAGE);
 				break;
 
@@ -1049,7 +1052,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				led_setMode2(3);
 				led_clearAllBlinkLeds();
 				led_setBlinkLed(LED_STEP8,1);
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_SAVE;
+				buttonHandler_setMode(SELECT_MODE_SAVE);
 				menu_switchPage(SAVE_PAGE);
 				break;
 			case SEQ_MORPH: //morph
@@ -1058,13 +1061,13 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				led_setMode2(3);
 				led_clearAllBlinkLeds();
 				led_setBlinkLed(LED_STEP9,1);
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_SAVE;
+				buttonHandler_setMode(SELECT_MODE_SAVE);
 				menu_switchPage(SAVE_PAGE);
 				break;
 /*
 			case SEQ_PATTERN: //Pattern
 				//--> pattern select mode
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_PATTERN;
+				buttonHandler_setMode(SELECT_MODE_PATTERN);
 				menu_switchPage(PATTERN_SAVE_PAGE);
 				break;
 				*/
@@ -1078,7 +1081,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				led_clearAllBlinkLeds();
 				led_setBlinkLed(LED_STEP16,1);
 				//buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_SAVE;
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_PATTERN;
+				buttonHandler_setMode(SELECT_MODE_PATTERN);
 				menu_switchPage(PATTERN_SAVE_PAGE);
 				menu_setLoadSaveCategory(SAVE_TYPE_PATTERN);
 				break;
@@ -1090,7 +1093,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				led_setMode2(3);
 				led_clearAllBlinkLeds();
 				led_setBlinkLed(LED_STEP10,1);
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_SAVE;
+				buttonHandler_setMode(SELECT_MODE_SAVE);
 				menu_switchPage(SAVE_PAGE);
 				break;
 			case SEQ_PROJECT: //Performance
@@ -1099,7 +1102,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				led_setMode2(3);
 				led_clearAllBlinkLeds();
 				led_setBlinkLed(LED_STEP11,1);
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_SAVE;
+				buttonHandler_setMode(SELECT_MODE_SAVE);
 				menu_switchPage(SAVE_PAGE);
 				break;
 
@@ -1210,7 +1213,12 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			break;
 
 
-		case SELECT_MODE_PERF: //--- buttons 1-8 initiate a manual roll
+		case SELECT_MODE_PERF: //--- buttons 1-7 roll; button 8 holds a pattern break
+			if(seqButtonPressed == 7) {
+				performanceBreakButtonHeld = 1;
+				seq_setPerformanceBreak(1);
+				break;
+			}
 			if (seqButtonPressed < 8) {
 				//turn roll on
 				frontPanel_sendData(SEQ_CC, SEQ_ROLL_ON_OFF,
@@ -1285,8 +1293,17 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 	} // is shift being held down
 }
 //--------------------------------------------------------
+static uint8_t buttonHandler_releasePerformanceBreak(uint8_t button)
+{
+	if(button != 7 || !performanceBreakButtonHeld) return 0;
+	performanceBreakButtonHeld = 0;
+	seq_setPerformanceBreak(0);
+	return 1;
+}
+
 static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 {
+	if(buttonHandler_releasePerformanceBreak(seqButtonPressed)) return;
 
 	uint8_t ledNr = led_idx2StepLed(seqButtonPressed);
 
@@ -1376,7 +1393,7 @@ static void buttonHandler_selectButtonPressed(uint8_t partNr)
 	if(buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_STEP)
 	{
 				led_clearAllBlinkLeds();
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_VOICE;
+				buttonHandler_setMode(SELECT_MODE_VOICE);
 				//update the status LED
 				led_setMode2(SELECT_MODE_VOICE);
 				//set menu to voice page mode
@@ -1453,7 +1470,7 @@ static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 	if(buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_STEP)
 	{
 				led_clearAllBlinkLeds();
-				buttonHandler_stateMemory.selectButtonMode = SELECT_MODE_VOICE;
+				buttonHandler_setMode(SELECT_MODE_VOICE);
 				//update the status LED
 				led_setMode2(SELECT_MODE_VOICE);
 				//set menu to voice page mode
@@ -2215,6 +2232,8 @@ uint8_t buttonHandler_getMode() {
 //--------------------------------------------------------------
 void buttonHandler_setMode(uint8_t mode)
 {
+	if(mode != SELECT_MODE_PERF && performanceBreakButtonHeld)
+		seq_setPerformanceBreak(0);
 	buttonHandler_stateMemory.selectButtonMode = mode;
 }
 //--------------------------------------------------------------

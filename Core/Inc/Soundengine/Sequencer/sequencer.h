@@ -259,6 +259,8 @@ void seq_sendStepInfoToFront(uint16_t stepNr);
 //------------------------------------------------------------------------------
 //void seq_sendMainStepInfoToFront(uint16_t stepNr);
 //------------------------------------------------------------------------------
+void seq_setPerformanceBreak(uint8_t held);
+uint8_t seq_isPerformanceBreak(void);
 void seq_setRoll(uint8_t voice, uint8_t onOff);
 //------------------------------------------------------------------------------
 void seq_setRollRate(uint8_t rate);

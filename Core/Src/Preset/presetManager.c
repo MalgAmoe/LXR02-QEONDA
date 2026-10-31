@@ -2673,6 +2673,7 @@ void preset_loadProjectNames(uint8_t projectNr)
 //----------------------------------------------------
 FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 {
+	seq_setPerformanceBreak(0);
 	FRESULT res;
 	FILINFO fno;
 	char text[17];
