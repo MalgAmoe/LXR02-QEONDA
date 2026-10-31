@@ -112,16 +112,24 @@ int main(void){
 """
 if case != "midi": run(preview)
 parser=implementation('Core/Src/Soundengine/MIDI/MidiParser.c')
+if 'midiParser_handleStatusByte' in parser:
+    framing = extract(parser,'midiParser_handleStatusByte')
+    state = 'static uint8_t parserState,checkMIDIprocPAR_t; static int8_t checkMIDIprocPAR; static MidiMsg midiMsg_tmp;'
+    reset = 'memset(&midiMsg_tmp,0,sizeof midiMsg_tmp);parserState=MIDI_STATUS;'
+else:
+    framing = (root/'Core/Src/Soundengine/MIDI/MidiStream.c').read_text()
+    framing += extract(parser,'midiParser_resetUart')
+    state = 'static MidiDecoder dinDecoder; static void uart_abortMidiSource(uint8_t source){(void)source;} static void usb_abortMidiSource(uint8_t source){(void)source;}'
+    reset = 'midiParser_resetUart();'
 c=r'''
 #include "Soundengine/MIDI/MidiMessages.h"
+#include "Soundengine/MIDI/MidiStream.h"
 #include <assert.h>
 #include <string.h>
 enum {MIDI_STATUS,MIDI_DATA1,MIDI_DATA2,SYSEX_DATA,IGNORE};
-static uint8_t parserState,checkMIDIprocPAR_t;
-static int8_t checkMIDIprocPAR;
-static MidiMsg midiMsg_tmp,received[32];static unsigned count;
+static MidiMsg received[32];static unsigned count;
 static void midiParser_parseMidiMessage(MidiMsg m){assert(count<32);received[count++]=m;}
-'''+extract(parser,'midiParser_handleStatusByte')+extract(parser,'midiParser_parseUartData')+r'''
+'''+state+framing+extract(parser,'midiParser_parseUartData')+r'''
 int main(void){
  unsigned char stream[]={0x90,60,0xf8,100,61,0xfa,110};
  for(unsigned i=0;i<sizeof stream;i++)midiParser_parseUartData(stream[i]);
@@ -130,14 +138,20 @@ int main(void){
  assert(received[1].status==0x90&&received[1].data1==60&&received[1].data2==100);
  assert(received[2].status==0xfa&&received[2].bits.length==0);
  assert(received[3].status==0x90&&received[3].data1==61&&received[3].data2==110);
- count=0;memset(&midiMsg_tmp,0,sizeof midiMsg_tmp);parserState=MIDI_STATUS;
+ count=0;RESET_DECODER;
  unsigned char sysex[]={0xf0,1,0xf8,2,0xf7};
  for(unsigned i=0;i<sizeof sysex;i++)midiParser_parseUartData(sysex[i]);
  assert(count==5&&received[2].status==0xf8&&!received[2].bits.sysxbyte);
  assert(received[3].bits.sysxbyte&&received[3].status==2);
+ count=0;RESET_DECODER;
+ unsigned char common[]={0x90,60,100,0xf3,4,61,101,0xf6,62,102};
+ for(unsigned i=0;i<sizeof common;i++)midiParser_parseUartData(common[i]);
+ assert(count==3);
+ assert(received[1].status==0xf3&&received[1].bits.length==1&&received[1].data1==4);
+ assert(received[2].status==0xf6&&received[2].bits.length==0);
  return 0;}
 '''
-if case != "seq": run(c)
+if case != "seq": run(c.replace("RESET_DECODER;",reset))
 # Both callers explicitly emit MIDI; low-level voice triggering must not duplicate it.
 voice=(root/'Core/Src/Soundengine/MIDI/MidiVoiceControl.c').read_text()
 assert 'seq_sendMidiNoteOn' not in extract(voice,'voiceControl_noteOn')

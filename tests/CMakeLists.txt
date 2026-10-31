@@ -130,3 +130,28 @@ add_test(NAME test_wavetable_wrap
 add_test(NAME test_external_clock
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_external_clock.py)
+
+lxr_add_host_test(test_midi_stream
+    SOURCES test_midi_stream.c
+    FIRMWARE_SOURCES Core/Src/Soundengine/MIDI/MidiStream.c
+)
+add_test(NAME test_midi_uart
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_midi_uart.py)
+
+add_test(NAME test_midi_usb_rx
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_midi_usb_rx.py)
+
+add_test(NAME test_midi_usb_tx_adapter
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_midi_usb_tx_adapter.py)
+
+lxr_add_host_test(test_midi_usb_tx
+    SOURCES test_midi_usb_tx.c
+    FIRMWARE_SOURCES Core/Src/Soundengine/MIDI/MidiUsbTx.c
+                     Core/Src/Soundengine/MIDI/MidiStream.c
+)
+
+add_test(NAME test_midi_routing
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_midi_routing.py)

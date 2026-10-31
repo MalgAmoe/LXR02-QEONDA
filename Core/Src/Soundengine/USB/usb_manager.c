@@ -12,152 +12,125 @@
  *  Created on: 26.10.2012
  *      Author: Julian Schmidt
  */
+#include "Soundengine/MIDI/MidiUsbRx.h"
+#include "Soundengine/MIDI/MidiUsbTx.h"
+#include "Soundengine/MIDI/Uart.h"
 #include "Soundengine/USB/usb_manager.h"
 #include <string.h>
 #include "usbd_cdc_if.h"
 
 
+/* Only queue operations use PRIMASK. Submission excludes the USB IRQ alone;
+ * the claim also prevents a higher-priority producer from submitting twice. */
+static volatile uint8_t submitting, inFlight;
 
-
-enum {
-	USB_NOT_DETECTED,
-	USB_DETECTED,
-};
-//USBD_HandleTypeDef           USB_OTG_dev;
-//-------------------------------------------------------------------------------
-#if 0
-void usb_init()
+void usb_midiReset(void)
 {
-#if HAL_USB
-	  if (USBD_Init(&hUsbDeviceFS, &FS_Desc, DEVICE_FS) != USBD_OK)
-	  {
-	    Error_Handler();
-	  }
-	  if (USBD_RegisterClass(&hUsbDeviceFS, &USBD_CDC) != USBD_OK)
-	  {
-	    Error_Handler();
-	  }
-	  if (USBD_CDC_RegisterInterface(&hUsbDeviceFS, &USBD_Interface_fops_FS) != USBD_OK)
-	  {
-	    Error_Handler();
-	  }
-	  if (USBD_Start(&hUsbDeviceFS) != USBD_OK)
-	  {
-	    Error_Handler();
-	  }
-#else
-
-	  usb_start();
-#endif
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    midi_usb_tx_reset(&midiUsbTx);
+    inFlight = 0;
+    /* Do not touch the decoder: foreground may be inside midi_decode(). */
+    midiUsbRx.read = midiUsbRx.write;
+    midiUsbRx.lost = 1;
+    __set_PRIMASK(mask);
 }
-//-------------------------------------------------------------------------------
-void usb_stop()
+
+void usb_midiTxComplete(void)
 {
-	//stop usb port
-	USBD_DeInit(&USB_OTG_dev);
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    if(inFlight) {
+        midi_usb_tx_complete(&midiUsbTx);
+        inFlight = 0;
+    }
+    __set_PRIMASK(mask);
 }
-#endif
-//-------------------------------------------------------------------------------
-void usb_tick()
+
+void usb_tick(void) { usb_flushMidi(); }
+
+void usb_flushMidi(void)
 {
-	usb_flushMidi();
+    uint32_t mask = __get_PRIMASK();
+    /* Never invoke the USB stack under a caller's global interrupt lock. */
+    if(mask) return;
+    __disable_irq();
+    if(submitting || inFlight) { __set_PRIMASK(mask); return; }
+    submitting = 1;
+    __set_PRIMASK(mask);
+
+    uint32_t enabled = NVIC_GetEnableIRQ(OTG_FS_IRQn);
+    NVIC_DisableIRQ(OTG_FS_IRQn);
+    __DSB(); __ISB();
+    mask = __get_PRIMASK();
+    __disable_irq();
+    uint16_t length = midi_usb_tx_stage(&midiUsbTx);
+    if(length) inFlight = 1; /* Before submission: tolerate synchronous completion. */
+    __set_PRIMASK(mask);
+    uint8_t result = length ? CDC_Transmit_FS(midiUsbTx.stage, length) : USBD_OK;
+    mask = __get_PRIMASK();
+    __disable_irq();
+    if(result != USBD_OK) inFlight = 0; /* BUSY retains the immutable stage. */
+    __set_PRIMASK(mask);
+    if(enabled) NVIC_EnableIRQ(OTG_FS_IRQn);
+    mask = __get_PRIMASK();
+    __disable_irq();
+    submitting = 0;
+    __set_PRIMASK(mask);
 }
-//-------------------------------------------------------------------------------
-#if 0
-void usb_start()
+
+static void sendMidi(MidiMsg msg, uint8_t source)
 {
-	//zero init the usb receive buffer
-	memset(usb_MidiMessages,0, sizeof(MidiMsg)*USB_MIDI_INPUT_BUFFER_SIZE);
-
-	//start usb port
-	 USBD_Init(&USB_OTG_dev,
-	            &USR_desc,
-				DEVICE_FS);
-
-	 if (USBD_RegisterClass(&USB_OTG_dev, &MIDI_cb) != USBD_OK)
-
-	 // if (USBD_CDC_RegisterInterface(&USB_OTG_dev, &USBD_Interface_fops_FS) != USBD_OK)
-	  {
-		//Error_Handler();
-	  }
-	  if (USBD_Start(&USB_OTG_dev) != USBD_OK)
-	  {
-		//Error_Handler();
-	  }
+    MidiEvent e = {msg.status, msg.bits.length, {msg.data1, msg.data2}, msg.bits.sysxbyte};
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    midi_usb_tx_push(&midiUsbTx, &e, source);
+    __set_PRIMASK(mask);
 }
-#endif
-//-------------------------------------------------------------------------------
-/*
- * writes a byte to the Usb Tx buffer
- * Will be send out by the usb_flushMidi() call
- */
-void usb_sendByte(uint8_t byte)
-{
-
-	*usb_MidiInWrPtr++ = byte;
-	if(usb_MidiInWrPtr >= (usb_MidiInBuff+(TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS)))
-	{
-		usb_MidiInWrPtr = usb_MidiInBuff;
-	}
-
-}
-//------------------------------------------------------------------------------
-/*
- * flush FIFO and send out next block of messages stored in the usb_MidiInBuff
- * called periodically by usb_tick()
- * TODO:  maybe there is a better way to call this automatically by the USB driver when it is ready to TX some more data?
- * probably using the USBD_CDC_TransmitPacket() callback
- */
-void usb_flushMidi()
-{
-
-	//TODO: is this right???
-	const uint8_t len = usb_MidiInWrPtr - usb_MidiInRdPtr;
-	if(len!=0)
-	//if((len != 0) && (USB_OTG_dev.dev.device_status != USB_OTG_SUSPENDED))
-	{
-
-	    /* Flush a Tx FIFO */
-	//    USB_FlushTxFifo (USB_OTG_FS, 15 ); //TODO is this needed? guess not
-	    // transmit next package
-	    // TODO clean up the USB-MIDI transmit buffer handling
-	    CDC_Transmit_FS(usb_MidiInRdPtr, len);
-
-		usb_MidiInRdPtr += len;
-		if(usb_MidiInRdPtr >= (usb_MidiInBuff+(TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS)))
-		{
-			usb_MidiInRdPtr = usb_MidiInBuff;
-		}
-		//usb_MidiInWrPtr=usb_MidiInRdPtr;
-	}
-
-}
-//------------------------------------------------------------------------------
 void usb_sendMidi(MidiMsg msg)
 {
-	//MIDI byte[0] = 4 bits cable number + 4 bits event type code
-	usb_sendByte(msg.status>>4);
-
-	//then the 3 midi message bytes
-	//USB MIDI msg has to be ALWAYS 4 bytes long
-	//even if it is just a single clock byte
-	usb_sendByte(msg.status);
-	usb_sendByte(msg.data1);
-	usb_sendByte(msg.data2);
+    sendMidi(msg, msg.bits.source == midiSourceMIDI ? 1 : 2);
+}
+void usb_sendMidiOwn(MidiMsg msg)
+{
+    msg.bits.sysxbyte = 0;
+    sendMidi(msg, 3);
+}
+void usb_abortMidiSource(uint8_t source)
+{
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    midi_usb_tx_abort(&midiUsbTx, source);
+    __set_PRIMASK(mask);
 }
 //-------------------------------------------------------------------------------
 uint8_t usb_getMidi(MidiMsg* msg)
 {
-	if(usb_MidiMessagesRead != usb_MidiMessagesWrite)
-	{
-		//we have unprocessed messages in the queue
-		*msg = usb_MidiMessages[usb_MidiMessagesRead];
-
-		usb_MidiMessagesRead++;
-		usb_MidiMessagesRead &= USB_MIDI_INPUT_BUFFER_MASK;
-
-		return 1; //return OK
-	}
-return 0; //no messages
+    for(;;) {
+        uint8_t byte, lost, have;
+        MidiEvent e;
+        uint32_t mask = __get_PRIMASK();
+        __disable_irq();
+        have = midi_usb_rx_take(&midiUsbRx, &byte, &lost);
+        __set_PRIMASK(mask);
+        if(lost) {
+            midi_decode_reset(&midiUsbRx.decoder);
+            uart_abortMidiSource(2);
+            usb_abortMidiSource(2);
+        }
+        if(!have) return 0;
+        /* Abort at the status boundary, even if decoding emits no event
+         * (undefined Common or an incomplete channel message). */
+        if(midiUsbRx.decoder.sysex && byte >= 0x80 && byte < 0xf8 && byte != 0xf7) {
+            uart_abortMidiSource(2);
+            usb_abortMidiSource(2);
+        }
+        if(!midi_decode(&midiUsbRx.decoder, byte, &e)) continue;
+        memset(msg, 0, sizeof(*msg));
+        msg->status = e.status; msg->data1 = e.data[0]; msg->data2 = e.data[1];
+        msg->bits.length = e.length; msg->bits.sysxbyte = e.sysex;
+        msg->bits.source = midiSourceUSB;
+        return 1;
+    }
 }
 

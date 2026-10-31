@@ -9,6 +9,10 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include <string.h>
+#include "Soundengine/MIDI/MidiStream.h"
+
+
 #include <Soundengine/MIDI/CortexParser.h>
 #include "stm32f7xx_hal.h"
 #include "Soundengine/MIDI/MidiParser.h"
@@ -33,7 +37,10 @@
 
 uint8_t midi_process_block = 0;
 
-static Fifo fifo_midiTx;
+static MidiSerial midiTx;
+static volatile uint8_t midiRxLost;
+volatile uint32_t midiRxLossCount;
+volatile uint32_t midiRxResyncCount;
 static Fifo fifo_midiRx;
 
 static Fifo fifo_frontTx;
@@ -53,6 +60,12 @@ void USART3_IRQHandler(void)
 	
   //if Receive interrupt (rx not empty)
 	__HAL_UART_CLEAR_OREFLAG(&huart3);
+    if(isrflags & (USART_ISR_ORE | USART_ISR_FE | USART_ISR_NE)) {
+        /* Discard pending RX at the loss boundary; ISR never runs the decoder. */
+        fifo_midiRx.read = fifo_midiRx.write;
+        midiRxLost = 1; midiRxLossCount++;
+        WRITE_REG(huart3.Instance->ICR, USART_ICR_FECF | USART_ICR_NCF);
+    }
 
 	if ((isrflags & USART_ISR_RXNE) != RESET)
 	{
@@ -61,8 +74,10 @@ void USART3_IRQHandler(void)
 
 		// put the received data in the RX midi buffer
     // fifo_bufferIn(&fifo_midiRx, data);
-    if (fifo_bufferIn(&fifo_midiRx, data) == 0)
-    {
+    if(!(isrflags & (USART_ISR_ORE | USART_ISR_FE | USART_ISR_NE)) &&
+       !fifo_bufferIn(&fifo_midiRx, data)) {
+        fifo_midiRx.read = fifo_midiRx.write;
+        midiRxLost = 1; midiRxLossCount++;
     }
     //  if (!midi_process_block)
     //  {
@@ -73,7 +88,7 @@ void USART3_IRQHandler(void)
 	//uint8_t test = ;// __HAL_UART_GET_IT(&huart2, UART_IT_TXE);
 	if ((isrflags & USART_ISR_TXE) != RESET)
 	{
-    if (fifo_bufferOut(&fifo_midiTx,&data) == 1) // If there is data in the output buffer to send
+    if (midi_serial_pop(&midiTx,&data) == 1) // If there is data in the output buffer to send
     {
       USART3->TDR = (data & (uint16_t)0x01FF);
     }
@@ -89,34 +104,58 @@ void USART3_IRQHandler(void)
 void uart_processMidi()
 {
     if(!sync_tryControl()) return;
-	uint8_t data;
-	while(fifo_bufferOut(&fifo_midiRx, &data))
-	{
-		midiParser_parseUartData(data);
-	}
+    for(;;) {
+        uint8_t data, lost, have;
+        uint32_t mask = __get_PRIMASK();
+        __disable_irq();
+        lost = midiRxLost; midiRxLost = 0;
+        have = fifo_bufferOut(&fifo_midiRx, &data);
+        __set_PRIMASK(mask);
+        if(lost) {
+            midiParser_resetUart();
+            uart_abortMidiSource(1);
+            midiRxResyncCount++;
+        }
+        if(!have) break;
+        midiParser_parseUartData(data);
+    }
     sync_releaseControl();
 }
-
+void uart_abortMidiSource(uint8_t source)
+{
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    midi_serial_abort(&midiTx, source);
+    __HAL_UART_ENABLE_IT(&huart3, UART_IT_TXE);
+    __set_PRIMASK(mask);
+}
+static void sendMidi(MidiMsg msg, uint8_t source)
+{
+    MidiEvent e = {msg.status, msg.bits.length, {msg.data1, msg.data2}, msg.bits.sysxbyte};
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    midi_serial_push(&midiTx, &e, source);
+    __HAL_UART_ENABLE_IT(&huart3, UART_IT_TXE);
+    __set_PRIMASK(mask);
+}
 void uart_sendMidi(MidiMsg msg)
 {
-	uart_sendMidiByte(msg.status);
-	if(msg.bits.length) {
-		uart_sendMidiByte(msg.data1);
-		if(msg.bits.length > 1)
-			uart_sendMidiByte(msg.data2);
-	}
-
+    sendMidi(msg, msg.bits.source == midiSourceMIDI ? 1 : 2);
 }
-//-----------------------------------------------------------------------------
+void uart_sendMidiOwn(MidiMsg msg)
+{
+    /* Own producers do not create SysEx; older note-off callers leave flags unset. */
+    msg.bits.sysxbyte = 0;
+    sendMidi(msg, 3);
+}
+/* Legacy byte API is not a raw escape hatch around destination ownership. */
 void uart_sendMidiByte(uint8_t data)
 {
-	//put data in the output fifo
-	fifo_bufferIn(&fifo_midiTx,data);
-
-	//enable Transmit Data Register empty interrupt
-	__HAL_UART_ENABLE_IT(&huart3, UART_IT_TXE);
-
-};
+    MidiMsg msg = {0};
+    if(data < 0xf8) return;
+    msg.status = data;
+    uart_sendMidiOwn(msg);
+}
 //-----------------------------------------------------------------------------
 void uart_processFront()
 {
@@ -167,7 +206,9 @@ void uart_sendFrontpanelSysExByte(uint8_t data)
 void initMidiUart()
 {
 	//init the fifo
-	fifo_init(&fifo_midiTx);
+	memset(&midiTx, 0, sizeof(midiTx));
+    midiRxLost = 0;
+    midiParser_resetUart();
 	fifo_init(&fifo_midiRx);
 
 	/*

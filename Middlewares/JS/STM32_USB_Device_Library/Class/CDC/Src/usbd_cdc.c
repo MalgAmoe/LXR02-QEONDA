@@ -56,6 +56,8 @@
   EndBSPDependencies */
 
 /* Includes ------------------------------------------------------------------*/
+#include "Soundengine/MIDI/MidiUsbRx.h"
+#include "Soundengine/USB/usb_manager.h"
 #include "usbd_cdc.h"
 
 #include "usbd_ctlreq.h"
@@ -85,14 +87,6 @@
 //#define USB_MIDI_INPUT_BUFFER_SIZE 	64
 //#define USB_MIDI_INPUT_BUFFER_MASK	0xFF	/**< mask to wrap the read/wrt pointers*/
 
-//buffer for parsed midi messages
-MidiMsg usb_MidiMessages[USB_MIDI_INPUT_BUFFER_SIZE];
-uint8_t usb_MidiMessagesRead = 0;
-uint8_t usb_MidiMessagesWrite = 0;
-
-uint8_t  usb_MidiInBuff [TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS];
-uint8_t* usb_MidiInWrPtr = usb_MidiInBuff;
-uint8_t* usb_MidiInRdPtr = usb_MidiInBuff;
 
 
 /**
@@ -690,6 +684,7 @@ __ALIGN_BEGIN uint8_t USBD_CDC_OtherSpeedCfgDesc[USB_CDC_CONFIG_DESC_SIZ] __ALIG
   */
 static uint8_t  USBD_CDC_Init (USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 {
+  usb_midiReset();
   uint8_t ret = 0U;
   USBD_CDC_HandleTypeDef   *hcdc;
 
@@ -768,6 +763,7 @@ static uint8_t  USBD_CDC_Init (USBD_HandleTypeDef *pdev, uint8_t cfgidx)
   */
 static uint8_t  USBD_CDC_DeInit (USBD_HandleTypeDef *pdev, uint8_t cfgidx)
 {
+  usb_midiReset();
   uint8_t ret = 0U;
 
   /* Close EP IN */
@@ -899,7 +895,7 @@ static uint8_t  USBD_CDC_DataIn (USBD_HandleTypeDef *pdev, uint8_t epnum)
   USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)pdev->pClassData;
   PCD_HandleTypeDef *hpcd = pdev->pData;
 
-  if(pdev->pClassData != NULL)
+  if(pdev->pClassData != NULL && epnum == (CDC_IN_EP & 0x0FU))
   {
     if((pdev->ep_in[epnum].total_length > 0U) && ((pdev->ep_in[epnum].total_length % hpcd->IN_ep[epnum].maxpacket) == 0U))
     {
@@ -912,6 +908,7 @@ static uint8_t  USBD_CDC_DataIn (USBD_HandleTypeDef *pdev, uint8_t epnum)
     else
     {
       hcdc->TxState = 0U;
+      usb_midiTxComplete();
     }
     return USBD_OK;
   }
@@ -930,116 +927,13 @@ static uint8_t  USBD_CDC_DataIn (USBD_HandleTypeDef *pdev, uint8_t epnum)
   */
 static uint8_t  USBD_CDC_DataOut (USBD_HandleTypeDef *pdev, uint8_t epnum)
 {
-  USBD_CDC_HandleTypeDef   *hcdc = (USBD_CDC_HandleTypeDef*) pdev->pClassData;
-
-  /* Get the received data length */
-  hcdc->RxLength = USBD_LL_GetRxDataSize (pdev, epnum);
-
-  /* USB data will be immediately processed, this allow next USB traffic being
-  NAKed till the end of the application Xfer */
-  if(pdev->pClassData != NULL)
-  {
+    USBD_CDC_HandleTypeDef *hcdc = (USBD_CDC_HandleTypeDef*)pdev->pClassData;
+    if(hcdc == NULL) return USBD_FAIL;
+    hcdc->RxLength = USBD_LL_GetRxDataSize(pdev, epnum);
+    /* Copy before Receive rearms the endpoint and permits buffer reuse. */
+    midi_usb_rx_receive(&midiUsbRx, hcdc->RxBuffer, hcdc->RxLength);
     ((USBD_CDC_ItfTypeDef *)pdev->pUserData)->Receive(hcdc->RxBuffer, &hcdc->RxLength);
-
-
-    //process buffer
-    MidiDataUsb usbData;
-    usbData.cin = 1;
-	for(uint8_t i=0;i< hcdc->RxLength && usbData.cin!=0x00;i+=4)
-	{
-		usbData.cin = hcdc->RxBuffer[i];
-		usbData.status = hcdc->RxBuffer[i+1];
-		usbData.data1 = hcdc->RxBuffer[i+2];
-		usbData.data2 = hcdc->RxBuffer[i+3];
-
-		/* reset data in buffer since it might not be completely overwritten */
-		hcdc->RxBuffer[i] = 0;
-
-		uint8_t length=0;
-
-		//TODO MIDI parsing can be improved
-		// we only have cable 0
-		if ((usbData.cin&0xf0) == 0)
-		{
-			// get length and type of message
-			switch(usbData.cin&0x0f) {
-				case CIN_TWO_BYTE_MESSAGE:
-				case CIN_PROG_CHANGE:
-				case CIN_CHAN_PRESS:
-					length = 2;
-					break;
-
-				case CIN_THREE_BYTE_MESSAGE:
-				case CIN_NOTE_OFF:
-				case CIN_NOTE_ON:
-				case CIN_POLY_KEY_PRESS:
-				case CIN_CC:
-				case CIN_PITCH_BEND:
-					length = 3;
-					break;
-
-				case CIN_SYSEX_START:
-					// SYSEX
-					length = 3;
-					break;
-
-				case CIN_SYSEX_END_1:
-					// SYSEX end
-					length = 1;
-					break;
-
-				case CIN_SYSEX_END_2:
-					// SYSEX end
-					length = 2;
-					break;
-
-				case CIN_SYSEX_END_3:
-					// SYSEX end
-					length = 3;
-					break;
-
-				case CIN_SINGLE_BYTE:
-					length = 1;
-					break;
-
-				default:
-					break;
-			}
-		}
-		else
-		{
-			//not our cable
-			//todo: are all messages in this chunk the same cable?
-			//then we could return; here
-
-			//JS: I think it's not guaranteed
-			//But I suppose there are no messages on other cables to be expected
-		}
-
-		if(length != 0)
-		{
-			usb_MidiMessages[usb_MidiMessagesWrite].status	= usbData.status;
-			usb_MidiMessages[usb_MidiMessagesWrite].data1 	= usbData.data1;
-			usb_MidiMessages[usb_MidiMessagesWrite].data2 	= usbData.data2;
-			usb_MidiMessages[usb_MidiMessagesWrite].bits.length = length-1; // we don't count the status byte in our length
-			// --AS todo keep track of sysex mode
-			// if we are in sysex mode, this will be set, and status will contain the current sysex message byte
-			// is it possible for there to be more than one sysex message byte received?
-			usb_MidiMessages[usb_MidiMessagesWrite].bits.sysxbyte = 0;
-			usb_MidiMessages[usb_MidiMessagesWrite].bits.source = midiSourceUSB;
-
-			//increment and wrap write pointer
-			usb_MidiMessagesWrite++;
-			usb_MidiMessagesWrite &= USB_MIDI_INPUT_BUFFER_MASK;
-		}
-	}
-
     return USBD_OK;
-  }
-  else
-  {
-    return USBD_FAIL;
-  }
 }
 
 /**
@@ -1190,8 +1084,9 @@ uint8_t  USBD_CDC_TransmitPacket(USBD_HandleTypeDef *pdev)
       pdev->ep_in[CDC_IN_EP & 0xFU].total_length = hcdc->TxLength;
 
       /* Transmit next packet */
-      USBD_LL_Transmit(pdev, CDC_IN_EP, hcdc->TxBuffer,
+      uint8_t result = USBD_LL_Transmit(pdev, CDC_IN_EP, hcdc->TxBuffer,
                        (uint16_t)hcdc->TxLength);
+      if(result != USBD_OK) { hcdc->TxState = 0U; return result; }
 
       return USBD_OK;
     }

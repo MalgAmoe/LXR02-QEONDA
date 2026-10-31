@@ -125,6 +125,10 @@ c+='static void received(uint8_t status){switch(status){'+dispatch+'default: bre
 c+=r'''
 static unsigned dinQueued,parsedDin,usbQueued,parsedUsb;
 static int fifo_midiRx,injectParser;
+static uint8_t midiRxLost;
+static uint32_t midiRxResyncCount;
+static void midiParser_resetUart(void){assert(!primask);}
+static void uart_abortMidiSource(uint8_t source){(void)source;assert(!primask);}
 static int fifo_bufferOut(int *fifo,uint8_t *data){(void)fifo;if(!dinQueued)return 0;dinQueued--;*data=0;return 1;}
 void uart_processMidi(void);
 static void midiParser_parseUartData(uint8_t data){

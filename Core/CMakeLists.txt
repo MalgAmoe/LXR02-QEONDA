@@ -119,6 +119,7 @@ add_library(lxr_midi OBJECT
     Src/Soundengine/MIDI/MidiParser.c
     Src/Soundengine/MIDI/MidiVoiceControl.c
     Src/Soundengine/MIDI/ParameterArray.c
+    Src/Soundengine/MIDI/MidiStream.c
     Src/Soundengine/MIDI/Uart.c
 )
 
@@ -185,3 +186,8 @@ endif()
 # jump-threads the loop back edge through that switch and duplicates the whole
 # loop body per case (ResonantFilter.c: 2772 B -> 6720 B at -O3, 8028 B at -O2).
 set_property(SOURCE Src/Soundengine/DSPAudio/ResonantFilter.c APPEND PROPERTY COMPILE_OPTIONS -fno-thread-jumps)
+
+# USB RX framing and bounded raw queue.
+target_sources(lxr_midi PRIVATE Src/Soundengine/MIDI/MidiUsbRx.c)
+
+target_sources(lxr_midi PRIVATE Src/Soundengine/MIDI/MidiUsbTx.c)

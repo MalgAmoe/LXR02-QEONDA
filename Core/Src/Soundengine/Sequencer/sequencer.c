@@ -486,10 +486,10 @@ void seq_setNextPattern(const uint8_t patNr)
 static void seq_sendMidi(MidiMsg msg)
 {
 	//send to usb midi
-	usb_sendMidi(msg);
+	usb_sendMidiOwn(msg);
 
 	//send to hardware midi out jack
-	uart_sendMidi(msg);
+	uart_sendMidiOwn(msg);
 
 }
 
@@ -2718,7 +2718,7 @@ static uint8_t seq_isNextStepSyncStep()
 void seq_midiNoteOff(uint8_t chan)
 {
 	uint8_t i;
-	MidiMsg msg;
+	MidiMsg msg = {0};
 
 	// we are not filtering according to tx filter because they might have turned that
 	// setting on while a note was sustaining
@@ -2750,7 +2750,7 @@ void seq_midiNoteOff(uint8_t chan)
 
 static void seq_sendRealtime(const uint8_t status)
 {
-	static MidiMsg msg = {0};
+	MidiMsg msg = {0};
 	// FILT filter out realtime msgs if appropriate
 	if(sync_suppressRealtime() || (midiParser_txRxFilter & (MIDI_FILTER_SYSTEM<<4))==0)
 		return;
@@ -2763,7 +2763,7 @@ static void seq_sendRealtime(const uint8_t status)
  */
 void seq_sendMidiNoteOn(const uint8_t channel, const uint8_t note, const uint8_t veloc)
 {
-	static MidiMsg msg = { .bits = { .length = 2 } };  // status + 2 data bytes
+	MidiMsg msg = { .bits = { .length = 2 } };  // status + 2 data bytes
 	// FILT filter out note msgs if appropriate
 	if((midiParser_txRxFilter & (MIDI_FILTER_NOTES<<4))==0)
 		return;
@@ -2791,7 +2791,7 @@ uint8_t seq_getStepIndex(uint8_t trackNr)
  */
 static void seq_sendProgChg(const uint8_t ptn)
 {
-	static MidiMsg msg = { .bits = { .length = 1 } };  // status + 1 data byte
+	MidiMsg msg = { .bits = { .length = 1 } };  // status + 1 data byte
 
 	// FILT filter out PC msgs if appropriate
 	if((midiParser_txRxFilter & (MIDI_FILTER_PROG_C<<4))==0)

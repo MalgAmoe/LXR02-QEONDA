@@ -23,6 +23,8 @@ extern uint8_t midi_process_block;
 void initMidiUart();
 
 void uart_sendMidi(MidiMsg msg);
+void uart_sendMidiOwn(MidiMsg msg);
+void uart_abortMidiSource(uint8_t source);
 
 void uart_sendMidiByte(uint8_t data);
 //check if there is some received data in the Rx buffer and send it to the midi parser
