@@ -55,7 +55,7 @@ typedef struct ImageFileHeaderStruct
 /* Private define ------------------------------------------------------------*/
 // The CMake build passes FIRMWARE_VERSION from project(VERSION); this is the fallback for STM32CubeIDE.
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION " 2.00"
+#define FIRMWARE_VERSION " 0.1"
 #endif
 //#define f_unmount(path) f_mount(0, path, 0)
 
@@ -351,10 +351,10 @@ int main(void)
 #else
 	//print boot up message
 lcd_clear();
-lcd_string("Sonic Potions");
+lcd_string("LXR QEONDA");
 //goto 2nd line
 lcd_setcursor(0,2);
-lcd_string("LXR2 Drums V");
+lcd_string("Firmware");
 lcd_string(FIRMWARE_VERSION);
 #endif
 
