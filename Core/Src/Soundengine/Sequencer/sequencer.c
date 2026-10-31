@@ -79,7 +79,7 @@ uint8_t seq_activeAutomTrack=0;
 uint8_t seq_delayedSyncStepFlag = 0;		//normally sync steps will only be advanced by external midi clocks in ext. sync mode
 											//if the shuffle needs a delayed sync step, it is indicated here.
 
-uint8_t seq_isSyncExternal = 0;
+volatile uint8_t seq_isSyncExternal = 0;
 uint8_t seq_lastMasterStep[NUM_TRACKS];		//keeps track of the last triggered master sync step of each track
 
 
@@ -94,7 +94,7 @@ static int8_t seq_armedArmedAutomationTrack = -1;
 
 static uint8_t seq_mutedTracks=0;			/**< indicate which tracks are muted */
 uint8_t seq_songModeEnabled=0;
-uint8_t seq_running = 0;					/**<  1 running, 0 if stopped*/
+volatile uint8_t seq_running = 0;					/**<  1 running, 0 if stopped*/
 
 uint8_t seq_activePattern = 0;				/**< the currently playing pattern*/
 uint8_t seq_pendingPattern = 0;				/**< next pattern to play*/
@@ -1535,7 +1535,13 @@ uint8_t seq_getExtSync()
 //------------------------------------------------------------------------------
 void seq_setExtSync(uint8_t isExt)
 {
-	seq_isSyncExternal = isExt;
+	uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    if(seq_isSyncExternal != isExt) {
+        seq_isSyncExternal = isExt;
+        sync_sourceChanged();
+    }
+    __set_PRIMASK(mask);
 }
 //------------------------------------------------------------------------------
 void seq_armAutomationStep(uint8_t stepNr, uint8_t track,uint8_t isArmed)
@@ -1669,44 +1675,18 @@ float seq_getElapsedStepTimePercent()
 	if(seq_getExtSync())
 	{
 
-		if(sync_delayedStepTimer != 0)
-		{
-			if(systick_ticks >= sync_delayedStepTimer)
-			{
-				sync_delayedStepTimer = 0;
-				seq_nextStep();
-				seq_prescaleCounter=0;
-
-				seq_MidiSyncQueue(0);
-			}
-		}
+        if(!sync_tryControl()) return;
+        sync_processAnalogTransport();
+        sync_pollDelayedStep();
 #if !HANDLE_SEQ_IN_CLOCK_INTERRUPT
-			while(trigger_clockReceived != 0) //analogue clock
-			{
-				trigger_clockReceived--;
-
-				//trigger_prescalerClockInput
-				//seq_nextStep();
-
-					uint8_t isStepShuffled = seq_getMasterStepCnt()%2 == 1;
-
-					if(isStepShuffled)
-					{
-						float dt = seq_getDeltaTShuffleDelay(seq_getBpm());
-						sync_delayedStepTimer = systick_ticks + dt;
-					}
-					else
-					{
-						seq_nextStep();
-						//seq_MidiSyncQueue(0);
-						seq_prescaleCounter=0;
-						seq_MidiSyncQueue(0);
-					}
-
-
-				//reset internal clock cycle for next step
-				//seq_prescaleCounter=0;
-			}
+        uint32_t mask = __get_PRIMASK();
+        __disable_irq();
+        uint8_t pulses = trigger_clockReceived;
+        trigger_clockReceived = 0;
+        __set_PRIMASK(mask);
+        while(pulses--) {
+            if(seq_getExtSync() == 1) sync_externalStep();
+        }
 
 			//midi clock flam stuff
 			if(systick_ticks-seq_lastTick >= seq_deltaT)
@@ -1779,6 +1759,7 @@ float seq_getElapsedStepTimePercent()
 
 
 #endif
+        sync_releaseControl();
 	}
 	else
 	{
@@ -1927,6 +1908,7 @@ uint8_t seq_isRunning() {
 //------------------------------------------------------------------------------
 void seq_resetPosition()
 {
+    sync_cancelPending();
 	led_resetBlinkTimer();
 
 	// reset all track rotations to 0. We are not saving rotated value. it's a performance tool.
@@ -1970,7 +1952,11 @@ void seq_resetPosition()
 void seq_setRunning(uint8_t isRunning)
 {
 	if(!isRunning) seq_setPerformanceBreak(0);
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
 	seq_running = isRunning;
+    sync_cancelPending();
+    __set_PRIMASK(mask);
 	//jump to 1st step if sequencer is stopped
 	if(!seq_running)
 	{

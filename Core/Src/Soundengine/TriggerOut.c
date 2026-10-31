@@ -21,6 +21,7 @@
 #include "Soundengine/DSPAudio/medianFilter.h"
 
 #include "main.h"
+#include "Soundengine/Sequencer/clockSync.h"
 
 uint8_t trigger_dividerClockOut1 = PRE_4_PPQ_OUT;
 //uint8_t trigger_dividerClockOut2 = PRE_4_PPQ;
@@ -102,33 +103,19 @@ void EXTI9_5_IRQHandler()
 #else
 
 #if !HANDLE_SEQ_IN_CLOCK_INTERRUPT
-uint8_t trigger_clockReceived = 0;
+volatile uint8_t trigger_clockReceived = 0;
 #endif
 
-#define WINDOW_SIZE 8
-#define WINDOW_MASK 0x07
-static float sync_window[WINDOW_SIZE];
-float trigger_timeLast = 0;
-uint8_t syncTrigger_writePos = 0;
+static SyncPulseHistory trigger_history;
 uint8_t trigger_clockCnt = 0;
 
-//---------------------------------------------------------
-uint16_t trigger_calcBpm(float timePerPulse)
+void trigger_ResetPosition(void)
 {
-	// 1 Minute has 60 * 1000 [ms]
-	//we have 24 pulses per quarter
-	//120 bpm = 120 quarters per minute
-
-	float quarterDuration = 24 * (timePerPulse/4);
-	float bpm = (60 * 1000) / quarterDuration;
-
-	return bpm>0?bpm:1;
-}
-
-void trigger_ResetPosition()
-{
-	trigger_clockCnt = 0;
-
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    trigger_clockCnt = 0;
+    trigger_history.baseline = trigger_history.count = trigger_history.pos = 0;
+    __set_PRIMASK(mask);
 }
 
 //Clock In Interrupt
@@ -151,7 +138,7 @@ void EXTI4_IRQHandler(void)
 			{
 				// 4ppq * 6 = 24ppq
 				syncFactor = 6;
-				trigger_clockReceived++;
+				if(sync_canSchedule() && trigger_clockReceived != UINT8_MAX) trigger_clockReceived++;
 			}
 			else if(trigger_prescalerClockInput == PRE_24_PPQ_IN)
 			{
@@ -159,7 +146,7 @@ void EXTI4_IRQHandler(void)
 
 				if(trigger_clockCnt == 0)
 				{
-					trigger_clockReceived++;
+					if(sync_canSchedule() && trigger_clockReceived != UINT8_MAX) trigger_clockReceived++;
 				}
 
 				trigger_clockCnt++;
@@ -171,22 +158,7 @@ void EXTI4_IRQHandler(void)
 			}
 
 
-				float time = systick_ticks - trigger_timeLast;
-				trigger_timeLast = systick_ticks;
-
-				sync_window[syncTrigger_writePos++] = time/syncFactor;
-				syncTrigger_writePos &= WINDOW_MASK;
-
-				//calc average time in [ms] between midi clock pulses
-				int i;
-				float avg=0;
-				for(i=0;i<WINDOW_SIZE;i++)
-				{
-					avg += sync_window[i];
-				}
-				avg /= WINDOW_SIZE;
-				//based on 24ppq midi resolution
-				seq_setBpm(trigger_calcBpm(avg));
+                sync_measurePulse(&trigger_history, systick_ticks, syncFactor);
 
 #else
 			/*
@@ -239,17 +211,7 @@ void EXTI9_5_IRQHandler(void)
 		if(seq_getExtSync() == 1)
 		{
 			const uint16_t pinState = (Reset_In_EXTI5_GPIO_Port->IDR & Reset_In_EXTI5_Pin);
-			if(!pinState)
-			{
-				//reset pin is high -> stop and reset sequencer
-				seq_setRunning(0);
-				trigger_ResetPosition();
-				seq_resetPosition();
-				trigger_prescaleCounterClockInput = 0;
-			} else {
-				//reset pin is low -> start sequencer
-				seq_setRunning(1);
-			}
+            sync_requestAnalogTransport(pinState != 0);
 		}
 		__HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_5);
 	}

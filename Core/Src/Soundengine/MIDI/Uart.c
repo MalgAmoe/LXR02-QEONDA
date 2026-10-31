@@ -12,6 +12,7 @@
 #include <Soundengine/MIDI/CortexParser.h>
 #include "stm32f7xx_hal.h"
 #include "Soundengine/MIDI/MidiParser.h"
+#include "Soundengine/Sequencer/clockSync.h"
 #include "Soundengine/MIDI/Uart.h"
 #include "Soundengine/FIFO.h"
 #include "Soundengine/config.h"
@@ -87,11 +88,13 @@ void USART3_IRQHandler(void)
 //-----------------------------------------------------------------------------
 void uart_processMidi()
 {
+    if(!sync_tryControl()) return;
 	uint8_t data;
 	while(fifo_bufferOut(&fifo_midiRx, &data))
 	{
 		midiParser_parseUartData(data);
 	}
+    sync_releaseControl();
 }
 
 void uart_sendMidi(MidiMsg msg)

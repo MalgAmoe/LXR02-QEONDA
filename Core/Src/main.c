@@ -48,6 +48,7 @@ typedef struct ImageFileHeaderStruct
 #include "Soundengine/DSPAudio/random.h"
 #include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/MIDI/Uart.h"
+#include "Soundengine/Sequencer/clockSync.h"
 
 /* Private typedef -----------------------------------------------------------*/
 
@@ -986,9 +987,10 @@ lcd_process_display_interrupt = 1;
 
 	  //check if we have some usb midi messages and process them
 	  MidiMsg msg;
-	  if(usb_getMidi(&msg)) {
-		  midiParser_parseMidiMessage(msg);
-	  }
+	  if(sync_tryControl()) {
+          if(usb_getMidi(&msg)) midiParser_parseMidiMessage(msg);
+          sync_releaseControl();
+      }
 
 		//process midi on midi port
 			uart_processMidi();

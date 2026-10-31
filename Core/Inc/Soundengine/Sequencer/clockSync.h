@@ -40,6 +40,20 @@ void sync_tick();
 void sync_midiResetPosition();
 void sync_midiStartStop(uint8_t isStart);
 uint8_t sync_getClockCnt();
-extern uint32_t sync_delayedStepTimer;
+typedef struct {
+    uint32_t last;
+    float window[WINDOW_SIZE];
+    uint8_t baseline, count, pos;
+} SyncPulseHistory;
+void sync_measurePulse(SyncPulseHistory *history, uint32_t now, uint8_t factor);
+uint8_t sync_tryControl(void);
+void sync_releaseControl(void);
+void sync_cancelPending(void);
+void sync_sourceChanged(void);
+void sync_requestAnalogTransport(uint8_t run);
+void sync_processAnalogTransport(void);
+uint8_t sync_canSchedule(void);
+void sync_externalStep(void);
+void sync_pollDelayedStep(void);
 
 #endif /* CLOCKSYNC_H_ */
