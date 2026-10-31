@@ -10,4 +10,5 @@ FRESULT storage_removeDirectory(const char *folder);
 FRESULT storage_recoverProject(unsigned slot);
 typedef FRESULT (*StorageProjectWriter)(void);
 FRESULT storage_saveProject(unsigned slot, StorageProjectWriter writeProject, unsigned char *cleanupWarning);
+FRESULT storage_removeOtherSlotFiles(const char *folder, const char *keep);
 #endif

@@ -119,4 +119,5 @@ void preset_sendDrumsetParametersImmediate();
 uint8_t preset_isNameEmpty(char* name);
 
 extern unsigned char preset_projectCleanupWarning;
+extern unsigned char preset_fileCleanupWarning;
 #endif /* PRESETMANAGER_H_ */

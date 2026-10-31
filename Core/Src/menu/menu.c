@@ -1948,6 +1948,18 @@ void menu_handleSaveScreenKnobValue(uint8_t potNr, uint8_t value)
 
 }
 //-----------------------------------------------------------------
+void menu_showSaveCleanupWarning(void)
+{
+    const uint8_t bg = soundengine_backgroundAudioBegin();
+    lcd_process_display_interrupt = 0;
+    while(sendDisplayBuffer() != 0);
+    lcd_clear(); lcd_home(); lcd_string("Saved");
+    lcd_setcursor(0,2); lcd_string("Cleanup pending");
+    HAL_Delay(2000);
+    lcd_process_display_interrupt = 1;
+    soundengine_backgroundAudioEnd(bg);
+}
+//-----------------------------------------------------------------
 void menu_showSdError(uint8_t res)
 {
 
@@ -2083,6 +2095,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
                                 menu_resetSaveParameters();
                                 return;
                             }
+                            if(preset_fileCleanupWarning) menu_showSaveCleanupWarning();
 
                         }
 							break;
@@ -2110,6 +2123,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
                                 menu_resetSaveParameters();
                                 return;
                             }
+                            if(preset_fileCleanupWarning) menu_showSaveCleanupWarning();
 
 
 							menu_loadedPresetNr[CURRENT_KIT] = menu_selectedPresetNr[SAVE_TYPE_KIT];

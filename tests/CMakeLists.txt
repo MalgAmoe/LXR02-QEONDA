@@ -98,3 +98,11 @@ lxr_add_host_test(test_delay_bounds
     FIRMWARE_SOURCES Core/Src/Soundengine/DSPAudio/FX/Delay.c
                      Core/Src/Soundengine/DSPAudio/1PoleLp.c
 )
+
+add_test(NAME test_control_fixes
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_control_fixes.py)
+lxr_add_host_test(test_slot_files
+    SOURCES test_slot_files.c
+    FIRMWARE_SOURCES Core/Src/Preset/SlotFiles.c
+)

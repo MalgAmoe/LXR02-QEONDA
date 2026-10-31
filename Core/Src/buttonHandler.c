@@ -93,7 +93,7 @@ static void buttonHandler_armTimerActionStep(int8_t stepNr) {
   // for (int i = 0; i < NUM_AUTOMATION_PAR; i++)
   // {
   //   parNr = patSet->seq_subStepPattern[seq_activePattern][0][stepNr].paramNr[i] - 1;
-  //   if (parNr != 254)
+  //   if (parNr != PAR_NONE)
   //   {
   //     buttonHandler_originalValue[i] = activeParameters[parNr];
   //     activeParameters[parNr] = patSet->seq_subStepPattern[seq_activePattern][0][stepNr].paramVal[i];
@@ -1172,6 +1172,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 
 				#endif
                 if(saveResult != FR_OK) { menu_showSdError(saveResult); return; }
+                if(preset_fileCleanupWarning) menu_showSaveCleanupWarning();
 
 
 

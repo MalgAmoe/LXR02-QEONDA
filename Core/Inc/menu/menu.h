@@ -714,4 +714,5 @@ void numtostru(char *buf, uint8_t num);
 // non space padded signed
 //void numtostrs(char *buf, int8_t num);
 
+void menu_showSaveCleanupWarning(void);
 #endif

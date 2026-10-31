@@ -89,6 +89,7 @@ static FRESULT preset_writeFile(FIL *file, const void *data, UINT length, UINT *
     return preset_writeResult;
 }
 unsigned char preset_projectCleanupWarning;
+unsigned char preset_fileCleanupWarning;
 static uint8_t preset_projectWriteActive;
 
 
@@ -878,6 +879,7 @@ void preset_saveDrumsetRam(uint8_t presetNr, uint8_t isMorph)
 //----------------------------------------------------
 FRESULT preset_saveDrumsetSD(uint8_t presetNr, uint8_t isMorph)
 {
+    preset_fileCleanupWarning = 0;
 #if USE_SD_CARD
 	FRESULT res;
 	unsigned int bytesWritten;
@@ -908,7 +910,10 @@ FRESULT preset_saveDrumsetSD(uint8_t presetNr, uint8_t isMorph)
 	//close the file
 	preset_closeFile((FIL*)&SDFile);
 
-	return preset_writeResult;
+	if(preset_writeResult != FR_OK) return preset_writeResult;
+    if(!preset_projectWriteActive && storage_removeOtherSlotFiles("/tmp", filename + 5) != FR_OK)
+        preset_fileCleanupWarning = 1;
+    return FR_OK;
 #else
 #endif
 };
@@ -1647,6 +1652,7 @@ void preset_savePatternTemp(uint8_t presetNr)
 //----------------------------------------------------
 FRESULT preset_savePatternSD(uint8_t presetNr)
 {
+    preset_fileCleanupWarning = 0;
 
 	FRESULT res;
 	UINT bytesWritten;
@@ -1685,7 +1691,10 @@ FRESULT preset_savePatternSD(uint8_t presetNr)
 	//reset the lcd
 	menu_repaintAll();
 	
-	return preset_writeResult;
+	if(preset_writeResult != FR_OK) return preset_writeResult;
+    if(!preset_projectWriteActive && storage_removeOtherSlotFiles("/tmp", filename + 5) != FR_OK)
+        preset_fileCleanupWarning = 1;
+    return FR_OK;
 }
 
 //----------------------------------------------------
@@ -2382,6 +2391,7 @@ FRESULT preset_loadSongSD(uint8_t songNr)
 //----------------------------------------------------
 FRESULT preset_saveSongSD(uint8_t songNr)
 {
+    preset_fileCleanupWarning = 0;
 	FRESULT res;
 	char filename[32];
 	unsigned int bytesWritten;
@@ -2414,6 +2424,10 @@ FRESULT preset_saveSongSD(uint8_t songNr)
 
 	//close the file handle
 	res = preset_closeFile((FIL*)&SDFile);
+    if(res == FR_OK && !preset_projectWriteActive) {
+        if(storage_removeOtherSlotFiles("/tmp", filename + 5) != FR_OK)
+            preset_fileCleanupWarning = 1;
+    }
 	return res;
 }
 
