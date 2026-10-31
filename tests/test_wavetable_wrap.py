@@ -7,11 +7,12 @@ import os,subprocess,tempfile
 helpers=(Path(__file__).parent/'test_control_fixes.py').read_text().split('case=os.environ')[0]
 exec(helpers)
 source=implementation('Core/Src/Soundengine/DSPAudio/Oscillator.c').replace('IN_ITCM_RAM ','')
-functions=''.join(extract(source,n) for n in ('calcWavetableOscBlock','calcFmBlock','calcPwmBlock','calcPwmFmBlock'))
+functions=''.join(extract(source,n) for n in ('calcFmSineBlock','calcWavetableOscBlock','calcFmBlock','calcPwmBlock','calcPwmFmBlock'))
 code=r'''
 #include <stdint.h>
 #include <assert.h>
 #include <stdio.h>
+#include <math.h>
 #include "Soundengine/DSPAudio/wavetable.h"
 #define INTERPOLATE_OSC 1
 #define INTERPOLATE_FM_OSC 1
@@ -44,6 +45,23 @@ int main(void){
    assert(out==__QSUB16(sample(sawTable[row],phase+(1u<<19)),sample(sawTable[row],phase+(1u<<19)+offset)));checks++;
   }
  }
+ /* Model current ARM unsigned conversion: finite negative products become
+    zero. Exhaust every signed16 input, including negative envelope multipliers. */
+ for(int m=-32768;m<=32767;m++)for(unsigned g=0;g<5;g++){
+  const float amounts[]={-1.f,0.f,0.125f,0.5f,1.f};
+  float x=m*amounts[g];uint32_t q=x<0?0:(uint32_t)x;
+  uint32_t phase=0xffe00000u;
+  OscInfo o={phase,12345,10,amounts[g],0};int16_t mod=m,out;
+  calcFmBlock(&o,recTable,&mod,&out,1,1);
+  assert(out==sample(recTable[10],phase+(q<<19)));checks++;
+  o.phase=phase;calcPwmFmBlock(&o,&mod,&out,1,1,1.f);
+  uint32_t index=phase+(q<<19);
+  assert(out==__QSUB16(sample(sawTable[10],index),sample(sawTable[10],index+0x80000000u)));checks++;
+  o.phase=phase;calcFmSineBlock(&o,&mod,&out,1,1);
+  index=phase+(q<<17);unsigned it=index>>20;
+  int16_t expected=sine_table[it]+(int16_t)(((int64_t)(sine_table[it+1]-sine_table[it])*(index&0xfffff))>>20);
+  assert(out==expected);checks++;
+ }
  printf("Wavetable wrap: %u sample comparisons across all rows, normal/FM/PWM paths pass.\n",checks);
 }
 '''
@@ -53,5 +71,5 @@ with tempfile.TemporaryDirectory() as tmp:
  (p/'stm32f7xx_hal.h').write_text('#include <stdint.h>\n')
  (p/'Soundengine/config.h').write_text('#define INDTCM\n')
  (p/'test.c').write_text(code)
- subprocess.run([os.getenv('CC','cc'),'-O2','-fsanitize=address,undefined','-fno-sanitize-recover=all','-I'+tmp,str(p/'test.c'),str(root/'Core/Src/Soundengine/DSPAudio/wavetable.c'),'-o',str(p/'test')],check=True)
+ subprocess.run([os.getenv('CC','cc'),'-O2','-fsanitize=address,undefined','-fno-sanitize-recover=all','-I'+tmp,str(p/'test.c'),str(root/'Core/Src/Soundengine/DSPAudio/wavetable.c'),'-lm','-o',str(p/'test')],check=True)
  subprocess.run([str(p/'test')],check=True)
