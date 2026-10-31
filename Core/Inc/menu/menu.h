@@ -653,6 +653,7 @@ void menu_kitLoaded(uint8_t kitNr);
 //-----------------------------------------------------------------
 //For nonblocking display refreshs
 void menu_tick();
+void menu_uiTick(void);
 //-----------------------------------------------------------------
 //blocking display refresh
 //void menu_fastRefreshDisplay();

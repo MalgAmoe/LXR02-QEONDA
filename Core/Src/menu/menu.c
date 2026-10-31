@@ -1006,6 +1006,11 @@ uint8_t sendDisplayBuffer()
 //-----------------------------------------------------------------
 void menu_tick()
 {
+	sendDisplayBuffer();
+}
+// Page work belongs in foreground, not the highest-priority LCD interrupt.
+void menu_uiTick()
+{
 
 	if((menu_activePage == PATTERN_SAVE_PAGE_OK) || (menu_activePage == KIT_SAVE_PAGE_OK))
 	{
@@ -1040,9 +1045,6 @@ void menu_tick()
 		//TODO could possibly be sped up by aborting and restarting running transfer instead of queing a new one
 	}
 
-
-
-	sendDisplayBuffer();
 }
 //-----------------------------------------------------------------
 void menu_repaintAll()
@@ -2109,7 +2111,9 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 						case SAVE_TYPE_GLO:
 						{
 							FRESULT res;
+							const uint8_t bg = soundengine_backgroundAudioBegin();
 							res = preset_saveGlobals();
+							soundengine_backgroundAudioEnd(bg);
 							if(res != FR_OK) menu_showSdError(res);
 						}
 							break;
@@ -2117,16 +2121,8 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 						case SAVE_TYPE_PROJECT:
 						{
 							FRESULT res;
-							if(!seq_isRunning())
-							{
-								HAL_TIM_Base_Stop(&htim2);	//calc sample interrupt - prio 1
-							}
 
 							res = preset_saveProject(menu_selectedPresetNr[SAVE_TYPE_PROJECT]);
-							if(!seq_isRunning())
-							{
-								  HAL_TIM_Base_Start_IT(&htim2);	//calc sample interrupt - prio 1
-							}
 
 							if(res != FR_OK) menu_showSdError(res);
 						}
@@ -2305,8 +2301,12 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 					break;
 */
 				case SAVE_TYPE_GLO:
+				{
+					const uint8_t bg = soundengine_backgroundAudioBegin();
 					preset_loadGlobals();
-					menu_resetSaveParameters();						
+					soundengine_backgroundAudioEnd(bg);
+					menu_resetSaveParameters();
+				}
 					break;
 #if USE_SAMPLES
 				case SAVE_TYPE_SAMPLES:

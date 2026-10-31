@@ -2465,15 +2465,15 @@ FRESULT preset_saveProject(uint8_t presetNr)
 		}
 	}
 
+	// Finish blocking SD cleanup while background rendering is still active.
+	preset_clearTmpFolder();
 	lcd_process_display_interrupt = 1;
-	preset_initTmpFolder();
 #if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
 			HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
 #else
 
 #endif
 
-			preset_clearTmpFolder();
 
 	return FR_OK;
 
