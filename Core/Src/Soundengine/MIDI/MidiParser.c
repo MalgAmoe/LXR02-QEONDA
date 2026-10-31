@@ -133,6 +133,8 @@ float midiParser_calcDetune(uint8_t value)
 //-----------------------------------------------------------
 static void midiParser_nrpnHandler(uint16_t value)
 {
+	// Wider panel commands are forwarded separately; never alias them to CC2.
+	if(midiParser_activeNrpnNumber > 255) return;
 	MidiMsg msg2;
 	msg2.status = MIDI_CC2;
 	msg2.data1 = midiParser_activeNrpnNumber;
@@ -907,7 +909,8 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 	{
 		const uint16_t paramNr = msg.data1 + 1 + 127;
 
-		if(updateOriginalValue && !isFloatModulator) {
+		if(updateOriginalValue && !isFloatModulator &&
+		   paramNr < sizeof(midiParser_originalCcValues)) {
 			midiParser_originalCcValues[paramNr] = value.itg;
 		}
 		switch(msg.data1)
