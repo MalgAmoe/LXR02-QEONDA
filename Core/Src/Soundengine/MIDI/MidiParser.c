@@ -1886,7 +1886,7 @@ void midiParser_parseMidiMessage(MidiMsg msg)
 					//record automation if record is turned on.
 					//Not bank select: it isn't a sound parameter, and recording it would
 					//replace the step's existing automation with a no-op.
-					if(msg.data1 != CC_BANK_CHANGE)
+					if(msg.data1 != CC_BANK_CHANGE && msg.data1 != NRPN_DATA_ENTRY_COARSE && msg.data1 != NRPN_FINE && msg.data1 != NRPN_COARSE)
 						seq_recordAutomation(frontParser_activeTrack, msg.data1, msg.data2);
 
 					//handle midi data
@@ -1901,9 +1901,10 @@ void midiParser_parseMidiMessage(MidiMsg msg)
 			{
 
 				// respond to CC message. This responds only when global channel or voice channel matches the cc message's channel
-				if((midiParser_txRxFilter & MIDI_FILTER_CC) && ((chanonly == midi_MidiChannels[voiceNr]) || (chanonly == midi_MidiChannels[7]) )) {
-					//record automation if record is turned on
-					seq_recordAutomation(frontParser_activeTrack, msg.data1, msg.data2);
+				if((midiParser_txRxFilter & MIDI_FILTER_CC) && ((chanonly == midi_MidiChannels[voiceNr-1]) || (chanonly == midi_MidiChannels[7]) )) {
+					// Bank select and NRPN control bytes are not sound automation.
+					if(msg.data1 != CC_BANK_CHANGE && msg.data1 != NRPN_DATA_ENTRY_COARSE && msg.data1 != NRPN_FINE && msg.data1 != NRPN_COARSE)
+						seq_recordAutomation(frontParser_activeTrack, msg.data1, msg.data2);
 
 					//handle midi data
 					midiParser_ccHandler(msg,1, 0, 0.f);
@@ -1964,6 +1965,18 @@ volatile static int8_t checkMIDIprocPAR = 0;
 
 void midiParser_parseUartData(unsigned char data)
 {
+    // Realtime can interrupt any message, including SysEx and running status.
+    if(data >= 0xF8)
+    {
+        MidiMsg realtime = midiMsg_tmp;
+        realtime.status = data;
+        realtime.bits.length = 0;
+        realtime.bits.sysxbyte = 0;
+        realtime.bits.source = midiSourceMIDI;
+        midiParser_parseMidiMessage(realtime);
+        return;
+    }
+
   checkMIDIprocPAR_t = ((checkMIDIprocPAR_t^1) & 0x01);
   checkMIDIprocPAR = (int8_t)checkMIDIprocPAR_t - 6;
 
