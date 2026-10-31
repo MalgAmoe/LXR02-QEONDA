@@ -21,6 +21,13 @@
 #include "Soundengine/globals.h"
 #include "Preset/SeqStep.h"
 #include "Parameters.h"
+// Decode the existing stored MIDI-CC target; do not change the file encoding.
+static inline uint16_t seq_automationTarget(uint8_t stored)
+{
+    if(stored == 0 || stored == 255) return PAR_NONE;
+    return stored < 128 ? (uint16_t)(stored - 1) : stored;
+}
+
 
  /**<
   * we have 6 voices

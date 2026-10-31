@@ -34,7 +34,8 @@ c = r'''
 #define SELECT_MODE_PERF 8
 static volatile uint8_t seq_performanceBreak;
 static uint8_t seq_running=1,seq_mutedTracks,seq_activePattern;
-static uint8_t seq_stepIndex[7], lastWasNoteOn[7],chokeCurrent,chokeNext;
+static int8_t seq_stepIndex[7];
+static uint8_t lastWasNoteOn[7],chokeCurrent,chokeNext;
 static uint8_t seq_rollState,seq_rollRate;
 static uint8_t performanceBreakButtonHeld;
 static struct {uint8_t selectButtonMode;} buttonHandler_stateMemory;
@@ -81,6 +82,9 @@ int main(void) {
  hits=0;seq_setPerformanceBreak(0);seq_processFlam(0);assert(hits==7);
  seq_setPerformanceBreak(1);seq_processFlam(0);assert(hits==7);
  seq_setPerformanceBreak(0);seq_processFlam(0);assert(hits==14);
+ for(unsigned t=0;t<7;t++) seq_stepIndex[t]=-1;
+ unsigned negativeBefore=hits;seq_processFlam(0);assert(hits==negativeBefore);
+ for(unsigned t=0;t<7;t++) seq_stepIndex[t]=0;
  /* Manual one-shot and stopped rolls remain live; recording path preserved. */
  seq_setPerformanceBreak(1);seq_rollRate=0xff;
  unsigned before=hits;seq_setRoll(2,1);assert(hits==before+1 && recordings==1);

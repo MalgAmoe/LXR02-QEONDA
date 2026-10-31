@@ -4103,7 +4103,7 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
         overwriteBufNr = 1; // Next overwrite on buf 1
         seq_setActiveAutomationTrack(0);
         buttonHandler_resetLock1 = 1;
-        seq_clearAutomation(0, seq_activePattern, 0);
+        // Replace only the armed step/lane; never clear another track.
         activeParameters[buttonHandler_originalParameter[0]] = buttonHandler_originalValue[0];
         if (buttonHandler_originalParameter[0] < 128) // => Sound Parameter
         {
@@ -4133,7 +4133,7 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
         overwriteBufNr = 0; // Next overwrite on buf 1
         seq_setActiveAutomationTrack(1);
         buttonHandler_resetLock2 = 1;
-        seq_clearAutomation(1, seq_activePattern, 1);
+        // Replace only the armed step/lane; never clear another track.
         activeParameters[buttonHandler_originalParameter[1]] = buttonHandler_originalValue[1];
         if (buttonHandler_originalParameter[1] < 128) // => Sound Parameter
         {

@@ -509,12 +509,13 @@ void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 	uint8_t midiNote; // which midi note to send
 
 	if(voiceNr > 6) return;
+	const int8_t step = seq_stepIndex[voiceNr];
 
 
 #if USE_PATTERN_EDIT_BUFFER
-	seq_parseAutomationNodes(voiceNr, &patternBackupBuffer.seq_subStepPattern[voiceNr][seq_stepIndex[voiceNr]]);
+	if(step >= 0) seq_parseAutomationNodes(voiceNr, &patternBackupBuffer.seq_subStepPattern[voiceNr][step]);
 #else
-	seq_parseAutomationNodes(voiceNr, &seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][seq_stepIndex[voiceNr]]);
+	if(step >= 0) seq_parseAutomationNodes(voiceNr, &seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][step]);
 #endif
 
 	//turn the trigger off before sending the next one
@@ -546,12 +547,9 @@ void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 		//midiNote = midi_NoteOverride[voiceNr];
 		midiNote = activeParameters[PAR_MIDI_NOTE1 + voiceNr];
 
-	//send the new note to midi/usb out
-#if USE_PATTERN_EDIT_BUFFER
-	seq_sendMidiNoteOn(midiChan, midiNote, patternBackupBuffer.seq_subStepPattern[voiceNr][seq_stepIndex[voiceNr]].volume&STEP_VOLUME_MASK);
-#else
-	seq_sendMidiNoteOn(midiChan, midiNote, seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][seq_stepIndex[voiceNr]].volume&STEP_VOLUME_MASK);
-#endif
+    // Match the actual trigger (including rolls and shifted notes), not another step's velocity.
+    seq_sendMidiNoteOn(midiChan, midiNote, vol);
+
 }
 //------------------------------------------------------------------------------
 //has to be called AFTER the last pattern switch is finished, so the playing pattern is properly put into the temp buffer
@@ -1115,6 +1113,7 @@ void seq_processFlam(uint8_t idx)
 
 	for(uint8_t track=0;track<NUM_TRACKS;track++)
 	{
+		if(seq_stepIndex[track] < 0) continue;
 		//if track is not muted
 		if(!(seq_mutedTracks & (1<<track) ) )
 		{
@@ -2321,7 +2320,8 @@ uint8_t seq_isAutomationStepArmed()
 //------------------------------------------------------------------------
 void seq_recordAutomation(uint8_t voice, uint8_t dest, uint8_t value)
 {
-	if(seq_recordActive)
+	if(voice >= NUM_TRACKS) return;
+	if(seq_recordActive && seq_stepIndex[voice] >= 0)
 	{
 		//uint8_t quantizedStep = seq_quantize(seq_stepIndex[voice]);
 		const uint8_t step = seq_stepIndex[voice];
@@ -2381,7 +2381,7 @@ void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note)
 	uint8_t targetPattern;
 	Step *stepPtr;
 	//only record notes when seq is running and recording
-	if(seq_running && seq_recordActive)
+	if(trackNr < NUM_TRACKS && seq_running && seq_recordActive && seq_stepIndex[trackNr] >= 0)
 	{
 		//const int8_t quantizedStep = seq_quantize(seq_stepIndex[trackNr]);
 
