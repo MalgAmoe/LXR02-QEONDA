@@ -69,6 +69,7 @@ static int8_t 	seq_stepIndex[NUM_TRACKS];	/**< we have 16 steps con 4 bars = 64 
 
 static uint16_t seq_tempo = 120;			/**< seq speed in bpm*/
 
+static float seq_midiRemaining;
 static uint32_t	seq_lastTick = 0;			/**< stores the time the last step change occured*/
 uint8_t isStepShuffled=0;
 static float	seq_deltaT;					/**< time in [ms] until the next step
@@ -194,6 +195,7 @@ uint8_t seq_getMasterStepCnt()
 //------------------------------------------------------------------------------
 void seq_init()
 {
+    sync_cancelPending();
 	int i;
 
 	//give active song pointer a proper value
@@ -1689,7 +1691,7 @@ float seq_getElapsedStepTimePercent()
         }
 
 			//midi clock flam stuff
-			if(systick_ticks-seq_lastTick >= seq_deltaT)
+			if(sync_interpolationAllowed() && systick_ticks-seq_lastTick >= seq_deltaT)
 			{
 
 
@@ -1931,6 +1933,7 @@ void seq_resetPosition()
 	seq_songPositionPointer = -1;
 	//so the next seq_tick call will trigger the next step immediately
 	seq_deltaT = 0;
+    seq_midiRemaining = 0;
 	seq_sendRealtime(MIDI_STOP);
 
 	// send notes off on all channels that have notes playing and reset our bitmap to reflect that
@@ -1949,6 +1952,40 @@ void seq_resetPosition()
 		seq_setStepIndexToStart();
 }
 //------------------------------------------------------------------------------
+/* Received transport changes no track, song, master or interpolation index.
+ * Keep only the fractional wait, not a snapshot of musical state. */
+void seq_setMidiRunning(uint8_t run)
+{
+    if(!run) {
+        float elapsed = (float)(uint32_t)(systick_ticks - seq_lastTick);
+        if(sync_interpolationAllowed())
+            seq_midiRemaining = seq_deltaT > elapsed ? seq_deltaT - elapsed : 0;
+    }
+    if(run && sync_interpolationAllowed()) seq_midiRemaining = 0;
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    seq_running = run;
+    __set_PRIMASK(mask);
+}
+
+/* Call only after run/pause/await publication, with interrupts enabled. */
+void seq_midiRunCleanup(uint8_t run)
+{
+    if(!run) {
+        seq_setPerformanceBreak(0);
+        voiceControl_noteOff(0xFF);
+        trigger_reset(0);
+        midiParser_checkMtc();
+    }
+    preset_touchTimer(run ? PRESET_STOP_PAT_TIMER : PRESET_PAT_TIMER);
+}
+
+void seq_midiClockAnchor(void)
+{
+    seq_lastTick = systick_ticks;
+    seq_deltaT = seq_midiRemaining;
+}
+
 void seq_setRunning(uint8_t isRunning)
 {
 	if(!isRunning) seq_setPerformanceBreak(0);
@@ -2715,7 +2752,7 @@ static void seq_sendRealtime(const uint8_t status)
 {
 	static MidiMsg msg = {0};
 	// FILT filter out realtime msgs if appropriate
-	if((midiParser_txRxFilter & (MIDI_FILTER_SYSTEM<<4))==0)
+	if(sync_suppressRealtime() || (midiParser_txRxFilter & (MIDI_FILTER_SYSTEM<<4))==0)
 		return;
 	msg.status=status;
 	seq_sendMidi(msg);

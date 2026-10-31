@@ -36,6 +36,9 @@
  */
 
 //called by midi clock
+uint8_t sync_suppressRealtime(void);
+uint8_t sync_interpolationAllowed(void);
+uint8_t sync_phasePaused(void);
 void sync_tick();
 void sync_midiResetPosition();
 void sync_midiStartStop(uint8_t isStart);

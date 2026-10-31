@@ -24,6 +24,39 @@ static uint32_t sync_delayedStepTimer;
 static volatile uint8_t sync_transportPending, sync_transportReset, sync_transportRun;
 static uint8_t sync_clockCnt;
 static SyncPulseHistory sync_midiHistory;
+/* Only received transport freezes musical phase; ordinary stopped clocks keep
+ * their historical divider behavior. Control ownership serializes MIDI work. */
+static volatile uint8_t sync_midiPaused, sync_midiAwaitClock;
+static uint8_t sync_receivedReset;
+static uint8_t sync_savedDelayed;
+static uint32_t sync_savedDelay;
+
+uint8_t sync_phasePaused(void) { return sync_midiPaused; }
+uint8_t sync_suppressRealtime(void) { return sync_receivedReset; }
+uint8_t sync_interpolationAllowed(void)
+{
+    return !sync_midiPaused && !sync_midiAwaitClock;
+}
+
+static uint8_t sync_resumeClock(void)
+{
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    uint8_t restored = 0;
+    if(sync_midiAwaitClock && seq_isRunning()) {
+        sync_midiAwaitClock = 0;
+        /* Scalar timestamp/delta publication only; no sequencer/kit work. */
+        seq_midiClockAnchor();
+        if(sync_savedDelayed) {
+            sync_delayedStepTimer = systick_ticks + sync_savedDelay;
+            sync_delayedStepPending = 1;
+            sync_savedDelayed = 0;
+            restored = 1;
+        }
+    }
+    __set_PRIMASK(mask);
+    return restored;
+}
 
 uint8_t sync_tryControl(void)
 {
@@ -77,6 +110,7 @@ void sync_cancelPending(void)
     uint32_t mask = __get_PRIMASK();
     __disable_irq();
     sync_delayedStepPending = 0;
+    sync_midiPaused = sync_midiAwaitClock = sync_savedDelayed = 0;
     trigger_clockReceived = 0;
     __set_PRIMASK(mask);
 }
@@ -133,10 +167,13 @@ uint8_t sync_canSchedule(void)
 /* Called with control ownership. IRQs can cancel but cannot step the seq. */
 void sync_externalStep(void)
 {
+    if(seq_getExtSync() == 1 && sync_resumeClock()) return;
     uint32_t delay = (uint32_t)seq_getDeltaTShuffleDelay(seq_getBpm());
     uint32_t mask = __get_PRIMASK();
     __disable_irq();
-    uint8_t ready = sync_canSchedule();
+    /* Single pending slot: discard later step requests until consumed, even
+     * after a paused long shuffle is overtaken by faster divider clocks. */
+    uint8_t ready = sync_canSchedule() && !sync_delayedStepPending;
     uint8_t shuffled = seq_getMasterStepCnt() % 2 == 1;
     if(ready && shuffled) {
         sync_delayedStepTimer = systick_ticks + delay;
@@ -169,7 +206,9 @@ void sync_tick(void)
 {
     if(seq_getExtSync() != 2) return;
     sync_measurePulse(&sync_midiHistory, systick_ticks, 1);
-    if(sync_canSchedule() && sync_clockCnt == 0) sync_externalStep();
+    if(sync_midiPaused) return;
+    uint8_t restored = sync_resumeClock();
+    if(!restored && sync_canSchedule() && sync_clockCnt == 0) sync_externalStep();
     if(++sync_clockCnt >= 6) sync_clockCnt = 0;
 }
 
@@ -177,15 +216,41 @@ void sync_midiResetPosition(void)
 {
     sync_cancelPending();
     sync_clockCnt = 0;
+    seq_prescaleCounter = 0;
+    sync_midiHistory.baseline = sync_midiHistory.count = sync_midiHistory.pos = 0;
+    seq_setMidiRunning(0);
+    seq_midiRunCleanup(0);
+    sync_receivedReset = 1;
     seq_resetPosition();
+    sync_receivedReset = 0;
 }
 
 void sync_midiStartStop(uint8_t isStart)
 {
-    seq_setRunning(isStart);
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
     if(isStart) {
-        sync_midiHistory.baseline = sync_midiHistory.count = sync_midiHistory.pos = 0;
+        if(seq_isRunning()) { __set_PRIMASK(mask); return; } /* Continue is idempotent while running. */
+        seq_setMidiRunning(1);
+        sync_midiPaused = 0;
+        sync_midiAwaitClock = 1;
+    } else {
+        if(sync_midiPaused) { __set_PRIMASK(mask); return; }
+        /* Capture interpolation against the OLD pause/await state. */
+        seq_setMidiRunning(0);
+        if(!sync_midiAwaitClock) {
+            sync_savedDelayed = sync_delayedStepPending;
+            uint32_t left = sync_delayedStepTimer - systick_ticks;
+            sync_savedDelay = left < 0x80000000u ? left : 0;
+        }
+        sync_delayedStepPending = 0;
+        trigger_clockReceived = 0;
+        sync_midiPaused = 1;
+        sync_midiAwaitClock = 0;
     }
+    __set_PRIMASK(mask);
+    /* No note-off, MTC or timer callbacks under the publication mask. */
+    seq_midiRunCleanup(isStart);
 }
 
 uint8_t sync_getClockCnt(void)

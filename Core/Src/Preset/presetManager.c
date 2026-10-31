@@ -30,6 +30,7 @@
 
 #include "Soundengine/MIDI/MidiParser.h"
 #include "Soundengine/Sequencer/sequencer.h"
+#include "Soundengine/Sequencer/clockSync.h"
 #include "Soundengine/Soundengine.h"
 
 
@@ -2479,6 +2480,7 @@ void preset_loadProjectNames(uint8_t projectNr)
 FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 {
 	seq_setPerformanceBreak(0);
+    sync_cancelPending(); // never resume a paused deadline from the old project
 	FRESULT recovery = storage_recoverProject(presetNr);
 	if(recovery != FR_OK) return recovery;
 	FRESULT res;

@@ -140,7 +140,7 @@ void EXTI4_IRQHandler(void)
 				syncFactor = 6;
 				if(sync_canSchedule() && trigger_clockReceived != UINT8_MAX) trigger_clockReceived++;
 			}
-			else if(trigger_prescalerClockInput == PRE_24_PPQ_IN)
+			else if(trigger_prescalerClockInput == PRE_24_PPQ_IN && !sync_phasePaused())
 			{
 				syncFactor = 1;
 

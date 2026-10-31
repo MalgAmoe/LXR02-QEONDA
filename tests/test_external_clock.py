@@ -33,6 +33,8 @@ c=r'''
 #define PRE_4_PPQ_IN 6
 #define PRE_24_PPQ_IN 1
 #define MIDI_START 250
+#define MIDI_CONTINUE 251
+#define MIDI_FILTER_SYSTEM 1
 #define MIDI_STOP 252
 #define MIDI_CLOCK 248
 #define MIDI_PRESCALER_MASK 4
@@ -52,7 +54,11 @@ static uint8_t seq_running,seq_isSyncExternal=2,seq_prescaleCounter,isStepShuffl
 static uint16_t seq_tempo=100;
 static unsigned steps,resets,starts,stops,indexResets,bpmWrites,seq_masterStepCnt,kitWork,heavyIrq,sourceIrq;
 static uint32_t seq_lastTick;
-static float seq_deltaT=1000000,seq_lastShuffle;
+static float seq_deltaT=1000000,seq_lastShuffle,seq_midiRemaining;
+static unsigned noteOffs,breakCancels,echoes,cleanupIrq;
+#define NUM_TRACKS 7
+static int8_t seq_stepIndex[NUM_TRACKS];
+static uint8_t seq_lastMasterStep[NUM_TRACKS];
 static int seq_songPositionPointer;
 static struct {uint16_t IDR;} resetPort;
 #define Reset_In_EXTI5_GPIO_Port (&resetPort)
@@ -63,6 +69,7 @@ static void trigger_ResetPosition(void);
 static void seq_setRunning(uint8_t);
 static void seq_resetPosition(void);
 static void EXTI9_5_IRQHandler(void);
+void EXTI4_IRQHandler(void);
 static uint8_t seq_getExtSync(void){return seq_isSyncExternal;}
 static uint8_t seq_isRunning(void){return seq_running;}
 static uint16_t seq_getMasterStepCnt(void){return seq_masterStepCnt;}
@@ -70,7 +77,7 @@ static uint16_t seq_getBpm(void){return seq_tempo;}
 static void seq_setBpm(uint16_t bpm){seq_tempo=bpm;bpmWrites++;}
 static float delayTicks=100;
 static float seq_getDeltaTShuffleDelay(uint16_t bpm){(void)bpm;return delayTicks;}
-static void seq_MidiSyncQueue(uint8_t x){(void)x;}
+
 /* Inject a reset IRQ DURING a simulated heavy step/kit operation. It must
  * only publish a request, not reenter transport or mask the heavy work. */
 void seq_setExtSync(uint8_t);
@@ -79,26 +86,41 @@ static void seq_nextStep(void){
  if(sourceIrq){unsigned mode=sourceIrq-1;sourceIrq=0;seq_setExtSync(mode);}
  if(heavyIrq){heavyIrq=0;kitWork=1;resetPort.IDR=0;EXTI9_5_IRQHandler();kitWork=0;assert(seq_running);}
 }
-static void seq_sendRealtime(uint8_t v){assert(!primask);(void)v;}
-static void seq_setPerformanceBreak(uint8_t v){(void)v;}
-static void preset_touchTimer(uint8_t t){assert(!primask);(void)t;}
+static void seq_sendRealtime(uint8_t v);
+void seq_setMidiRunning(uint8_t);
+void seq_midiRunCleanup(uint8_t);
+void seq_midiClockAnchor(void);
+void seq_MidiSyncQueue(uint8_t);
+static void seq_setPerformanceBreak(uint8_t v){(void)v;breakCancels++;}
+static void preset_touchTimer(uint8_t t){assert(!primask);(void)t;if(cleanupIrq){cleanupIrq=0;EXTI4_IRQHandler();}}
 static void trigger_reset(uint8_t v){assert(!primask);if(v)starts++;else stops++;}
-static void seq_setStepIndexToStart(void){assert(!kitWork);assert(!primask);indexResets++;}
+static void seq_setStepIndexToStart(void);
 static void led_resetBlinkTimer(void){assert(!kitWork);assert(!primask);resets++;}
-static void voiceControl_noteOff(uint8_t t){(void)t;assert(!primask);}
-static void midiParser_checkMtc(void){assert(!primask);}
+static void voiceControl_noteOff(uint8_t t){(void)t;assert(!primask);noteOffs++;if(cleanupIrq){cleanupIrq=0;EXTI4_IRQHandler();}}
+static void midiParser_checkMtc(void);
+#define FRONT_SEQ_CC 0
+#define FRONT_SEQ_RUN_STOP 0
+static uint8_t midiParser_mtcIsRunning;
+static uint32_t midiParser_lastMtcReceived;
+static void uart_sendFrontpanelByte(uint8_t b){(void)b;}
 static void seq_calcDeltaT(uint16_t b,uint8_t s){(void)b;(void)s;seq_deltaT=1000000;}
 static void trigger_clockTick(uint8_t v,uint8_t c){(void)v;(void)c;}
 static void seq_processFlam(uint8_t c){(void)c;}
 '''+api
 # Clock source has public declarations; these extracted definitions use the same linkage.
 c=c.replace('static void trigger_ResetPosition(void);','void trigger_ResetPosition(void);').replace('static void seq_setRunning(uint8_t);','void seq_setRunning(uint8_t);').replace('static void seq_resetPosition(void);','void seq_resetPosition(void);').replace('static void EXTI9_5_IRQHandler(void);','void EXTI9_5_IRQHandler(void);')
+c+=extract(source('Core/Src/Soundengine/MIDI/MidiParser.c'),'midiParser_checkMtc')
 c+=clock
 c+='static SyncPulseHistory trigger_history;\n'
 for name in ['trigger_ResetPosition','EXTI4_IRQHandler','EXTI9_5_IRQHandler']:
     c+=extract(trigger,name)
-for name in ['seq_setExtSync','seq_resetPosition','seq_setRunning','seq_tick','seq_sync']:
+c+='typedef struct {uint8_t status;} MidiMsg;\nstatic uint8_t midiParser_txRxFilter=MIDI_FILTER_SYSTEM | (MIDI_FILTER_SYSTEM<<4);\nstatic void seq_sendMidi(MidiMsg msg){assert(!primask);echoes++;(void)msg;}\n'
+c+=extract(seq,'seq_sendRealtime')
+for name in ['seq_setStepIndexToStart','seq_MidiSyncQueue','seq_setMidiRunning','seq_midiRunCleanup','seq_midiClockAnchor','seq_setExtSync','seq_resetPosition','seq_setRunning','seq_tick','seq_sync']:
     c+=extract(seq,name)
+midi=source('Core/Src/Soundengine/MIDI/MidiParser.c')
+dispatch=midi[midi.index('      case MIDI_CLOCK:'):midi.index('      case MIDI_SONG_POSITION_POINTER:')]
+c+='static void received(uint8_t status){switch(status){'+dispatch+'default: break;}}\n'
 # Actual DIN owner + dequeue function, endpoints inject a competing TIM2/main call.
 c+=r'''
 static unsigned dinQueued,parsedDin,usbQueued,parsedUsb;
@@ -115,8 +137,7 @@ usb_start=main.index('if(sync_tryControl())',main.index('//check if we have some
 usb_end=main.index('//process midi on midi port',usb_start)
 usb=main[usb_start:usb_end]
 c+=r'''
-typedef uint8_t MidiMsg;
-static int usb_getMidi(MidiMsg *msg){if(!usbQueued)return 0;usbQueued--;*msg=0;return 1;}
+static int usb_getMidi(MidiMsg *msg){if(!usbQueued)return 0;usbQueued--;msg->status=0;return 1;}
 static void midiParser_parseMidiMessage(MidiMsg msg){(void)msg;assert(!primask);parsedUsb++;uart_processMidi();seq_tick();}
 static void usbMain(void){MidiMsg msg;
 '''+usb+'}\n'
@@ -159,18 +180,107 @@ int main(void){
  /* Threshold is inclusive; a larger gap holds BPM and starts a fresh window. */
  init(0,2);pulse(0);pulse(60000);assert(bpmWrites==1);
  pulse(120001);assert(bpmWrites==1);pulse(120101);assert(seq_tempo==100);
- /* MIDI stop preserves divider phase; stopped pulses still advance it.
-  * Start retains existing track-index reset but reacquires a fresh tempo window. */
+ /* Received Stop/Continue preserve actual track arrays and all scalar phase. */
  init(0,2);pulse(0);pulse(100);assert(sync_getClockCnt()==2);
- unsigned indexBefore=indexResets;
- sync_midiStartStop(0);assert(sync_getClockCnt()==2);
- for(unsigned i=2;i<5;i++){pulse(i*100);assert(!sync_delayedStepPending);}
- assert(sync_getClockCnt()==5&&steps==1);
- sync_midiStartStop(1);assert(sync_getClockCnt()==5&&indexResets==indexBefore+2);
- assert(!sync_midiHistory.baseline&&!sync_midiHistory.count&&!sync_midiHistory.pos);
- pulse(500);assert(steps==1&&sync_getClockCnt()==0);
- pulse(700);assert(seq_tempo==50&&sync_delayedStepPending);
- poll(800);assert(steps==2);
+ for(unsigned i=0;i<NUM_TRACKS;i++){seq_stepIndex[i]=i*3+1;seq_lastMasterStep[i]=i+2;}
+ uint8_t indices[NUM_TRACKS],masters[NUM_TRACKS];
+ memcpy(indices,seq_stepIndex,sizeof indices);memcpy(masters,seq_lastMasterStep,sizeof masters);
+ seq_songPositionPointer=9;seq_masterStepCnt=31;seq_prescaleCounter=7;
+ seq_lastTick=80;seq_deltaT=60;systick_ticks=100;
+ unsigned echoBefore=echoes,offBefore=noteOffs,breakBefore=breakCancels;
+ midiParser_mtcIsRunning=1;midiParser_lastMtcReceived=0;
+ received(MIDI_STOP);assert(!seq_running&&seq_midiRemaining==40&&!midiParser_mtcIsRunning);
+ assert(seq_lastTick==80&&seq_deltaT==60&&seq_prescaleCounter==7);
+ assert(noteOffs==offBefore+1&&breakCancels==breakBefore+1);
+ for(unsigned i=2;i<40;i++){pulse(i*100);poll(i*100);}
+ assert(sync_getClockCnt()==2&&seq_prescaleCounter==7&&seq_deltaT==60);
+ received(MIDI_STOP);assert(noteOffs==offBefore+1);
+ received(MIDI_CONTINUE);poll(9000);assert(seq_prescaleCounter==7);
+ received(MIDI_CONTINUE);assert(sync_midiAwaitClock);
+ received(MIDI_STOP);received(MIDI_CONTINUE);assert(seq_midiRemaining==40);
+ pulse(10000);poll(10039);assert(seq_prescaleCounter==7);
+ poll(10040);assert(seq_prescaleCounter==8);
+ assert(!memcmp(indices,seq_stepIndex,sizeof indices)&&!memcmp(masters,seq_lastMasterStep,sizeof masters));
+ assert(seq_songPositionPointer==9&&seq_masterStepCnt==31&&echoes==echoBefore);
+ received(MIDI_CONTINUE);assert(!sync_midiAwaitClock&&seq_prescaleCounter==8);
+ /* Start while paused resets actual arrays, song/master and divider, but waits. */
+ received(MIDI_STOP);received(MIDI_START);assert(seq_running&&sync_midiAwaitClock);
+ assert(!seq_masterStepCnt&&seq_songPositionPointer==-1&&!sync_clockCnt);
+ for(unsigned i=0;i<NUM_TRACKS;i++)assert(seq_stepIndex[i]==-1&&!seq_lastMasterStep[i]);
+ unsigned beforeStartSteps=steps;poll(20000);assert(steps==beforeStartSteps&&echoes==echoBefore);
+ pulse(20100);assert(steps==beforeStartSteps+1&&!sync_midiAwaitClock);
+ /* Freeze remaining shuffled delay across stopped clocks and repeated transport. */
+ init(1000,2);seq_masterStepCnt=1;pulse(1000);assert(sync_delayedStepPending);
+ systick_ticks=1040;received(MIDI_STOP);assert(!sync_delayedStepPending&&sync_savedDelay==60);
+ for(unsigned i=0;i<20;i++){pulse(2000+i*100);poll(2000+i*100);}
+ received(MIDI_CONTINUE);poll(9000);assert(!steps);
+ received(MIDI_STOP);received(MIDI_CONTINUE);pulse(10000);
+ poll(10059);assert(!steps);poll(10060);assert(steps==1);
+ poll(10061);assert(steps==1);
+ /* A long frozen shuffle survives faster clocks crossing the next divider zero.
+  * Overload drops later step requests, rather than replacing/queuing them. */
+ init(1000,2);seq_masterStepCnt=1;delayTicks=1000;pulse(1000);
+ systick_ticks=1040;received(MIDI_STOP);assert(sync_savedDelay==960);
+ for(unsigned i=0;i<20;i++)pulse(2000+i*10);
+ delayTicks=10;received(MIDI_CONTINUE);pulse(10000);
+ for(unsigned i=1;i<=6;i++){pulse(10000+i*10);poll(10000+i*10);}
+ assert(sync_clockCnt==2&&sync_delayedStepTimer==10960&&!steps);
+ poll(10959);assert(!steps);poll(10960);poll(10961);assert(steps==1);
+ /* IRQs in Stop cleanup see frozen phase; Continue callbacks see await gating. */
+ init(0,1);trigger_prescalerClockInput=PRE_24_PPQ_IN;
+ trigger_clockCnt=3;seq_lastTick=0;seq_deltaT=100;systick_ticks=40;
+ cleanupIrq=1;received(MIDI_STOP);
+ assert(!cleanupIrq&&trigger_clockCnt==3&&!trigger_clockReceived&&seq_midiRemaining==60);
+ trigger_clockCnt=0;seq_masterStepCnt=1;cleanupIrq=1;received(MIDI_CONTINUE);
+ assert(!cleanupIrq&&sync_midiAwaitClock&&!sync_interpolationAllowed());
+ assert(trigger_clockReceived==1); /* eligible edge retained, not executed in callback */
+ poll(1000);assert(!sync_midiAwaitClock&&!steps&&seq_deltaT==60);
+ /* Received transport is still accepted with analogue selected. Its 24PPQ
+  * musical divider freezes too; ordinary analogue stop behavior is unchanged. */
+ init(0,1);trigger_prescalerClockInput=PRE_24_PPQ_IN;
+ pulse(0);pulse(100);poll(100);assert(trigger_clockCnt==2);
+ received(MIDI_STOP);for(unsigned i=0;i<20;i++){pulse(200+i*100);poll(200+i*100);}
+ assert(trigger_clockCnt==2&&seq_tempo==100);
+ received(MIDI_CONTINUE);unsigned analogBefore=steps;
+ for(unsigned i=0;i<4;i++){pulse(3000+i*100);poll(3000+i*100);assert(steps==analogBefore);}
+ pulse(3400);poll(3400);assert(steps==analogBefore); /* odd master: shuffle */
+ poll(3500);assert(steps==analogBefore+1&&!sync_midiAwaitClock);
+ /* Every divider phase, including zero, resumes without an early step. */
+ for(unsigned phase=0;phase<6;phase++){
+  init(1000,2);sync_clockCnt=phase;seq_masterStepCnt=2;seq_prescaleCounter=13;
+  received(MIDI_STOP);for(unsigned i=0;i<17;i++)pulse(1100+100*i);
+  assert(sync_clockCnt==phase);received(MIDI_CONTINUE);poll(9000);
+  assert(!steps&&seq_prescaleCounter==13);pulse(9100);
+  assert(steps==(phase==0)&&sync_clockCnt==(phase+1)%6);
+ }
+ /* Paused shuffle over timestamp wrap, including already-due remainder zero. */
+ for(unsigned due=0;due<2;due++){
+  init(0xffffffb0u,2);seq_masterStepCnt=1;pulse(systick_ticks);
+  systick_ticks+=due?101:40;received(MIDI_STOP);
+  assert(sync_savedDelay==(due?0:60));received(MIDI_CONTINUE);poll(1000);assert(!steps);
+  pulse(2000);poll(2000+(due?0:59));assert(steps==due);
+  poll(2060);assert(steps==1);
+ }
+ /* Start is a reset even when already running, unlike Continue. */
+ init(0,2);pulse(0);seq_stepIndex[0]=9;received(MIDI_START);
+ assert(seq_stepIndex[0]==-1&&!seq_masterStepCnt&&!sync_clockCnt&&!seq_prescaleCounter);
+ assert(sync_midiAwaitClock&&!sync_midiHistory.baseline);poll(9000);assert(steps==1);
+ pulse(9100);assert(steps==2);
+ /* Source/panel/reset invalidate paused resume; panel still resets tracks. */
+ for(unsigned action=0;action<4;action++){
+  init(0,2);pulse(0);systick_ticks=20;received(MIDI_STOP);
+  if(action==0)seq_setExtSync(1);
+  if(action==1)seq_setRunning(0);
+  if(action==2)seq_resetPosition();
+  if(action==3)seq_setExtSync(0);
+  assert(!sync_midiPaused&&!sync_savedDelayed&&!sync_midiAwaitClock);
+ }
+ init(0,2);seq_stepIndex[0]=12;seq_prescaleCounter=9;seq_setRunning(0);
+ assert(seq_stepIndex[0]==-1);seq_setRunning(1);assert(!seq_prescaleCounter&&seq_stepIndex[0]==-1);
+ /* Actual acceptance cases: RX filter/internal mode ignore received transport. */
+ init(0,2);midiParser_txRxFilter=0;received(MIDI_STOP);assert(seq_running);
+ midiParser_txRxFilter=MIDI_FILTER_SYSTEM | (MIDI_FILTER_SYSTEM<<4);seq_setExtSync(0);received(MIDI_STOP);assert(seq_running);
+ init(0,1);received(MIDI_STOP);assert(!seq_running);received(MIDI_CONTINUE);assert(seq_running);
  /* Deadline zero is valid; unsigned half-range comparison across wrap. */
  init(0xffffff9cu,2);seq_masterStepCnt=1;pulse(systick_ticks);
  assert(sync_delayedStepPending&&sync_delayedStepTimer==0);

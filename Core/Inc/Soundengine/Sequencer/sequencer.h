@@ -240,6 +240,10 @@ void seq_setMainStep(uint8_t patternNr, uint8_t voice, uint8_t stepNr, uint8_t o
 //------------------------------------------------------------------------------
 void seq_resetPosition();
 //------------------------------------------------------------------------------
+/* Scalar publication only; caller publishes pause/await in the same transaction. */
+void seq_setMidiRunning(uint8_t run);
+void seq_midiRunCleanup(uint8_t run);
+void seq_midiClockAnchor(void);
 void seq_setRunning(uint8_t isRunning);
 //------------------------------------------------------------------------------
 void seq_setSongModeEnabled(uint8_t onOff);
