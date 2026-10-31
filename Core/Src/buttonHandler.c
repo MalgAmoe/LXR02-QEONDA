@@ -63,6 +63,7 @@ volatile static int8_t buttonHandler_armedAutomationStep = NO_STEP_SELECTED;
 
 //--------------------------------------------------------
 static void buttonHandler_armTimerActionStep(int8_t stepNr) {
+	if(stepNr < 0 || stepNr >= NUM_STEPS || menu_getActiveVoice() >= NUM_TRACKS) return;
 #if 0
 	//check if sub or main step
 	const uint8_t isMainStep = ((stepNr % 8) == 0);
@@ -1434,16 +1435,8 @@ static void buttonHandler_selectButtonPressed(uint8_t partNr)
 			led_setBlinkLed(led_idx2SelectLed(partNr), 1);
 		}
 	} else */ { // none or clear
-		// the code that handles most of this case is in the button release
-		// if shift is held and a part button is held down, we will enter automation record mode
-		// for that sub-step on the currently selected step.
-		// if shift is not held, we just do normal handling
-		if ( buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_VOICE && buttonHandler_getShift()) {
-			//TODO hier muss selektiert werden!
-			buttonHandler_setTimeraction((uint8_t)(buttonHandler_selectedStep * 8 + partNr));
-		} else {
-			buttonHandler_handleSelectButton(partNr);
-		}
+		// Select buttons do not address substeps in the 64-step layout.
+		buttonHandler_handleSelectButton(partNr);
 
 	}
 

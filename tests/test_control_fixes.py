@@ -27,6 +27,7 @@ c=r'''
 #include <stdint.h>
 #include <assert.h>
 #define NUM_TRACKS 7
+#define NUM_STEPS 64
 #define USE_PATTERN_EDIT_BUFFER 0
 #define STEP_VOLUME_MASK 127
 #define PAR_MIDI_NOTE1 10
@@ -87,6 +88,10 @@ static uint8_t buttonHandler_originalValue[2],buttonHandler_resetLock1,buttonHan
 """
 preview+=extract(panel,'buttonHandler_armTimerActionStep')+extract(panel,'buttonHandler_disarmTimerActionStep')+r"""
 int main(void){
+ buttonHandler_armTimerActionStep(-1);buttonHandler_armTimerActionStep(64);
+ assert(buttonHandler_armedAutomationStep==-1);
+ previewVoice=7;buttonHandler_armTimerActionStep(0);
+ assert(buttonHandler_armedAutomationStep==-1);previewVoice=3;
  Step *step=&seq_patternSet.seq_subStepPattern[0][3][5];
  step->param1Nr=step->param2Nr=200;step->param1Val=20;step->param2Val=30;
  activeParameters[200]=10;

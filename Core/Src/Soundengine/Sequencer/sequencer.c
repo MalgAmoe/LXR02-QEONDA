@@ -1541,6 +1541,7 @@ void seq_setExtSync(uint8_t isExt)
 void seq_armAutomationStep(uint8_t stepNr, uint8_t track,uint8_t isArmed)
 {
 	if(isArmed) {
+		if(stepNr >= NUM_STEPS || track >= NUM_TRACKS) return;
 		seq_armedArmedAutomationStep 	= stepNr;
 		seq_armedArmedAutomationTrack 	= track;
 	} else {

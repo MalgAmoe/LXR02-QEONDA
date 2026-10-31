@@ -110,3 +110,7 @@ lxr_add_host_test(test_slot_files
 add_test(NAME test_cleanup_fatfs
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cleanup_fatfs.py)
+
+add_test(NAME test_index_bounds
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_index_bounds.py)
