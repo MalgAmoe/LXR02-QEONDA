@@ -382,7 +382,7 @@ float seq_getDeltaTShuffleDelay(uint16_t bpm)
 	//--- calc deltaT ----
 	// for 4/4tel takt -> 1 beat = 4 main steps = 4*8 = 32 sub steps
 	// 120 bpm 4/4tel = 120 * 1 beat / 60sec = 120 * 32 in 60 sec;
-	dT 	= (1000*60)/bpm; 	//bei 12 = 500ms = time for one beat
+	dT 	= 60000.0f / bpm; 	//bei 12 = 500ms = time for one beat
 	dT /= 96.f; //we run the internal clock at 96ppq -> seq clock 32 ppq == prescaler 3, midi clock 24 ppq == prescale 4
 	dT *= 4;
 	//32.f;					// time for one beat / number of steps per beat
@@ -412,7 +412,7 @@ static void seq_calcDeltaT(uint16_t bpm, uint8_t isShuffled)
 	//--- calc deltaT ----
 	// for 4/4tel takt -> 1 beat = 4 main steps = 4*8 = 32 sub steps
 	// 120 bpm 4/4tel = 120 * 1 beat / 60sec = 120 * 32 in 60 sec;
-	seq_deltaT 	= (1000*60)/bpm; 	//bei 12 = 500ms = time for one beat
+	seq_deltaT 	= 60000.0f / bpm; 	//bei 12 = 500ms = time for one beat
 	seq_deltaT /= 96.f; //we run the internal clock at 96ppq -> seq clock 32 ppq == prescaler 3, midi clock 24 ppq == prescale 4
 	seq_deltaT *= 4;
 	//32.f;					// time for one beat / number of steps per beat
