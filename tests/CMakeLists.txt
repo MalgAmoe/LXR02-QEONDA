@@ -122,3 +122,7 @@ add_test(NAME test_tempo
 add_test(NAME test_decay_endpoints
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_decay_endpoints.py)
+
+add_test(NAME test_wavetable_wrap
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_wavetable_wrap.py)
