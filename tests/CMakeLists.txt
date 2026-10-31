@@ -118,3 +118,7 @@ add_test(NAME test_index_bounds
 add_test(NAME test_tempo
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_tempo.py)
+
+add_test(NAME test_decay_endpoints
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_decay_endpoints.py)
