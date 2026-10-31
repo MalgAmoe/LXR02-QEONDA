@@ -115,7 +115,11 @@ typedef enum
 } FunctionalState;
 
 /* Peripheral handles are opaque on the host; only pointers to them are used. */
-typedef struct { int unused; } GPIO_TypeDef;
+typedef struct { uint32_t BSRR, IDR; } GPIO_TypeDef;
+extern GPIO_TypeDef lxr_test_gpio_b;
+#define GPIOB (&lxr_test_gpio_b)
+#define GPIO_PIN_2 (1u << 2)
+#define GPIO_PIN_7 (1u << 7)
 typedef struct { int unused; } I2S_HandleTypeDef;
 typedef struct { int unused; } TIM_HandleTypeDef;
 typedef struct { int unused; } UART_HandleTypeDef;
@@ -139,6 +143,8 @@ typedef struct
 } HAL_SD_CardInfoTypeDef;
 
 /* --- HAL functions (declared only, see above) ----------------------------- */
+HAL_StatusTypeDef HAL_SPI_Receive(SPI_HandleTypeDef *, uint8_t *, uint16_t, uint32_t);
+HAL_StatusTypeDef HAL_SPI_Transmit(SPI_HandleTypeDef *, uint8_t *, uint16_t, uint32_t);
 uint32_t HAL_GetTick(void);
 uint32_t HAL_RCC_GetHCLKFreq(void);
 void HAL_Delay(uint32_t delay);

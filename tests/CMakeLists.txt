@@ -74,3 +74,8 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME test_audio_scheduling
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_audio_scheduling.py)
+
+lxr_add_host_test(test_play_debounce
+    SOURCES test_play_debounce.c
+    FIRMWARE_SOURCES Core/Src/IO/DIO.c
+)

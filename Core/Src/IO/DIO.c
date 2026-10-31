@@ -24,6 +24,36 @@ uint8_t INDTCMZ din_inputData_old[NUM_INPUTS/8];
 uint8_t dout_outputData[NUM_OUTS/8];
 
 uint8_t button43_old;
+
+// Start/Stop responds immediately, but rearms only after a stable release.
+// Other buttons (including performance controls) retain their original handling.
+#define PLAY_RELEASE_DEBOUNCE_MS 20u
+static uint8_t playReleasePending;
+static uint32_t playReleaseSince;
+
+static void dio_debouncePlay(void)
+{
+	const uint8_t group = BUT_START_STOP / 8;
+	const uint8_t mask = 1u << (BUT_START_STOP % 8);
+	if(din_inputData[group] & mask)
+	{
+		playReleasePending = 0;
+	}
+	else if(din_inputData_old[group] & mask)
+	{
+		const uint32_t now = HAL_GetTick();
+		if(!playReleasePending)
+		{
+			playReleasePending = 1;
+			playReleaseSince = now;
+		}
+		if((uint32_t)(now - playReleaseSince) < PLAY_RELEASE_DEBOUNCE_MS)
+			din_inputData[group] |= mask; // Keep logical button held through bounce.
+		else
+			playReleasePending = 0;
+	}
+}
+
 #if 0
 static void MX_SPI1_Init(void)
 {
@@ -66,6 +96,8 @@ void dio_init(SPI_HandleTypeDef* _hspi1)
 	spi1 = _hspi1;
 
 	button43_old = 0;
+	playReleasePending = 0;
+	playReleaseSince = 0;
 }
 
 
@@ -90,6 +122,7 @@ void dio_process()
 
 
 	//--- handle buttons ---
+	dio_debouncePlay();
 
 	for(int i=0; i<NUM_INPUTS/8; i++)
 	{
