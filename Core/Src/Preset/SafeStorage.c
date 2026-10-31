@@ -13,28 +13,48 @@ static FRESULT emptyPath(char *path, unsigned capacity)
     if(base + 1 >= capacity) return FR_INVALID_NAME;
     for(;;)
     {
-        // _FS_LOCK=1: close the parent before descending or unlinking.
         DIR dir;
         FRESULT res = f_opendir(&dir, path);
         if(res != FR_OK) return res;
-        FILINFO info;
-        do { res = f_readdir(&dir, &info); }
-        while(res == FR_OK && info.fname[0] == '.');
-        const FRESULT closed = f_closedir(&dir);
-        if(res != FR_OK) return res;
-        if(closed != FR_OK) return closed;
-        if(!info.fname[0]) return FR_OK;
-        unsigned nameLen = 0;
-        while(nameLen < sizeof(info.fname) && info.fname[nameLen]) ++nameLen;
-        if(nameLen == sizeof(info.fname) || base + 1 + nameLen >= capacity)
-            return FR_INVALID_NAME;
-        path[base] = '/';
-        memcpy(path + base + 1, info.fname, nameLen + 1);
-        if(info.fattrib & AM_DIR) res = emptyPath(path, capacity);
-        if(res == FR_OK) res = f_unlink(path);
-        path[base] = 0;
-        if(res != FR_OK) return res;
-        // Reopen from the first entry after deletion, never retaining a parent handle.
+        for(;;)
+        {
+            FILINFO info;
+            res = f_readdir(&dir, &info);
+            if(res != FR_OK || !info.fname[0])
+            {
+                const FRESULT closed = f_closedir(&dir);
+                return res != FR_OK ? res : closed;
+            }
+            if(info.fname[0] == '.') continue;
+            unsigned nameLen = 0;
+            while(nameLen < sizeof(info.fname) && info.fname[nameLen]) ++nameLen;
+            if(nameLen == sizeof(info.fname) || base + 1 + nameLen >= capacity)
+            {
+                f_closedir(&dir);
+                return FR_INVALID_NAME;
+            }
+            path[base] = '/';
+            memcpy(path + base + 1, info.fname, nameLen + 1);
+            if(info.fattrib & AM_DIR)
+            {
+                // _FS_LOCK=1: release the parent before opening a child.
+                res = f_closedir(&dir);
+                if(res == FR_OK) res = emptyPath(path, capacity);
+                if(res == FR_OK) res = f_unlink(path);
+                path[base] = 0;
+                if(res != FR_OK) return res;
+                break; // Reopen parent after recursion; ordinary files need no restart.
+            }
+            // FatFs advances the cursor before returning a filename. Unlink marks
+            // that entry deleted without shifting others, and needs no lock slot.
+            res = f_unlink(path);
+            path[base] = 0;
+            if(res != FR_OK)
+            {
+                f_closedir(&dir);
+                return res;
+            }
+        }
     }
 }
 FRESULT storage_emptyDirectory(const char *folder)

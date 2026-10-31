@@ -86,6 +86,13 @@ int main(void) {
  reset(0);assert(storage_saveProject(3,writer,&warning)==FR_OK);assert(nodes[0].contents==3);
  reset(1);char original[13]="/proj03";assert(storage_emptyDirectory(original)==FR_OK);assert(!strcmp(original,"/proj03"));assert(!nodes[0].contents);
  reset(1);nested=1;assert(storage_emptyDirectory("/proj03")==FR_OK);assert(!nested&&!nodes[0].contents&&!depth);
+ unsigned nestedOperations=calls;
+ for(unsigned i=1;i<=nestedOperations;i++) {
+  reset(1);nested=1;failAt=i;
+  assert(storage_emptyDirectory("/proj03")!=FR_OK);assert(!depth);
+  failAt=0;assert(storage_emptyDirectory("/proj03")==FR_OK);
+  assert(!nested&&!nodes[0].contents&&!depth);
+ }
  char longPath[80];memset(longPath,'x',79);longPath[79]=0;assert(storage_emptyDirectory(longPath)==FR_INVALID_NAME);
  assert(storage_saveProject(64,writer,&warning)==FR_INVALID_NAME);
  printf("Storage tests pass: %u injected operation failures plus retries, write failure, recovery preservation, first save and bounded cleanup.\n",operations);

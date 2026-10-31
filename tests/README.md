@@ -57,3 +57,16 @@ which don't exist on the host.
 Keep the firmware files themselves unchanged for testing. If a file is hard to test because it
 mixes logic with hardware access, the better fix is to move the logic into its own function or
 file, so that the firmware and the test share it.
+
+### Real FatFs cleanup regression
+
+`test_cleanup_fatfs.py` builds the bundled `ff.c` and production configuration
+against a disposable 64 MiB RAM FAT32 disk. Only HAL header dependencies and
+LP64 host integer widths are adapted. It exercises 194 populated files across
+sector/cluster boundaries, single-slot directory locking, nested cleanup,
+remount, surviving file contents and recovered free-cluster count. A disk-read
+budget rejects the previous restart-per-file implementation. To reproduce that
+intentional failure: `LXR_BASE_REV=50b74f2 python3 tests/test_cleanup_fatfs.py`.
+Disk-operation counts are not SD latency measurements. Existing fake-filesystem
+failure tests include nested cleanup; their failed-close model releases the
+handle, unlike some possible actual FatFs failures.

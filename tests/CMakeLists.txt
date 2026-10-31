@@ -106,3 +106,7 @@ lxr_add_host_test(test_slot_files
     SOURCES test_slot_files.c
     FIRMWARE_SOURCES Core/Src/Preset/SlotFiles.c
 )
+
+add_test(NAME test_cleanup_fatfs
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cleanup_fatfs.py)

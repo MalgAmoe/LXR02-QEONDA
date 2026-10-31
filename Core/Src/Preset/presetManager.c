@@ -2316,6 +2316,7 @@ static FRESULT preset_writeProjectBody(void)
         res = preset_saveSongSD(i);
         if(res != FR_OK) return res;
     }
+    lcd_setcursor(0,2); lcd_string(PSTR("Finalizing"));
     return FR_OK;
 }
 static FRESULT preset_writeProjectFiles(void)
