@@ -2060,6 +2060,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 							//nothing to do here
 							break;
 						case SAVE_TYPE_PATTERN:
+                        {
 
 
 
@@ -2071,15 +2072,23 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 										#else
 
 										#endif
-											preset_savePatternSD(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);
+											FRESULT saveResult = preset_savePatternSD(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);
 										#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
 													HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
 										#else
 
 										#endif
+                            if(saveResult != FR_OK) {
+                                menu_showSdError(saveResult);
+                                menu_resetSaveParameters();
+                                return;
+                            }
+
+                        }
 							break;
 
 						case SAVE_TYPE_KIT:
+                        {
 
 
 							preset_saveDrumsetRam(menu_selectedPresetNr[SAVE_TYPE_KIT],0);
@@ -2090,18 +2099,25 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 							#else
 
 							#endif
-														preset_saveDrumsetSD(menu_selectedPresetNr[SAVE_TYPE_KIT],0);
+														FRESULT saveResult = preset_saveDrumsetSD(menu_selectedPresetNr[SAVE_TYPE_KIT],0);
 							#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
 										HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
 							#else
 
 							#endif
+                            if(saveResult != FR_OK) {
+                                menu_showSdError(saveResult);
+                                menu_resetSaveParameters();
+                                return;
+                            }
+
 
 							menu_loadedPresetNr[CURRENT_KIT] = menu_selectedPresetNr[SAVE_TYPE_KIT];
 							menu_activePage = KIT_SAVE_PAGE_OK;
 							sucessTimer = systick_ticks;
 							menu_repaint();
 
+                        }
 							break;
 
 						case SAVE_TYPE_MORPH:
@@ -2112,7 +2128,8 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 						{
 							FRESULT res;
 							const uint8_t bg = soundengine_backgroundAudioBegin();
-							res = preset_saveGlobals();
+							res = preset_initTmpFolder();
+							if(res == FR_OK) res = preset_saveGlobals();
 							soundengine_backgroundAudioEnd(bg);
 							if(res != FR_OK) menu_showSdError(res);
 						}
@@ -2123,6 +2140,17 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 							FRESULT res;
 
 							res = preset_saveProject(menu_selectedPresetNr[SAVE_TYPE_PROJECT]);
+                            if(res == FR_OK && preset_projectCleanupWarning) {
+                                const uint8_t bg = soundengine_backgroundAudioBegin();
+                                lcd_process_display_interrupt = 0;
+                                while(sendDisplayBuffer() != 0);
+                                lcd_clear(); lcd_home(); lcd_string("Project saved");
+                                lcd_setcursor(0,2); lcd_string("Cleanup pending");
+                                HAL_Delay(2000);
+                                lcd_process_display_interrupt = 1;
+                                soundengine_backgroundAudioEnd(bg);
+                            }
+
 
 							if(res != FR_OK) menu_showSdError(res);
 						}

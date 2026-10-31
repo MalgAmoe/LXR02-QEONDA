@@ -161,7 +161,7 @@ void sd_formatRoutine()
 		f_mount(&fs, "", 0);
 
 		//create glo.cfg file
-		preset_createGlobals();
+		if(preset_createGlobals() != FR_OK) lcd_string("Settings unsaved");
 
 		//load init sound
 		preset_init(0);
@@ -479,7 +479,7 @@ if(sd_card_ok)
 			lcd_string(PSTR("glo.cfg error"));
 			lcd_setcursor(0,2);
 			lcd_string("Using defaults.");
-			preset_createGlobals();
+			if(preset_createGlobals() != FR_OK) lcd_string("Settings unsaved");
 			HAL_Delay(1000);
 
 		}
@@ -845,6 +845,7 @@ if(sd_card_ok)
 	{
 		preset_loadDrumsetRam(seq_patternSet.kitNr[seq_activePattern], 0, 1);
 		menu_selectedPresetNr[SAVE_TYPE_KIT] = seq_patternSet.kitNr[seq_activePattern];
+		menu_loadedPresetNr[CURRENT_KIT] = seq_patternSet.kitNr[seq_activePattern];
 	}
 #endif
 

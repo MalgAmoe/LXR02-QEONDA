@@ -1161,12 +1161,14 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				#else
 
 				#endif
-					preset_savePatternSD(seqButtonPressed + 16 * menu_activePatternBank);
+					FRESULT saveResult = preset_savePatternSD(seqButtonPressed + 16 * menu_activePatternBank);
 				#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
 							HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
 				#else
 
 				#endif
+                if(saveResult != FR_OK) { menu_showSdError(saveResult); return; }
+
 
 
 				menu_selectedPresetNr[SAVE_TYPE_PATTERN] = seqButtonPressed + 16 * menu_activePatternBank;

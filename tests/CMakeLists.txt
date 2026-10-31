@@ -83,3 +83,12 @@ lxr_add_host_test(test_play_debounce
 add_test(NAME test_performance_break
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_performance_break.py)
+
+lxr_add_host_test(test_safe_storage
+    SOURCES test_safe_storage.c
+    FIRMWARE_SOURCES Core/Src/Preset/SafeStorage.c
+)
+
+add_test(NAME test_save_io
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_save_io.py)

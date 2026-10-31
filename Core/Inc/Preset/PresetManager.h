@@ -56,7 +56,7 @@ typedef enum
 
 FRESULT preset_LoadTmpKit();
 FRESULT preset_LoadTmpPat();
-void preset_initTmpFolder();
+FRESULT preset_initTmpFolder(void);
 void preset_touchTimer(PresetTimer type);
 void preset_processTimer();
 FRESULT preset_clearTmpFolder();
@@ -83,7 +83,7 @@ void preset_saveDrumsetRam(uint8_t presetNr, uint8_t isMorph);
 
 FRESULT preset_saveGlobals();
 uint8_t preset_loadGlobals();
-void preset_createGlobals();
+FRESULT preset_createGlobals();
 
 FRESULT preset_loadLastUsedProjectNrFromSD(uint8_t* projNr);
 FRESULT preset_saveLastUsedProjectNrToSD(uint8_t projNr);
@@ -118,4 +118,5 @@ void preset_sendDrumsetParametersImmediate();
 
 uint8_t preset_isNameEmpty(char* name);
 
+extern unsigned char preset_projectCleanupWarning;
 #endif /* PRESETMANAGER_H_ */

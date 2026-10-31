@@ -172,8 +172,8 @@ with tempfile.TemporaryDirectory() as directory:
 # Source-order guards complement runtime function tests; they are not an SD simulation.
 preset = source('Preset/presetManager.c')
 save = preset[preset.index('FRESULT preset_saveProject('):]
-cleanup = save.index('preset_clearTmpFolder();')
-assert save.index('HAL_TIM_Base_Stop_IT', cleanup) < save.index('return FR_OK;', cleanup)
+cleanup = save.index('preset_clearTmpFolder()')
+assert save.index('soundengine_backgroundAudioEnd(bg);', cleanup) < save.index('return res;', cleanup)
 assert 'menu_repaint' not in function(source('menu/menu.c'), 'menu_tick')
 assert 'menu_uiTick();' in source('main.c')
 for spi in ('spi2', 'spi3'):
