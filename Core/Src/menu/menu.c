@@ -722,6 +722,28 @@ void copyEditBufferToName(uint8_t presetNr, uint8_t nameType)
 	}
 }
 //-----------------------------------------------------------------
+/** Updates the menu after kit kitNr has been loaded from RAM with
+ *  preset_loadDrumsetRam(), from the Load page or from outside the menu
+ *  (MIDI bank select).
+ */
+void menu_kitLoaded(uint8_t kitNr)
+{
+	menu_loadedPresetNr[CURRENT_KIT] = kitNr;
+	// **LFOTARGFIX - save the gap index
+	menu_TargetVoiceGapIndex = getModTargetGapIndex(activeParameters[PAR_TARGET_LFO1 + menu_activeVoice]);
+
+	// While a kit is being saved, the selected slot is where it will be saved to: leave it.
+	if(menu_activePage == SAVE_PAGE && menu_saveOptions.category == SAVE_TYPE_KIT
+			&& menu_saveOptions.state != SAVE_STATE_EDIT_PRESET_NR)
+		return;
+
+	menu_selectedPresetNr[SAVE_TYPE_KIT] = kitNr;
+	// The Load/Save page shows a copy of the selected kit's name, refresh it.
+	if((menu_activePage == LOAD_PAGE || menu_activePage == SAVE_PAGE)
+			&& menu_saveOptions.category == SAVE_TYPE_KIT)
+		copyNameToEditBuffer(kitNr, menu_saveOptions.nameBuffer);
+}
+//-----------------------------------------------------------------
 void menu_setShownPattern(uint8_t patternNr)
 {
 	menu_shownPattern = patternNr;
@@ -2192,9 +2214,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 #if 1
 
 					preset_loadDrumsetRam(menu_selectedPresetNr[menu_saveOptions.category],0, 0);
-					menu_TargetVoiceGapIndex = getModTargetGapIndex(activeParameters[PAR_TARGET_LFO1 + menu_activeVoice]);
-
-					menu_loadedPresetNr[CURRENT_KIT] = menu_selectedPresetNr[menu_saveOptions.category];
+					menu_kitLoaded(menu_selectedPresetNr[menu_saveOptions.category]);
 					//update autosave kit
 					preset_touchTimer(PRESET_KIT_TIMER);
 					//store selected kit in current pattern

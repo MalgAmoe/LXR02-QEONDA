@@ -1883,8 +1883,11 @@ void midiParser_parseMidiMessage(MidiMsg msg)
 			{
 				if((midiParser_txRxFilter & MIDI_FILTER_CC) && (midiParser_isValidChannel(chanonly) ))
 				{
-					//record automation if record is turned on
-					seq_recordAutomation(frontParser_activeTrack, msg.data1, msg.data2);
+					//record automation if record is turned on.
+					//Not bank select: it isn't a sound parameter, and recording it would
+					//replace the step's existing automation with a no-op.
+					if(msg.data1 != CC_BANK_CHANGE)
+						seq_recordAutomation(frontParser_activeTrack, msg.data1, msg.data2);
 
 					//handle midi data
 					midiParser_ccHandler(msg,1, 0, 0.f);

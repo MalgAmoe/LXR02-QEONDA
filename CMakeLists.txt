@@ -13,6 +13,20 @@ cmake_minimum_required(VERSION 3.21)
 #
 # See README.md for details.
 
+# Host unit tests (tests/): built with the computer's own C compiler instead of
+# the Arm toolchain, so they replace the firmware build. See tests/README.md.
+#
+#   cmake --preset host-tests
+#   cmake --build --preset host-tests
+#   ctest --preset host-tests
+option(LXR_HOST_TESTS "Build the host unit tests in tests/ instead of the firmware" OFF)
+if(LXR_HOST_TESTS)
+    project(LXR_V2_host_tests LANGUAGES C)
+    enable_testing()
+    add_subdirectory(tests)
+    return()
+endif()
+
 # CMake modules and tools (toolchain file, MCU settings, output generation).
 set(LXR_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake")
 if(NOT CMAKE_TOOLCHAIN_FILE)

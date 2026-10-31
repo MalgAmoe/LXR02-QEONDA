@@ -649,6 +649,7 @@ void menu_repaintAll();
 //-----------------------------------------------------------------
 //repaint the screen. show all changes*/
 void menu_repaint();
+void menu_kitLoaded(uint8_t kitNr);
 //-----------------------------------------------------------------
 //For nonblocking display refreshs
 void menu_tick();
