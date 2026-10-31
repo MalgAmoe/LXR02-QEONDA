@@ -92,3 +92,9 @@ lxr_add_host_test(test_safe_storage
 add_test(NAME test_save_io
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_save_io.py)
+
+lxr_add_host_test(test_delay_bounds
+    SOURCES test_delay_bounds.c
+    FIRMWARE_SOURCES Core/Src/Soundengine/DSPAudio/FX/Delay.c
+                     Core/Src/Soundengine/DSPAudio/1PoleLp.c
+)

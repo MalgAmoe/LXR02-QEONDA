@@ -35,6 +35,7 @@ extern "C" {
 #define __STATIC_INLINE static inline
 #define __STATIC_FORCEINLINE static inline
 #define __ASM __asm__
+#define __PKHBT(a,b,shift) (((uint32_t)(a) & 0xffffu) | (((uint32_t)(b) << (shift)) & 0xffff0000u))
 #define __NOP() ((void)0)
 #define __DSB() ((void)0)
 #define __ISB() ((void)0)
