@@ -108,3 +108,8 @@ certification of all projects, cards or MIDI traffic.
 Received MIDI Stop preserves position; Continue resumes on incoming clocks; Start
 resets position. Front-panel transport behavior is distinct. Song Position Pointer
 is not implemented.
+
+## Button response
+
+Play and both bar/bank buttons respond immediately. Each rearms independently
+after 20 ms of stable release, suppressing contact-bounce repeats in all modes.
