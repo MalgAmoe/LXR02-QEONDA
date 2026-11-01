@@ -51,7 +51,7 @@ The compressor follows the filters on St1 only.
 | Attack | 0.1…100 ms | Approximately 5 ms |
 | Release | 10…500 ms | Approximately 100 ms |
 
-Attack/release use logarithmic steps. Automatic makeup follows half the predicted reduction at 0 dBFS (up to +22.8 dB); ratio1
+Attack/release use logarithmic steps. Automatic makeup follows the full predicted reduction at 0 dBFS (up to +45.6 dB); ratio1
 returns to bypass through a short transition. **This is not a limiter**: transients
 can pass through the attack and final output conversion can clip.
 

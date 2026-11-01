@@ -55,7 +55,7 @@ three banks; the four knobs control the following, left to right:
   session controls: ordinary loads retain them; startup and Shift+Reload reset them.
 - **Master compressor:** acts on **St1 only**, after the filters. Threshold spans −48…0 dBFS,
   ratio 1:1…20:1, attack 0.1…100 ms and release 10…500 ms. **Ratio 1:1 bypasses compression.**
-  Automatic makeup follows half the predicted reduction at 0 dBFS (up to +22.8 dB). It is not a limiter and does not guarantee no clipping.
+  Automatic makeup follows the full predicted reduction at 0 dBFS (up to +45.6 dB). It is not a limiter and does not guarantee no clipping.
   Settings are saved with the project, not the kit. Loading a project adopts its settings;
   older projects without compressor settings default to bypass. Kit/pattern loads and
   Shift+Reload do not reset compression. Save the project explicitly to retain edits.

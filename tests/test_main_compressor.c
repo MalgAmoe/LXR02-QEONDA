@@ -18,12 +18,14 @@ static void transitions(void) {
     for(unsigned i=0;i<30000;i++){float x[2]={16000,8000};MainCompressor_processPair(x);last=x[0];}
     MainCompressor_setParameter(302,36);MainCompressor_beginBlock();
     float x[2]={16000,8000};MainCompressor_processPair(x);
-    assert(fabsf(x[0]-last)<100); /* No instantaneous curve replacement. */
+    /* Relative continuity bound: full makeup changes absolute output level.
+     * A 24 dB threshold edit ramps over 221 samples (~1.2%/sample here). */
+    assert(fabsf(x[0]-last)<0.02f*fmaxf(fabsf(last),16000.f));
     for(unsigned i=0;i<30000;i++){float y[2]={16000,8000};MainCompressor_processPair(y);last=y[0];}
     MainCompressor_setParameter(303,1);MainCompressor_beginBlock();
     for(unsigned i=0;i<221;i++) {
       float y[2]={16000,8000};MainCompressor_processPair(y);
-      assert(fabsf(y[0]-last)<100);last=y[0];
+      assert(fabsf(y[0]-last)<0.02f*fmaxf(fabsf(last),16000.f));last=y[0];
     }
     assert(comp.curveRamp==0 && comp.slope==comp.goalSlope);
     for(unsigned i=0;i<30000;i++){float y[2]={16000,8000};MainCompressor_processPair(y);last=y[0];}
@@ -32,7 +34,7 @@ static void transitions(void) {
     assert(comp.envelope>0); /* Not reset at publication/block boundary. */
     for(unsigned i=0;i<300;i++) {
       float y[2]={16000,8000};MainCompressor_processPair(y);
-      assert(fabsf(y[0]-last)<100);assert(y[0]==2*y[1]);last=y[0];
+      assert(fabsf(y[0]-last)<0.02f*fmaxf(fabsf(last),16000.f));assert(y[0]==2*y[1]);last=y[0];
     }
     assert(!MainCompressor_beginBlock());assert(last==16000);
     assert(comp.envelope==0 && comp.gain==1 && comp.makeup==1);
@@ -60,7 +62,8 @@ static void transitions(void) {
     for(unsigned i=0;i<30000;i++){float x[2]={16000,8000};MainCompressor_processPair(x);last=x[0];}
     MainCompressor_setControls(off);
     int16_t frame[2]={16000,8000};MainDjFilter_process(frame,1);
-    assert(abs(frame[0]-(int)last)<100 && frame[0]!=16000);
+    int previousOutput=last>32767.f?32767:(int)last;
+    assert(abs(frame[0]-previousOutput)<0.02f*fmaxf(fabsf(last),16000.f) && frame[0]!=16000);
     for(unsigned i=0;i<220;i++){frame[0]=16000;frame[1]=8000;MainDjFilter_process(frame,1);}
     assert(frame[0]==16000 && frame[1]==8000);
     assert(!MainCompressor_beginBlock() && comp.envelope==0);
@@ -81,10 +84,10 @@ int main(void) {
         if(error>curveWorst)curveWorst=error;
         assert(error<0.001);
       }
-      /* Half the reference reduction at 0 dBFS, without a separate cap. */
-      double expectedMakeup=1.0/sqrt(oracle(1.0));
+      /* Full reference reduction at 0 dBFS, without a separate cap. */
+      double expectedMakeup=1.0/oracle(1.0);
       assert(fabs(comp.makeupGoal/expectedMakeup-1.0)<1.e-5);
-      if(th==0 && ratio==19) assert(comp.makeupGoal>13.8f);
+      if(th==0 && ratio==19) assert(comp.makeupGoal>190.f);
     }
     printf("static curve worst %.8f dB\n",curveWorst);
     double worst=0, worstFast=0;

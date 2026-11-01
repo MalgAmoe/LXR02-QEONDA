@@ -135,9 +135,9 @@ int main(void){
    int st1=t==0||t==6||(t==2&&left)||(t==3&&!left);
    int st2=t==1||t==7||(t==4&&left)||(t==5&&!left);
    assert(dma_buffer[128*half+i]==(st2?1000:0));
-   /* Settled DC: reduction at input level plus uncapped half-reduction makeup. */
+   /* Settled DC: reduction at input level plus full reference makeup. */
    double reductionDb=(20.0*log10(1000.0/32768.0)+48.0)*0.95;
-   double expected=1000.0*pow(10.0,(22.8-reductionDb)/20.0);
+   double expected=1000.0*pow(10.0,(45.6-reductionDb)/20.0);
    assert(st1?fabs(dma_buffer2[128*half+i]-expected)<3.0:dma_buffer2[128*half+i]==0);
    assert(dma_buffer[128*(1-half)+i]==12345);
    assert(dma_buffer2[128*(1-half)+i]==12345);
