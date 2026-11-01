@@ -77,11 +77,11 @@ assert len(txt)==len(pars)==8
 c+='static const uint8_t texts[8]={'+','.join(txt)+'};\nstatic const uint16_t pars[8]={'+','.join(pars)+'};\n'
 c+='''
 int main(void){
- _Static_assert(NUM_PARAMS==302 && END_OF_SOUND_PARAMETERS==247 && PAR_BEGINNING_OF_GLOBALS==272,"layout");
+ _Static_assert(NUM_PARAMS==306 && END_OF_SOUND_PARAMETERS==247 && PAR_BEGINNING_OF_GLOBALS==272,"layout");
  _Static_assert(PAR_PERF_HP==262 && PAR_PERF_LP==265 && PAR_PERF_RESONANCE==263,"aliases");
  menu_activePage=PERF_PAGE;
  for(int i=0;i<8;i++){(&menuPages[PERF_PAGE][0].top1)[i]=texts[i];(&menuPages[PERF_PAGE][0].bot1)[i]=pars[i];}
- for(int i=0;i<8;i++){menuIndex=i;menu_moveToMenuItem(1);assert(menuIndex==(i<7?i+1:7));}
+ for(int i=0;i<8;i++){menuIndex=i;menu_moveToMenuItem(1);assert(menuIndex==i+1);}
  for(int arm=0;arm<2;arm++)for(int slot=5;slot<=7;slot++)for(int start=0;start<128;start++)for(int delta=-128;delta<128;delta++){
   unsigned p=pars[slot],max=127;int want=start+delta;if(want<0)want=0;if(want>max)want=max;
   buttonHandler_armedAutomationStep=arm?0:NO_STEP_SELECTED;menuIndex=slot;activeParameters[p]=start;capture=sent=0;

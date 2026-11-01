@@ -426,6 +426,10 @@ enum ParamEnums
 
 		PAR_PATTERN_MODE,
 
+	MASTER_COMP_THRESHOLD, // 302: -48..0 dB
+	MASTER_COMP_RATIO,     // 303: 1..20 (1 = bypass)
+	MASTER_COMP_ATTACK,    // 304: logarithmic 0.1..100 ms
+	MASTER_COMP_RELEASE,   // 305: logarithmic 10..500 ms
 	NUM_PARAMS,
 	PAR_PERF_HP = PAR_UNUSED,
 	PAR_PERF_LP = UNUSED_PAR_GLO_SAT,

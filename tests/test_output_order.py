@@ -49,6 +49,7 @@ static unsigned sent, status, dest, value;
 static void frontPanel_sendData(unsigned a,unsigned b,unsigned c){sent++;status=a;dest=b;value=c;}
 static void preset_touchTimer(int t){(void)t;}
 static void menu_parseGlobalParam(unsigned p,unsigned v){assert(0);}
+static uint8_t menu_setMasterCompressor(uint16_t p,int32_t v){assert(p<MASTER_COMP_THRESHOLD);return 0;}
 static uint8_t menu_setPerformanceFilter(uint16_t p,int16_t v){assert(p!=PAR_PERF_HP && p!=PAR_PERF_LP);return 0;}
 static uint8_t getNumModTargets(void){return 1;}
 static uint8_t getModTargetIdxFromGapIdx(unsigned a,unsigned b){return 0;}

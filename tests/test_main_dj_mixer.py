@@ -16,6 +16,7 @@ pre=r'''
 #include <assert.h>
 #include <stdio.h>
 #include "Soundengine/DSPAudio/MainDjFilter.h"
+#include "Soundengine/DSPAudio/MainCompressor.h"
 #define USE_TRIGGERED_PAN 1
 #define OUTPUT_DMA_SIZE 64
 static int sat(int x){return x>32767?32767:x< -32768?-32768:x;}
@@ -119,11 +120,36 @@ int main(void){
   }
   failures+=!ok;
  }
+ // Compressor through actual mixer -> Soundengine -> DMA halves, filters bypassed.
+ MainDjFilter_reset();
+ MainCompressor_setParameter(302,0);MainCompressor_setParameter(303,19);
+ MainCompressor_setParameter(304,0);MainCompressor_setParameter(305,0);
+ for(unsigned t=0;t<8;t++)for(unsigned half=0;half<2;half++){
+  mixer_audioRouting[0]=routes[t];
+  fxBus.audioRouting=t==7?MIXER_ROUTING_DAC2_STEREO:MIXER_ROUTING_DAC1_STEREO;
+  for(unsigned i=0;i<256;i++)dma_buffer[i]=dma_buffer2[i]=12345;
+  for(unsigned j=0;j<500;j++)render(half);
+  for(unsigned i=0;i<128;i++){
+   int left=(i%2)==0;
+   int st1=t==0||t==6||(t==2&&left)||(t==3&&!left);
+   int st2=t==1||t==7||(t==4&&left)||(t==5&&!left);
+   assert(dma_buffer[128*half+i]==(st2?1000:0));
+   assert(st1?(dma_buffer2[128*half+i]>0 && dma_buffer2[128*half+i]<900):dma_buffer2[128*half+i]==0);
+   assert(dma_buffer[128*(1-half)+i]==12345);
+   assert(dma_buffer2[128*(1-half)+i]==12345);
+  }
+ }
+ MainCompressor_setParameter(303,0);
+ mixer_audioRouting[0]=MIXER_ROUTING_DAC1_STEREO;
+ // Drain the finite DSP-owned bypass ramp before asserting exact routing.
+ for(unsigned i=0;i<4;i++)render(i%2);
+ render(0);render(1);
+ for(unsigned i=0;i<256;i++)assert(dma_buffer2[i]==1000);
  printf("%u/64 intended main-only routing checks failed\\n",failures);
  return failures?1:0;
 }
 '''
 with tempfile.TemporaryDirectory() as tmp:
  p=Path(tmp);(p/'test.c').write_text(c)
- subprocess.run([os.environ.get('CC','cc'),'-O1','-DLXR_HOST_TEST','-fsanitize=address,undefined','-I'+str(root/'Core/Inc'),str(p/'test.c'),str(root/'Core/Src/Soundengine/DSPAudio/MainDjFilter.c'),'-lm','-o',str(p/'test')],check=True)
+ subprocess.run([os.environ.get('CC','cc'),'-O1','-DLXR_HOST_TEST','-fsanitize=address,undefined','-I'+str(root/'tests/shim'),'-I'+str(root/'Core/Inc'),str(p/'test.c'),str(root/'Core/Src/Soundengine/DSPAudio/MainDjFilter.c'),str(root/'Core/Src/Soundengine/DSPAudio/MainCompressor.c'),'-lm','-o',str(p/'test')],check=True)
  raise SystemExit(subprocess.run([str(p/'test')]).returncode)

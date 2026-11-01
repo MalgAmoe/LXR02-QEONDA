@@ -15,6 +15,7 @@
 #include <frontPanelParser_ui.h>
 #include "Preset/PresetManager.h"
 #include "Preset/SafeStorage.h"
+#include "Soundengine/DSPAudio/MainCompressor.h"
 //#include "../Hardware/SD/ff.h"
 #include "ff.h"
 #include <stdio.h>
@@ -923,14 +924,32 @@ FRESULT preset_saveDrumsetSD(uint8_t presetNr, uint8_t isMorph)
 };
 
 //----------------------------------------------------
+// The on-disk legacy prefix is fixed, independent of appended parameter IDs.
+#define PRESET_LEGACY_GLOBAL_BYTES 30
+static const uint8_t preset_masterCompDefaults[4] = {30, 0, 17, 20};
+
+static void preset_applyMasterComp(const uint8_t values[4])
+{
+    activeParameters[MASTER_COMP_THRESHOLD] = values[0];
+    activeParameters[MASTER_COMP_RATIO] = values[1];
+    activeParameters[MASTER_COMP_ATTACK] = values[2];
+    activeParameters[MASTER_COMP_RELEASE] = values[3];
+    // Publish before any subsequent per-field menu redispatch (same values).
+    MainCompressor_setControls(values);
+}
+
 static void preset_writeGlobalData()
 {
 	unsigned int bytesWritten;
 	int i;
-	for(i=PAR_BEGINNING_OF_GLOBALS;(i<NUM_PARAMS);i++)
+	for(i=PAR_BEGINNING_OF_GLOBALS;i<PAR_BEGINNING_OF_GLOBALS + PRESET_LEGACY_GLOBAL_BYTES;i++)
 	{
 		preset_writeFile((FIL*)&SDFile,&activeParameters[i],1,&bytesWritten);
 	}
+    const uint8_t extension[8] = {'M', 'C', 1, 0,
+        activeParameters[MASTER_COMP_THRESHOLD], activeParameters[MASTER_COMP_RATIO],
+        activeParameters[MASTER_COMP_ATTACK], activeParameters[MASTER_COMP_RELEASE]};
+    preset_writeFile((FIL*)&SDFile, extension, sizeof(extension), &bytesWritten);
 }
 
 //----------------------------------------------------
@@ -960,70 +979,65 @@ FRESULT preset_saveGlobals()
 }
 //----------------------------------------------------
 // returns 1 on success
-static uint8_t preset_readGlobalData()
+static uint8_t preset_readGlobalData(uint8_t *candidate)
 {
 #if USE_SD_CARD
-
-	UINT bytesRead;
-#if 0
-	int i;
-	for(i=PAR_BEGINNING_OF_GLOBALS;(i<NUM_PARAMS) &&( bytesRead!=0);i++) {
-		f_read((FIL*)&SDFile,&activeParameters[i],1,&bytesRead);
-		if(!bytesRead)
-			return 0;
-	}
-	if(!bytesRead)
-		return 0;
-	return 1;
-#else
-	const uint8_t numGlobals = NUM_PARAMS - PAR_BEGINNING_OF_GLOBALS;
-	f_read((FIL*)&SDFile,&activeParameters[PAR_BEGINNING_OF_GLOBALS],numGlobals,&bytesRead);
-	if(bytesRead != numGlobals)	return 0;
-	else return 1;
-
-#endif
+    UINT bytesRead;
+    FRESULT res = f_read((FIL*)&SDFile, &activeParameters[PAR_BEGINNING_OF_GLOBALS],
+                        PRESET_LEGACY_GLOBAL_BYTES, &bytesRead);
+    // Preserve the legacy count-only return contract, including read errors.
+    if(bytesRead != PRESET_LEGACY_GLOBAL_BYTES) return 0;
+    if(candidate && res == FR_OK)
+    {
+        // Nine bytes detect oversized files without trusting a reported size.
+        uint8_t extension[9];
+        res = f_read((FIL*)&SDFile, extension, sizeof(extension), &bytesRead);
+        if(res == FR_OK && bytesRead == 8 &&
+           extension[0] == 'M' && extension[1] == 'C' &&
+           extension[2] == 1 && extension[3] == 0 &&
+           extension[4] <= 48 && extension[5] <= 19 &&
+           extension[6] <= 30 && extension[7] <= 34)
+            memcpy(candidate, extension + 4, 4);
+        // Exact legacy EOF, malformed trailers and IO faults retain defaults.
+    }
+    return 1;
 #endif
 }
 //----------------------------------------------------
 uint8_t preset_loadGlobals()
 {
-
-
-	FRESULT res;
-/*
-	res = f_mount((FATFS*)&SDFatFS, (TCHAR const*)SDPath,1);
-	if( res != FR_OK)
-	{
-		return res;
-	}
-	*/
-
-	//open the file
-	res = preset_openFile((FIL*)&SDFile,"glo.cfg",FA_OPEN_EXISTING | FA_READ);
-	
-	if(res!=FR_OK)
-		return 0; //file open error... maybe the file does not exist?
-
-	if(!preset_readGlobalData())
-	{
-		preset_closeFile((FIL*)&SDFile);
-		return 0;
-	}
-	preset_closeFile((FIL*)&SDFile);
-	menu_sendAllGlobals();
-	
-	//f_unmount((TCHAR const*)SDPath);
-
-	return 1;
-
+    uint8_t candidate[4];
+    memcpy(candidate, preset_masterCompDefaults, sizeof(candidate));
+    FRESULT res = preset_openFile((FIL*)&SDFile,"glo.cfg",FA_OPEN_EXISTING | FA_READ);
+    uint8_t legacySuccess = 0;
+    if(res == FR_OK)
+    {
+        legacySuccess = preset_readGlobalData(candidate);
+        if(preset_closeFile((FIL*)&SDFile) != FR_OK)
+            memcpy(candidate, preset_masterCompDefaults, sizeof(candidate));
+    }
+    // Adopt once at this existing load boundary, even on missing globals.
+    preset_applyMasterComp(candidate);
+    if(legacySuccess)
+        menu_sendAllGlobals();
+    else
+    {
+        menu_parseGlobalParam(MASTER_COMP_THRESHOLD, candidate[0]);
+        menu_parseGlobalParam(MASTER_COMP_RATIO, candidate[1]);
+        menu_parseGlobalParam(MASTER_COMP_ATTACK, candidate[2]);
+        menu_parseGlobalParam(MASTER_COMP_RELEASE, candidate[3]);
+    }
+    return legacySuccess;
 }
-
-
-
 
 //----------------------------------------------------
 void preset_loadDefaultGlobals()
 {
+    preset_applyMasterComp(preset_masterCompDefaults);
+    menu_parseGlobalParam(MASTER_COMP_THRESHOLD, preset_masterCompDefaults[0]);
+    menu_parseGlobalParam(MASTER_COMP_RATIO, preset_masterCompDefaults[1]);
+    menu_parseGlobalParam(MASTER_COMP_ATTACK, preset_masterCompDefaults[2]);
+    menu_parseGlobalParam(MASTER_COMP_RELEASE, preset_masterCompDefaults[3]);
 	activeParameters[PAR_BPM] = 120;
 
 	activeParameters[PAR_MIDI_CHAN_1] = 1;
@@ -2330,10 +2344,10 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 
 	if(isAll){
 		// read global data
-		if(!preset_readGlobalData())
+		if(!preset_readGlobalData(NULL))
 			goto closeFile;
 		// size of padding after globals
-		remain=	64- (NUM_PARAMS - PAR_BEGINNING_OF_GLOBALS);
+		remain=	64- PRESET_LEGACY_GLOBAL_BYTES;
 
 	} else {
 		// read bpm

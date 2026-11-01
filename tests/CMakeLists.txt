@@ -195,7 +195,8 @@ add_test(NAME test_output_order
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_output_order.py)
 
 # DSP owner: actual float32 implementation, no replacement filter model.
-lxr_add_host_test(test_main_dj_filter SOURCES test_main_dj_filter.c)
+lxr_add_host_test(test_main_dj_filter SOURCES test_main_dj_filter.c
+    FIRMWARE_SOURCES Core/Src/Soundengine/DSPAudio/MainCompressor.c)
 target_link_libraries(test_main_dj_filter PRIVATE m)
 add_test(NAME test_main_dj_mixer
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
@@ -204,3 +205,24 @@ add_test(NAME test_main_dj_mixer
 add_test(NAME test_main_dj_filter_ui
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_main_dj_filter_ui.py)
+
+lxr_add_host_test(test_main_compressor SOURCES test_main_compressor.c)
+target_link_libraries(test_main_compressor PRIVATE m)
+
+add_test(NAME test_master_comp_persistence
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_master_comp_persistence.py)
+
+add_test(NAME test_master_compressor_ui
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_master_compressor_ui.py)
+
+foreach(case master_comp_save master_comp_publication)
+    add_test(NAME test_${case}
+        COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+                ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_${case}.py)
+endforeach()
+
+add_test(NAME test_master_compressor_lifecycle
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_master_compressor_lifecycle.py)

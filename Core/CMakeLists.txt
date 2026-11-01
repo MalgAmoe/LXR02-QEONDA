@@ -77,6 +77,7 @@ add_library(lxr_dsp OBJECT
     Src/Soundengine/DSPAudio/HiHat.c
     Src/Soundengine/DSPAudio/lfo.c
     Src/Soundengine/DSPAudio/MainDjFilter.c
+    Src/Soundengine/DSPAudio/MainCompressor.c
     Src/Soundengine/DSPAudio/mixer.c
     Src/Soundengine/DSPAudio/modulationNode.c
     Src/Soundengine/DSPAudio/Oscillator.c
