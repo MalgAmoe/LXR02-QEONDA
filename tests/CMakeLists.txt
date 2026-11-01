@@ -167,3 +167,17 @@ add_test(NAME test_snare_hardclip
 add_test(NAME test_fx_drywet
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_fx_drywet.py)
+
+# SD-only platform shims; compile the real BSP, disk adapter and FatFs dispatch.
+lxr_add_host_test(test_sd_driver
+    SOURCES test_sd_driver.c
+    FIRMWARE_SOURCES FATFS/Target/sd_diskio.c
+                     FATFS/Target/bsp_driver_sd.c
+                     Middlewares/Third_Party/FatFs/src/diskio.c
+                     Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+)
+target_include_directories(test_sd_driver BEFORE PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/shim/sd)
+add_test(NAME test_sd_hal_status
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_sd_hal_status.py)
+set_tests_properties(test_sd_driver test_sd_hal_status PROPERTIES TIMEOUT 30)

@@ -2273,6 +2273,8 @@ HAL_SD_CardStateTypeDef HAL_SD_GetCardState(SD_HandleTypeDef *hsd)
   if(errorstate != HAL_SD_ERROR_NONE)
   {
     hsd->ErrorCode |= errorstate;
+    /* Preserve command failure separately from a valid busy card response. */
+    return HAL_SD_CARD_ERROR;
   }
 
   cardstate = ((resp1 >> 9U) & 0x0FU);

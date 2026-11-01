@@ -201,10 +201,21 @@ __weak uint8_t BSP_SD_Erase(uint32_t StartAddr, uint32_t EndAddr)
   *          This value can be one of the following values:
   *            @arg  SD_TRANSFER_OK: No data transfer is acting
   *            @arg  SD_TRANSFER_BUSY: Data transfer is acting
+  *            @arg  SD_TRANSFER_ERROR: Status command failed or unusable state
   */
 __weak uint8_t BSP_SD_GetCardState(void)
 {
-  return ((HAL_SD_GetCardState(&hsd1) == HAL_SD_CARD_TRANSFER ) ? SD_TRANSFER_OK : SD_TRANSFER_BUSY);
+  switch (HAL_SD_GetCardState(&hsd1))
+  {
+    case HAL_SD_CARD_TRANSFER:
+      return SD_TRANSFER_OK;
+    case HAL_SD_CARD_SENDING:
+    case HAL_SD_CARD_RECEIVING:
+    case HAL_SD_CARD_PROGRAMMING:
+      return SD_TRANSFER_BUSY;
+    default:
+      return SD_TRANSFER_ERROR;
+  }
 }
 
 /**
