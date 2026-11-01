@@ -329,6 +329,7 @@ int main(void)
 
  
   menu_init();
+  menu_resetPerformanceFilter();
   //HAL_ADC_Start(&hadc1);
 
 

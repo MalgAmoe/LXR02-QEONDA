@@ -193,3 +193,14 @@ add_test(NAME test_perf_reload
 add_test(NAME test_output_order
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_output_order.py)
+
+# DSP owner: actual float32 implementation, no replacement filter model.
+lxr_add_host_test(test_main_dj_filter SOURCES test_main_dj_filter.c)
+target_link_libraries(test_main_dj_filter PRIVATE m)
+add_test(NAME test_main_dj_mixer
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_main_dj_mixer.py)
+
+add_test(NAME test_main_dj_filter_ui
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_main_dj_filter_ui.py)

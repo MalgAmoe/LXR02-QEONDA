@@ -893,6 +893,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			//{
 
 				activeParameters[PAR_MORPH] = 0;
+				menu_resetPerformanceFilter();
 
 				//tell sequencer to change/reload current pattern
 				frontPanel_sendData(SEQ_CC, SEQ_CHANGE_PAT, seq_activePattern);

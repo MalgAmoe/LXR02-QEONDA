@@ -61,6 +61,7 @@ static uint8_t menu_getActivePage(void){return menu_activePage;}
 static void menu_repaint(void){displayMrp=activeParameters[PAR_MORPH];displaySrt=activeParameters[PAR_VOICE_DECIMATION_ALL];repaints++;}
 static void menu_repaintAll(void){menu_repaint();}
 static void preset_touchTimer(int t){(void)t;}
+static void menu_resetPerformanceFilter(void){activeParameters[PAR_PERF_FILTER]=63;activeParameters[PAR_PERF_RESONANCE]=0;}
 static void seq_setStepIndexToStart(void){}
 static void seq_setShuffle(float x){(void)x;}
 static int led_idx2StepLed(int x){return x;}
@@ -113,6 +114,7 @@ int main(void){
  int before=repaints;
  press_reload();
  assert(activeParameters[PAR_MORPH]==0);assert(nonzeroTicks==0);
+ assert(activeParameters[PAR_PERF_FILTER]==63 && activeParameters[PAR_PERF_RESONANCE]==0);
  assert(activeParameters[PAR_VOICE_DECIMATION_ALL]==((!run&&md==1&&linked)?63:127));
  /* Stopped activation itself repaints both eligible fixture pages. */
  assert(repaints-before==(!run)+perf);

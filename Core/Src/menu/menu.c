@@ -8,6 +8,7 @@
  */
 
 #include "menu/menu.h"
+#include "Soundengine/DSPAudio/MainDjFilter.h"
 #include "lcd.h"
 #include <string.h>
 #include <stdlib.h>
@@ -249,6 +250,8 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_P3, CAT_FX, LONG_P3},/*TEXT_FX_P3*/
 		{SHORT_P4, CAT_FX, LONG_P4},/*TEXT_FX_P4*/
 		{SHORT_KCM, CAT_GLOBAL, LONG_PATTERN_MODE},/*TEXT_AUTO_SWITCH_KIT*/
+		{SHORT_PERF_FILTER, CAT_GLOBAL, LONG_PERF_FILTER},
+		{SHORT_FIL_RESO, CAT_GLOBAL, LONG_RESONANCE},
 
 
 };
@@ -524,7 +527,7 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_P1_VAL*/ 			DTYPE_0B127,							//240
 	    /*PAR_P2_VAL*/ 			DTYPE_0B127,
 	    /*PAR_SHUFFLE*/ 		DTYPE_0B127,
-	    /*PAR_UNUSED*/ 			DTYPE_0B127,
+	    /*PAR_UNUSED / PAR_PERF_FILTER*/ DTYPE_PM63,
 	    /*PAR_PATTERN_NEXT*/ 	DTYPE_MENU | (MENU_NEXT_PATTERN<<8),
 	    /*PAR_TRACK_LENGTH*/ 	DTYPE_1B64,
 	    /*PAR_GLO_SAT*/			DTYPE_0B127,
@@ -2826,6 +2829,36 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 
 }
 
+// Session-only controls: never enter automation capture or MIDI dispatch.
+static uint8_t menu_setPerformanceFilter(uint16_t paramNr, int16_t value)
+{
+	if(paramNr != PAR_PERF_FILTER && paramNr != PAR_PERF_RESONANCE) return 0;
+	int16_t maximum = paramNr == PAR_PERF_FILTER ? 126 : 127;
+	if(value < 0) value = 0;
+	if(value > maximum) value = maximum;
+	activeParameters[paramNr] = (uint8_t)value;
+	MainDjFilter_setTargets(activeParameters[PAR_PERF_FILTER], activeParameters[PAR_PERF_RESONANCE]);
+	return 1;
+}
+
+void menu_resetPerformanceFilter(void)
+{
+	activeParameters[PAR_PERF_FILTER] = 63;
+	activeParameters[PAR_PERF_RESONANCE] = 0;
+	for(uint8_t i = 0; i < 2; i++)
+	{
+		if(buttonHandler_originalParameter[i] == PAR_PERF_FILTER ||
+		   buttonHandler_originalParameter[i] == PAR_PERF_RESONANCE)
+		{
+			buttonHandler_originalParameter[i] = 0;
+			buttonHandler_originalValue[i] = 0;
+			if(i == 0) buttonHandler_resetLock1 = 0;
+			else buttonHandler_resetLock2 = 0;
+		}
+	}
+	MainDjFilter_reset();
+}
+
 // Local UI order only; stored routing numbers remain canonical.
 static uint8_t menu_stepAudioOutput(uint8_t value, int8_t diff)
 {
@@ -2849,6 +2882,8 @@ static void menu_encoderChangeParameter(int8_t inc)
 
 	//get address from top1-8 from activeParameter (base adress top1 + offset)
 	uint16_t paramNr		= pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter);
+	if(paramNr == PAR_NONE) return;
+	if(menu_setPerformanceFilter(paramNr, (int16_t)activeParameters[paramNr] + inc)) return;
 	//uint8_t *paramValue = &mainParameters[paramNr];
 	uint8_t *paramValue;
 
@@ -3458,9 +3493,10 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 	break;
 
 
-	case UNUSED_PAR_GLO_SAT:
-
-		break;
+	case PAR_PERF_FILTER:
+	case PAR_PERF_RESONANCE:
+		menu_setPerformanceFilter(paramNr, value);
+		return;
 
 	case PAR_POS_Y:
 		frontPanel_sendData(SEQ_CC,SEQ_SET_ACTIVE_TRACK,menu_getActiveVoice());
@@ -3960,6 +3996,9 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 	}
 
 
+
+	if(paramNr == PAR_NONE) return 0;
+	if(menu_setPerformanceFilter(paramNr, (int16_t)activeParameters[paramNr] + diff)) return 1;
 
 	//parameter fetch. given the value of the pot, and the parameter number
 	// fetch the actual numeric value that the parameter should be set to

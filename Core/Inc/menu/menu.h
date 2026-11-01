@@ -272,6 +272,8 @@ enum NamesEnum
 	TEXT_PATTERN_MODE,
 
 
+	TEXT_PERF_FILTER,
+	TEXT_PERF_RESONANCE,
 	NUM_NAMES
 };
 //-----------------------------------------------------------------
@@ -379,7 +381,8 @@ enum shortNamesEnum
 	SHORT_P4,
 	SHORT_KCM,
 	SHORT_FLAM,
-	SHORT_SHIFT
+	SHORT_SHIFT,
+	SHORT_PERF_FILTER
 
 	
 };
@@ -508,7 +511,8 @@ enum longNamesEnum
 	LONG_P4,
 	LONG_PATTERN_MODE,
 	LONG_FLAM,
-	LONG_SHIFT
+	LONG_SHIFT,
+	LONG_PERF_FILTER
 	
 };
 
@@ -613,6 +617,7 @@ enum Datatypes
 //-----------------------------------------------------------------
 extern const enum Datatypes parameter_dtypes[NUM_PARAMS];
 extern uint8_t mainParameters[NUM_KIT_SLOTS][END_OF_SOUND_PARAMETERS];		// keeps all kits from sd card in memory
+void menu_resetPerformanceFilter(void);
 extern uint8_t activeParameters[NUM_PARAMS];					// keeps the currently used kit in memory -> editBuffer
 //extern uint8_t morphParameters[END_OF_SOUND_PARAMETERS];
 extern uint8_t *morphParameters;
