@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual mix and smoother bodies; bounded producer stubs isolate final narrowing.
+"""Actual mix and smoother bodies; bounded producer stubs isolate pre-envelope clipping.
 The real transient producer's known negative signed shift UB is NOT exercised or
 suppressed here. LXR_BASE_REV selects the historical actual Snare.c for red tests.
 """
@@ -61,10 +61,12 @@ int main(void){
    float combined=snareVoice.vol*(mode?snareVoice.velo:1)*snareVoice.egValueOscVol;
    float tmp=fmaf(noise,snareVoice.mix,(int16_t)(tone*(1-snareVoice.mix)));
    tmp+=transient;
+   if(tmp>32767){tmp=32767;positive++;}
+   else if(tmp< -32768){tmp=-32768;negative++;}
    float value=combined*tmp*state;
    int32_t integral=(int32_t)value;
-   if(integral>32767){expected[i]=32767;positive++;}
-   else if(integral< -32768){expected[i]=-32768;negative++;}
+   if(integral>32767){expected[i]=32767;}
+   else if(integral< -32768){expected[i]=-32768;}
    else {expected[i]=(int16_t)value;if(value!=integral)fractional++;}
   }
   Snare_calcSyncBlock(out,64);
@@ -72,6 +74,34 @@ int main(void){
   assert(reads==64 && dist_calls==1);
   assert(fabsf(state-snareVoice.FaderVolumeFilter.b)<0.000001f);
   cases++;
+ }
+
+ /* Explicit overload witnesses: attenuation must follow clipping, not hide it.
+    Exercise each gain independently, both branches and both signs. */
+ for(int mode=FIRST_MODE;mode<2;mode++)for(int sign=-1;sign<=1;sign+=2)
+ for(int gain=0;gain<4;gain++){
+  snareVoice=(SnareVoice){.volumeMod=mode,.vol=gain==2?0.5f:1,
+   .velo=gain==1?0.5f:1,.egValueOscVol=gain==0?0.5f:1,
+   .FaderVolumeFilter={gain==3?0.5f:1,0.1f}};
+  fader=gain==3?0.5f:1;tone=sign*30000;noise=0;transient=sign*30000;
+  int16_t out;Snare_calcSyncBlock(&out,1);
+  float scale=(gain==1&&!mode)?1:0.5f;
+  assert(out==(int16_t)((sign>0?32767.f:-32768.f)*scale));
+ }
+ /* Fractional mix survives until final conversion: 100.5 * 2 = 201. */
+ for(int mode=FIRST_MODE;mode<2;mode++){
+  snareVoice=(SnareVoice){.volumeMod=mode,.vol=2,.velo=1,.egValueOscVol=1,
+   .mix=0.5f,.FaderVolumeFilter={1,0.1f}};
+  fader=1;tone=0;noise=201;transient=0;
+  int16_t out;Snare_calcSyncBlock(&out,1);assert(out==201);
+  /* Signed envelope undershoot and asymmetric endpoint; extended invalid gains. */
+  tone=-32768;noise=0;transient=-32768;snareVoice.mix=0;
+  snareVoice.vol=1;snareVoice.egValueOscVol=-1;
+  Snare_calcSyncBlock(&out,1);assert(out==32767);
+  snareVoice.vol=1e38f;
+  Snare_calcSyncBlock(&out,1);assert(out==32767);
+  snareVoice.egValueOscVol=1;
+  Snare_calcSyncBlock(&out,1);assert(out==-32768);
  }
  assert(positive && negative && fractional);
  printf("snare: %u cases; positive overload %u negative overload %u fractional inrange %u\n",cases,positive,negative,fractional);
