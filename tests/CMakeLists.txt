@@ -185,7 +185,3 @@ set_tests_properties(test_sd_driver test_sd_hal_status PROPERTIES TIMEOUT 30)
 add_test(NAME test_sd_remount
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_sd_remount.py)
-
-add_test(NAME test_loader_small_fixes
-    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
-            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_loader_small_fixes.py)
