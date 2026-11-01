@@ -1,4 +1,6 @@
-"""Real mixer block/routing bodies, fake voice producers and FX return endpoint."""
+"""Actual mixer/Soundengine/FX routing and DSP; both DMA halves, canonical St1.
+Constant voice, IRQ primitives and unused FX algorithms are host stubs.
+"""
 from pathlib import Path
 import re, subprocess, tempfile, os
 root=Path(__file__).resolve().parents[1]
@@ -16,13 +18,6 @@ pre=r'''
 #include "Soundengine/DSPAudio/MainDjFilter.h"
 #define USE_TRIGGERED_PAN 1
 #define OUTPUT_DMA_SIZE 64
-#define MIXER_ROUTING_DAC1_STEREO 0
-#define MIXER_ROUTING_DAC2_STEREO 1
-#define MIXER_ROUTING_DAC1_L 2
-#define MIXER_ROUTING_DAC1_R 3
-#define MIXER_ROUTING_DAC2_L 4
-#define MIXER_ROUTING_DAC2_R 5
-#define MIXER_ROUTING_FX_BUS 6
 static int sat(int x){return x>32767?32767:x< -32768?-32768:x;}
 #define __PKHBT(a,b,n) (((uint32_t)(a)&65535u)|((uint32_t)(b)<<16))
 static int32_t __QADD16(int32_t a,int32_t b){return __PKHBT(sat((int16_t)a+(int16_t)b),sat((int16_t)((uint32_t)a>>16)+(int16_t)((uint32_t)b>>16)),16);}
@@ -47,27 +42,87 @@ static void Snare_calcSyncBlock(int16_t*p,unsigned n){memset(p,0,n*2);}
 #define HiHat_calcSyncBlock Snare_calcSyncBlock
 static void mixer_decimateBlock(int n,int16_t*p){}
 static void bufferTool_clearBuffer(int16_t*p,unsigned n){memset(p,0,n*2);}
-static int fxSecond;
-static void FxBus_process(int16_t*fx,int16_t*l,int16_t*r,int16_t*l2,int16_t*r2,unsigned n){for(unsigned i=0;i<n;i++){(fxSecond?l2:l)[2*i]+=fx[2*i];(fxSecond?r2:r)[2*i]+=fx[2*i+1];}}
 '''
-main=r'''
+labels=(root/'Core/Inc/menu/MenuText.h').read_text()
+for table, expected in (('outputNames', ['St1','St2','L1','R1','L2','R2','FX']), ('outputNamesFx', ['St1','St2','L1','R1','L2','R2'])):
+ block=re.search(r'const char '+table+r'\[\]\[7\]\s*=\s*\{(.*?)\n\};',labels,re.S)
+ assert block, table
+ assert re.findall(r'\{"([^"\n]+)"\}',block[1])==expected, table
+h=(root/'Core/Inc/Soundengine/DSPAudio/mixer.h').read_text()
+pre+=re.search(r'enum\s*\{.*?\};',h,re.S)[0]+'\n'
+def body(path,name):
+ s=(root/path).read_text();m=re.search(r'(?m)^(?:IN_ITCM_RAM )?(?:void|uint8_t) '+name+r'\([^;]*?\)\s*\{',s);assert m,name
+ p=m.end();d=1
+ while d:d+=(s[p]=='{')-(s[p]=='}');p+=1
+ return s[m.start():p].replace('IN_ITCM_RAM ','')+'\n'
+pre+='''
+#define USE_DAC2 1
+#define USE_REVERB 0
+#define SAMPLE_VALID 2
+#define FX_OFF 0
+#define FX_DISTORTION 1
+#define FX_RING 2
+#define FX_COMPRESSOR 3
+#define FX_DELAY 4
+#define DELAY_NORMAL 0
+static struct {int audioRouting,fxType,dryWet,distortion,ringmod,compressor;struct {int delayType;} delay;} fxBus;
+#define Distortion_process(...) assert(0)
+#define Ringmod_process(...) assert(0)
+#define Compressor_process(...) assert(0)
+#define Delay_process(...) assert(0)
+#define Delay_processPingPong(...) assert(0)
+static int16_t dma_buffer[256],dma_buffer2[256];
+static uint8_t bCurrentSampleValid;
+static uint32_t codec_requestGeneration;
+static uint32_t __get_PRIMASK(void){return 0;}
+static void __disable_irq(void){}
+static void __set_PRIMASK(uint32_t x){}
+'''
+c=pre+body('Core/Src/Soundengine/FxBus.c','FxBus_process')
+c+=''.join(extract(n) for n in ('mixer_checkOutJackAvailable','mixer_addDataToOutput','mixer_calcNextSampleBlock'))
+c+=body('Core/Src/Soundengine/Soundengine.c','soundengine_calcNextSampleBlock')
+c+='''
+static void render(unsigned half){bCurrentSampleValid=half;assert(soundengine_calcNextSampleBlock());}
 int main(void){
  voiceArray[0].triggeredPanL=voiceArray[0].triggeredPanR=1;
- int16_t a[128],b[128];
- for(unsigned route=0;route<7;route++)for(fxSecond=0;fxSecond<2;fxSecond++){
-  MainDjFilter_reset();mixer_audioRouting[0]=route;
-  for(unsigned j=0;j<20;j++)mixer_calcNextSampleBlock(a,b);
-  int16_t baseline[128];memcpy(baseline,b,sizeof b);
-  MainDjFilter_setTargets(126,127);
-  for(unsigned j=0;j<100;j++){mixer_calcNextSampleBlock(a,b);assert(!memcmp(b,baseline,sizeof b));}
-  if(route==1||route==4||route==5||(route==6&&!fxSecond))assert(a[126]==0&&a[127]==0);
-  if(route==0||route==2||(route==6&&fxSecond))assert(b[126]==1000);
-  if(route==0||route==3||(route==6&&fxSecond))assert(b[127]==1000);
+ assert(MIXER_ROUTING_DAC1_STEREO==0 && MIXER_ROUTING_DAC2_STEREO==1);
+ assert(MIXER_ROUTING_DAC1_L==2 && MIXER_ROUTING_DAC1_R==3);
+ assert(MIXER_ROUTING_DAC2_L==4 && MIXER_ROUTING_DAC2_R==5 && MIXER_ROUTING_FX_BUS==6);
+ unsigned failures=0;
+ const unsigned routes[]={MIXER_ROUTING_DAC1_STEREO,MIXER_ROUTING_DAC2_STEREO,MIXER_ROUTING_DAC1_L,MIXER_ROUTING_DAC1_R,MIXER_ROUTING_DAC2_L,MIXER_ROUTING_DAC2_R,MIXER_ROUTING_FX_BUS,MIXER_ROUTING_FX_BUS};
+ const char *names[]={"St1","St2","L1","R1","L2","R2","FX->St1","FX->St2"};
+ for(unsigned t=0;t<8;t++)for(unsigned half=0;half<2;half++){
+  mixer_audioRouting[0]=routes[t];fxBus.audioRouting=t==7?MIXER_ROUTING_DAC2_STEREO:MIXER_ROUTING_DAC1_STEREO;
+  for(unsigned i=0;i<256;i++)dma_buffer[i]=dma_buffer2[i]=12345;
+  MainDjFilter_reset();for(unsigned j=0;j<120;j++)render(half);
+  // Validate actual baseline destinations; do not let silence make invariance vacuous.
+  for(unsigned i=0;i<128;i++){
+   int left=(i%2)==0;
+   int st1=t==0||t==6||(t==2&&left)||(t==3&&!left);
+   int st2=t==1||t==7||(t==4&&left)||(t==5&&!left);
+   assert(dma_buffer2[128*half+i]==(st1?1000:0));
+   assert(dma_buffer[128*half+i]==(st2?1000:0));
+  }
+  int16_t a[128],b[128];memcpy(a,dma_buffer+128*half,sizeof a);memcpy(b,dma_buffer2+128*half,sizeof b);
+  MainDjFilter_setTargets(126,127);for(unsigned j=0;j<120;j++)render(half);
+  int st1Changed=memcmp(b,dma_buffer2+128*half,sizeof b)!=0;
+  int st2Changed=memcmp(a,dma_buffer+128*half,sizeof a)!=0;
+  int mainRoute=t==0||t==2||t==3||t==6;
+  int dcRejected=1;
+  if(mainRoute)for(unsigned i=0;i<128;i++)dcRejected &= dma_buffer2[128*half+i]>=-1 && dma_buffer2[128*half+i]<=1;
+  int ok=mainRoute?(st1Changed&&!st2Changed&&dcRejected):(!st1Changed&&!st2Changed);
+  printf("%s half=%u: St1 changed=%d St2 changed=%d expected main-only: %s\\n",names[t],half,st1Changed,st2Changed,ok?"PASS":"FAIL");
+  for(unsigned i=0;i<128;i++){
+   assert(dma_buffer[128*(1-half)+i]==12345);
+   assert(dma_buffer2[128*(1-half)+i]==12345);
+  }
+  failures+=!ok;
  }
- puts("Actual mixer routes and post-FX Stereo2 invariance passed");
+ printf("%u/16 intended main-only routing checks failed\\n",failures);
+ return failures?1:0;
 }
 '''
 with tempfile.TemporaryDirectory() as tmp:
- p=Path(tmp);(p/'test.c').write_text(pre+extract('mixer_checkOutJackAvailable')+extract('mixer_addDataToOutput')+extract('mixer_calcNextSampleBlock')+main)
+ p=Path(tmp);(p/'test.c').write_text(c)
  subprocess.run([os.environ.get('CC','cc'),'-O1','-DLXR_HOST_TEST','-fsanitize=address,undefined','-I'+str(root/'Core/Inc'),str(p/'test.c'),str(root/'Core/Src/Soundengine/DSPAudio/MainDjFilter.c'),'-lm','-o',str(p/'test')],check=True)
- subprocess.run([str(p/'test')],check=True)
+ raise SystemExit(subprocess.run([str(p/'test')]).returncode)
