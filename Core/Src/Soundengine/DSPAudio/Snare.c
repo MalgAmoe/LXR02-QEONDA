@@ -177,6 +177,8 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 	transient_calcBlock(&snareVoice.transGen,transBuf,size);
 
 
+	const float faderTarget = adc_getFaderVolume(3);
+
 	uint8_t j;
 	if(snareVoice.volumeMod)
 	{
@@ -195,7 +197,7 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 			tmp	+= transBuf[j];
 			// Clip the source mix before envelope, velocity and fader attenuation.
 			tmp = tmp > 32767.f ? 32767.f : (tmp < -32768.f ? -32768.f : tmp);
-			float output = snareVoice.combinedVolume  * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, adc_getFaderVolume(3));
+			float output = snareVoice.combinedVolume  * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, faderTarget);
 			// Defensive conversion: signed envelope undershoot or extended gains.
 			output = output > 32767.f ? 32767.f : (output < -32768.f ? -32768.f : output);
 			buf[j] = (int16_t)output;
@@ -225,7 +227,7 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 			tmp	+= transBuf[j];
 			// Clip the source mix before envelope, velocity and fader attenuation.
 			tmp = tmp > 32767.f ? 32767.f : (tmp < -32768.f ? -32768.f : tmp);
-			float output = snareVoice.combinedVolume * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, adc_getFaderVolume(3));
+			float output = snareVoice.combinedVolume * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, faderTarget);
 			// Defensive conversion: signed envelope undershoot or extended gains.
 			output = output > 32767.f ? 32767.f : (output < -32768.f ? -32768.f : output);
 			buf[j] = (int16_t)output;

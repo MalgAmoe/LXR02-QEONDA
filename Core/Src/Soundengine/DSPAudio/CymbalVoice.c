@@ -183,6 +183,8 @@ void Cymbal_calcSyncBlock(int16_t* buf, const uint8_t size)
 		//calc transient sample
 		transient_calcBlock(&cymbalVoice.transGen,mod,size);
 
+		const float faderTarget = adc_getFaderVolume(4);
+
 		uint8_t j;
 		if(cymbalVoice.volumeMod)
 		{
@@ -202,7 +204,7 @@ void Cymbal_calcSyncBlock(int16_t* buf, const uint8_t size)
 			for(j=0;j<size;j++)
 			{
 				//add volume
-				buf[j] *=  cymbalVoice.combinedVolume * calcOnePole( &cymbalVoice.FaderVolumeFilter, adc_getFaderVolume(4));
+				buf[j] *=  cymbalVoice.combinedVolume * calcOnePole( &cymbalVoice.FaderVolumeFilter, faderTarget);
 			}
 #else
 			for(j=0;j<size;j++)
@@ -231,7 +233,7 @@ void Cymbal_calcSyncBlock(int16_t* buf, const uint8_t size)
 			for(j=0;j<size;j++)
 			{
 				//add volume
-				buf[j] *=  cymbalVoice.combinedVolume * calcOnePole( &cymbalVoice.FaderVolumeFilter, adc_getFaderVolume(4));
+				buf[j] *=  cymbalVoice.combinedVolume * calcOnePole( &cymbalVoice.FaderVolumeFilter, faderTarget);
 			}
 #else
 			for(j=0;j<size;j++)

@@ -191,6 +191,8 @@ void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
 	//calc transient sample
 	transient_calcBlock(&hatVoice.transGen,mod1,size);
 
+	const float faderTarget = adc_getFaderVolume(5);
+
 	uint8_t j;
 	if(hatVoice.volumeMod)
 	{
@@ -210,7 +212,7 @@ void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
 			for(j=0;j<size;j++)
 			{
 				//add volume
-				buf[j] *=  hatVoice.combinedVolume * calcOnePole( &hatVoice.FaderVolumeFilter, adc_getFaderVolume(5));
+				buf[j] *=  hatVoice.combinedVolume * calcOnePole( &hatVoice.FaderVolumeFilter, faderTarget);
 			}
 #else
 		for(j=0;j<size;j++)
@@ -238,7 +240,7 @@ void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
 			for(j=0;j<size;j++)
 			{
 				//add volume
-				buf[j] *=  hatVoice.combinedVolume * calcOnePole( &hatVoice.FaderVolumeFilter, adc_getFaderVolume(5));
+				buf[j] *=  hatVoice.combinedVolume * calcOnePole( &hatVoice.FaderVolumeFilter, faderTarget);
 			}
 #else
 		for(j=0;j<size;j++)

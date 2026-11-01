@@ -298,14 +298,16 @@ IN_ITCM_RAM void calcDrumVoiceSyncBlock(const uint8_t voiceNr, int16_t* buf, con
 	//channel volume
 	//bufferTool_addGain(buf,voiceArray[voiceNr].combinedVolume  ,size);
 
+	const float faderTarget = adc_getFaderVolume(voiceNr);
+
 	for(int i=0; i< size; i++)
 	{
 #if SMOOTH_MIXER_VOL_PAN_DRIVE
 
 		float mixVol 	= calcOnePole( &voiceArray[voiceNr].MixerPageFilter[0], voiceArray[voiceNr].vol);
-		voiceArray[voiceNr].combinedVolume = mixVol * calcOnePole( &voiceArray[voiceNr].FaderVolumeFilter, adc_getFaderVolume(voiceNr));
+		voiceArray[voiceNr].combinedVolume = mixVol * calcOnePole( &voiceArray[voiceNr].FaderVolumeFilter, faderTarget);
 #else
-		voiceArray[voiceNr].combinedVolume = voiceArray[voiceNr].vol * calcOnePole( &voiceArray[voiceNr].FaderVolumeFilter, adc_getFaderVolume(voiceNr));
+		voiceArray[voiceNr].combinedVolume = voiceArray[voiceNr].vol * calcOnePole( &voiceArray[voiceNr].FaderVolumeFilter, faderTarget);
 #endif
 		buf[i] *= voiceArray[voiceNr].combinedVolume;
 	}

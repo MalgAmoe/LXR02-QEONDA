@@ -71,7 +71,8 @@ int main(void){
   }
   Snare_calcSyncBlock(out,64);
   for(int i=0;i<64;i++)assert(out[i]==expected[i]);
-  assert(reads==64 && dist_calls==1);
+  /* Target read once per block; output/state checks above retain per-sample smoothing. */
+  assert(reads==1 && dist_calls==1);
   assert(fabsf(state-snareVoice.FaderVolumeFilter.b)<0.000001f);
   cases++;
  }
