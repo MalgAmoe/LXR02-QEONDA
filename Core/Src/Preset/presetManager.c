@@ -606,8 +606,6 @@ FRESULT preset_saveTmpPat()
 
 	//write pattern data
 	//preset_writePatternData(presetNr);
-#if 0
-#else
 
 		uint8_t length;
 
@@ -650,7 +648,6 @@ FRESULT preset_saveTmpPat()
 		//write associated kit nr
 		preset_writeFile((FIL*)&SDFile,&seq_patternSet.kitNr[presetNr],sizeof(uint8_t),&bytesWritten);
 
-#endif
 
 	//close the file
 	res = preset_closeFile((FIL*)&SDFile);
@@ -1396,98 +1393,11 @@ void preset_sendDrumsetParameters()
 
 }
 //----------------------------------------------------
-/*
-char* preset_loadName(uint8_t presetNr, uint8_t nameBufferIdx, uint8_t what)
-{
-	uint8_t type;
 
-	switch(what) {
-	case SAVE_TYPE_PATTERN:
-		type=FEXT_PAT;
-		break;
-	case SAVE_TYPE_KIT:
-	case SAVE_TYPE_MORPH:
-		type=FEXT_SOUND;
-		break;
-	case SAVE_TYPE_ALL:
-		type=FEXT_ALL;
-		break;
-	case SAVE_TYPE_PERFORMANCE:
-		type=FEXT_PERF;
-		break;
-	default:
-		return NULL; // for glo and sample we don't load a name
-	}
-	
-
-#if USE_SD_CARD		
-	//filename in 8.3  format
-	char filename[9];
-	preset_makeFileName(filename,presetNr,type);
-
-	//try to open the file
-	FRESULT res = preset_openFile((FIL*)&SDFile,filename,FA_OPEN_EXISTING | FA_READ);
-	
-
-
-	if(res!=FR_OK)
-	{
-		//error opening the file
-		memcpy((void*)savefileNames[nameBufferIdx][presetNr],PSTR("Empty   "),8);
-		return NULL;	
-	}
-	
-	//file opened correctly -> extract name (first 8 bytes)
-	unsigned int bytesRead;
-	f_read((FIL*)&SDFile,(void*)savefileNames[nameBufferIdx][presetNr],8,&bytesRead);
-	
-
-
-	//close the file handle
-	preset_closeFile((FIL*)&SDFile);
-	
-	return (char*)savefileNames[nameBufferIdx][presetNr];
-#else
-
-return "ToDo";
-#endif
-}
-*/
 
 //----------------------------------------------------
 /** request step data from the cortex via uart and save it in the provided step struct*/
-/*
-void preset_queryStepDataFromSeq(uint16_t stepNr)
-{
-	frontParser_newSeqDataAvailable = 0;
 
-	//request step data
-	//the max number for 14 bit data is 16383!!!
-	//current max step nr is 128*7*8 = 7168
-	frontPanel_sendByte((stepNr>>7)&0x7f);		//upper nibble 7 bit
-	frontPanel_sendByte(stepNr&0x7f);			//lower nibble 7 bit
-
-	//wait until data arrives
-	uint8_t newSeqDataLocal = 0;
-	uint16_t now = systick_ticks;
-	while((newSeqDataLocal==0))
-	{
-		//we have to call the uart parser to handle incoming messages from the sequencer
-		uart_checkAndParse();
-		
-		newSeqDataLocal = frontParser_newSeqDataAvailable;
-		
-		if(systick_ticks-now >= 31)
-		{
-			//timeout
-			now = systick_ticks;
-			//request step again
-			frontPanel_sendByte((stepNr>>7)&0x7f);		//upper nibble 7 bit
-			frontPanel_sendByte(stepNr&0x7f);
-		}
-	}
-}
-*/
 //----------------------------------------------------
 /*
 static void preset_sendMainStepDataToSeq( uint16_t mainStepData)
@@ -1499,30 +1409,7 @@ static void preset_sendMainStepDataToSeq( uint16_t mainStepData)
 */
 //----------------------------------------------------
 /** send step data from SD card to the sequencer*/
-/*
-static void preset_sendStepDataToSeq()
-{
-	frontPanel_sendByte(frontParser_stepData.volume	& 0x7f);
-	frontPanel_sendByte(frontParser_stepData.prob	& 0x7f);
-	frontPanel_sendByte(frontParser_stepData.note	& 0x7f);
 
-	frontPanel_sendByte(frontParser_stepData.param1Nr	& 0x7f);
-	frontPanel_sendByte(frontParser_stepData.param1Val	& 0x7f);
-
-	frontPanel_sendByte(frontParser_stepData.param2Nr	& 0x7f);
-	frontPanel_sendByte(frontParser_stepData.param2Val	& 0x7f);
-
-	//now the MSBs from all 7 values
-	frontPanel_sendByte((uint8_t) 	(((frontParser_stepData.volume 	& 0x80)>>7) |
-							((frontParser_stepData.prob	 	& 0x80)>>6) |
-							((frontParser_stepData.note	 	& 0x80)>>5) |
-							((frontParser_stepData.param1Nr	& 0x80)>>4) |
-							((frontParser_stepData.param1Val	& 0x80)>>3) |
-							((frontParser_stepData.param2Nr	& 0x80)>>2) |
-							((frontParser_stepData.param2Val	& 0x80)>>1))
-							);
-}	
-*/
 //----------------------------------------------------
 void preset_queryPatternInfoFromSeq(uint8_t patternNr, uint8_t* next, uint8_t* repeat)
 {
@@ -1592,8 +1479,6 @@ void preset_queryMainStepDataFromSeq(uint16_t stepNr, uint16_t *mainStepData, ui
 //----------------------------------------------------
 static void preset_writePatternData(uint8_t patternNr)
 {
-#if 0
-#else
 		UINT bytesWritten;
 		uint8_t length;
 
@@ -1636,41 +1521,10 @@ static void preset_writePatternData(uint8_t patternNr)
 		//write associated kit nr
 		preset_writeFile((FIL*)&SDFile,&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesWritten);
 
-#endif
 }
 
 //----------------------------------------------------
-/*
-void preset_savePatternTemp(uint8_t presetNr)
-{
 
-	UINT bytesWritten;
-	//lcd_clear();
-	//lcd_home();
-	//lcd_string(PSTR("Saving pattern"));
-
-
-	//filename in 8.3  format
-	char filename[9];
-	//sprintf(filename,"p%03d.pat",presetNr);
-	preset_makeFileNameTemp(filename,presetNr,FEXT_PAT);
-	//open the file
-	preset_openFile((FIL*)&SDFile,filename,FA_CREATE_ALWAYS | FA_WRITE);
-
-	//write preset name to file
-	preset_writeFile((FIL*)&SDFile,(void*)preset_currentName,8,&bytesWritten);
-
-	preset_writePatternData();
-
-	//close the file
-	preset_closeFile((FIL*)&SDFile);
-
-	//reset the lcd
-	menu_repaintAll();
-
-
-}
-*/
 //----------------------------------------------------
 FRESULT preset_savePatternSD(uint8_t presetNr)
 {
@@ -1724,170 +1578,6 @@ FRESULT preset_savePatternSD(uint8_t presetNr)
 static uint8_t preset_readPatternData(uint8_t patternNr, uint8_t dataVersion)
 {
 
-#if 0
-
-
-	// note that the pattern length data is no longer stored in the same way.
-	// This means that loading old patterns with non-standard length, the length will be
-	// ignored and a standard length used. I think it's acceptable as long as users are aware of this.
-
-	UINT bytesRead;
-	uint8_t success=1; // start off succeeding
-	//uint16_t i;
-	//uint8_t repeat=0;
-	uint8_t next=0;
-
-	//lcd_clear();
-	//lcd_home();
-	//lcd_string(PSTR("Loading pattern"));
-
-	// ---------- Load step data first
-
-
-
-	// load step data
-
-
-	for(uint8_t pat=0; pat<NUM_PATTERN;pat++)
-	{
-		for(uint8_t trk=0; trk<NUM_TRACKS;trk++)
-		{
-
-#if 1
-
-			if( (pat == seq_activePattern) && seq_isRunning() )
-			{
-				f_read((FIL*)&SDFile,(void*)&seq_tmpPattern.seq_subStepPattern[trk][0],sizeof(Step)*STEPS_PER_PATTERN,&bytesRead);
-			} else {
-				f_read((FIL*)&SDFile,(void*)&seq_patternSet.seq_subStepPattern[pat][trk][0],sizeof(Step)*STEPS_PER_PATTERN,&bytesRead);
-			}
-
-
-
-			if(bytesRead!=sizeof(Step)*(STEPS_PER_PATTERN))
-			{
-				success=0;
-				break; // file error, or we ran out of file (eof)
-			}
-#else
-			for(uint8_t stp=0;stp<STEPS_PER_PATTERN; stp++)
-			{
-				f_read((FIL*)&SDFile,(void*)&frontParser_stepData,sizeof(Step),&bytesRead);
-				if(bytesRead==sizeof(Step))
-				{
-					seq_patternSet.seq_subStepPattern[pat][trk][stp] = frontParser_stepData;
-				} else {
-					success=0;
-					break; // file error, or we ran out of file (eof)
-				}
-			}
-#endif
-		}
-	}
-
-	// ---------- load the main step data next
-	uint16_t mainStepData;
-
-	for(uint8_t pat=0; pat<NUM_PATTERN;pat++)
-	{
-		for(uint8_t trk=0; trk<NUM_TRACKS;trk++)
-		{
-			for(uint8_t bar=0;bar<NUM_BARS; bar++)
-			{
-				f_read((FIL*)&SDFile,(void*)&mainStepData,sizeof(uint16_t),&bytesRead);
-
-				if( bytesRead==sizeof(uint16_t)) {
-
-					if( (pat == seq_activePattern) && seq_isRunning() )
-					{
-						seq_tmpPattern.seq_mainSteps[bar][trk] = mainStepData;
-					} else {
-						seq_patternSet.seq_mainSteps[bar][pat][trk] = mainStepData;
-					}
-				}
-				 else {
-						success=0;
-						break;
-					}
-			}
-		}
-	}
-
-	//---------- pattern info (next/repeat)
-	/*
-	if(success) {
-		for(i=0;i<(NUM_PATTERN);i++)
-		{
-			f_read((FIL*)&preset_File,(void*)&next,sizeof(uint8_t),&bytesRead);
-			if(!bytesRead) {
-				success=0;
-				break;
-			}
-			f_read((FIL*)&preset_File,(void*)&repeat,sizeof(uint8_t),&bytesRead);
-			if(!bytesRead) {
-				success=0;
-				break;
-			}
-
-			if( (i == seq_activePattern) && seq_isRunning() )
-			{
-				seq_tmpPattern.seq_patternSettings.nextPattern = next;
-				seq_tmpPattern.seq_patternSettings.changeBar = repeat;
-			} else {
-				seq_patternSet.seq_patternSettings[i].nextPattern = next;
-				seq_patternSet.seq_patternSettings[i].changeBar = repeat;
-			}
-
-		}
-	}
-	*/
-
-	// ------------ shuffle settings
-	if(success) {
-		//load the shuffle settings
-		f_read((FIL*)&SDFile,(void*)&activeParameters[PAR_SHUFFLE],sizeof(uint8_t),&bytesRead);
-		//and update on cortex
-		if(bytesRead)
-			//frontPanel_sendData(SEQ_CC,SEQ_SHUFFLE,parameter_values[PAR_SHUFFLE]);
-			seq_setShuffle(activeParameters[PAR_SHUFFLE]/127.f);
-		else {
-			success=0;
-		}
-	}
-
-	// ----------- Pattern/track lengths
-	// -- AS this might not exist in the saved data file, we still want success
-	if(success) {
-
-
-		for(uint8_t pat=0; pat<NUM_PATTERN;pat++)
-		{
-			for(uint8_t trk=0; trk<NUM_TRACKS;trk++)
-			{
-				f_read((FIL*)&SDFile,(void*)&next,sizeof(uint8_t),&bytesRead);
-
-
-				if( (pat == seq_activePattern) && seq_isRunning() )
-				{
-					seq_tmpPattern.length[trk] = next;
-				} else {
-					seq_patternSet.length[pat][trk] = next;
-				}
-			}
-		}
-
-		// signal new pattern after receiving all the data
-		/*
-		if( seq_isRunning() ) {
-			seq_newPatternAvailable = 1;
-		}
-		*/
-
-		success=1; // just to document that we don't consider this a failure, we just didn't read the bytes for this
-	}
-
-	return success;
-#else
 
 	// note that the pattern length data is no longer stored in the same way.
 	// This means that loading old patterns with non-standard length, the length will be
@@ -1991,55 +1681,10 @@ static uint8_t preset_readPatternData(uint8_t patternNr, uint8_t dataVersion)
 	}
 
 	return success;
-#endif
 
 }
 //----------------------------------------------------
-/*
-uint8_t preset_loadPatternTemp(uint8_t presetNr)
-{
-#if USE_SD_CARD
-	//filename in 8.3  format
-	char filename[9];
-	UINT bytesRead;
-	uint8_t success=0;
-	//sprintf(filename,"p%03d.pat",presetNr);
-	preset_makeFileNameTemp(filename,presetNr,FEXT_PAT);
 
-	//open the file
-	FRESULT res = preset_openFile((FIL*)&SDFile,filename,FA_OPEN_EXISTING | FA_READ);
-
-	if(res!=FR_OK)
-	{
-
-		return 0; //file open error... maybe the file does not exist?
-	}
-
-
-	//read the preset name
-	f_read((FIL*)&SDFile,(void*)preset_currentName,8,&bytesRead);
-	if(bytesRead != 8)
-		goto closeFile;
-
-	if(!preset_readPatternData())
-		goto closeFile;
-
-	success=1;
-	//close the file handle
-closeFile:
-	preset_closeFile((FIL*)&SDFile);
-
-	//force complete repaint
-	menu_repaintAll();
-	// return success or failure
-	return success;
-
-#else
-frontPanel_sendData(PRESET,PATTERN_LOAD,presetNr);
-
-#endif
-}
-*/
 //----------------------------------------------------
 FRESULT preset_loadPatternSD(uint8_t presetNr)
 {

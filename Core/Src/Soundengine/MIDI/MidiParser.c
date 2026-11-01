@@ -76,24 +76,8 @@ enum State
 #define NUM_LFO 6
 uint8_t midiParser_selectedLfoVoice[NUM_LFO] = {0,0,0,0,0,0};
 
-#if 0
-// -- AS for debugging
-void midiDebugSend(uint8_t b1, uint8_t b2)
-{
-	uart_sendMidiByte(0xF2);
-	uart_sendMidiByte(b1&0x7F);
-	uart_sendMidiByte(b2&0x7F);
-}
-#endif
 
 //----------------------------------------------------------
-#if 0
-inline uint16_t calcSlopeEgTime(uint8_t data2)
-{
-	float val = (data2+1)/128.f;
-	return data2>0?val*val*data2*128:1;
-}
-#endif
 //-----------------------------------------------------------
 static inline float calcPitchModAmount(uint8_t data2)
 {

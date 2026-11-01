@@ -179,7 +179,6 @@ static void seq_sendProgChg(const uint8_t ptn);
 
 
 
-//static uint8_t seq_isNextStepSyncStep();
 static uint8_t seq_intIsStepActive(uint8_t voice, uint8_t stepNr, uint8_t patternNr);
 static uint8_t seq_intIsMainStepActive(uint8_t voice, uint8_t mainStepNr, uint8_t pattern);
 static void seq_resetNote(Step *step);
@@ -1602,61 +1601,7 @@ void seq_triggerNextMasterStep(uint8_t stepSize)
 	}
 }
 //------------------------------------------------------------------------------
-/*
-void seq_resetDeltaAndTick()
-{
-	//if there are unplayed steps jump over them
-	while(!seq_isNextStepSyncStep())
-	{
-		seq_nextStep();
-	}
 
-	//is shuffle delay necessary?
-
-	if(seq_shuffle != 0)
-	{
-		//seq_deltaT = 0;^
-
-		seq_deltaT 	= (1000*60)/seq_tempo; 	//bei 12 = 500ms = time for one beat
-		seq_deltaT /= 96.f; //we run the internal clock at 96ppq -> seq clock 32 ppq == prescaler 3, midi clock 24 ppq == prescale 4
-		seq_deltaT *= 4;
-
-		seq_lastTick = systick_ticks;
-
-		uint8_t stepInHalfBeat = seq_masterStepCnt&0xf;
-		const float shuffleFactor = seq_shuffleTable[stepInHalfBeat] * seq_shuffle;
-		const float originalDeltaT = seq_deltaT;
-
-		seq_deltaT = shuffleFactor * originalDeltaT * 16.f;
-		seq_lastShuffle = shuffleFactor;
-
-		if(seq_deltaT <= 0)
-		{
-			seq_nextStep();
-			seq_lastTick = systick_ticks;
-			seq_calcDeltaT(seq_tempo);
-		} else
-		{
-			seq_delayedSyncStepFlag =1;
-		}
-
-		seq_prescaleCounter = 0;
-
-	}
-	else
-	{
-		//play next sync step
-		seq_nextStep();
-
-		seq_lastTick = systick_ticks;
-		seq_calcDeltaT(seq_tempo);
-
-		seq_prescaleCounter = 0;
-	}
-
-
-}
-*/
 //------------------------------------------------------------------------------
 //returns how many % [0:99] of the current step have elapsed (time to next step)
 // used for MIDI recording quantisation.
@@ -2698,21 +2643,7 @@ uint8_t seq_getActiveAutomationTrack(void)
   return seq_activeAutomTrack;
 }
 //------------------------------------------------------------------------------
-/*
-static uint8_t seq_isNextStepSyncStep()
-{
-	if(seq_delayedSyncStepFlag)
-	{
-		seq_delayedSyncStepFlag = 0;
-		seq_prescaleCounter = 0;
-		return 0;
-	}
-	if( ((seq_stepIndex[0] & 0x3) % 4) == 3) {
-		return 1;
-	}
-	return 0;
-}
-*/
+
 //------------------------------------------------------------------------------
 
 void seq_midiNoteOff(uint8_t chan)

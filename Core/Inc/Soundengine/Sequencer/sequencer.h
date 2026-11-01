@@ -205,7 +205,6 @@ void seq_tick();
 //------------------------------------------------------------------------------
 void seq_armAutomationStep(uint8_t stepNr, uint8_t track,uint8_t isArmed);
 //------------------------------------------------------------------------------
-//void seq_resetDeltaAndTick();
 //------------------------------------------------------------------------------
 void seq_setDeltaT(float delta);
 //------------------------------------------------------------------------------
@@ -304,7 +303,6 @@ void seq_copyBackupBufferToPattern(uint8_t patternNr);
 //------------------------------------------------------------------------------
 //void seq_copyEditBufferToRam(uint8_t patternNr);
 //------------------------------------------------------------------------------
-//uint8_t seq_isNextStepSyncStep();
 //------------------------------------------------------------------------------
 // send a note off for a channel if there is a note playing on that channel
 // if 0xff is specified, send a note off on all channels that have a note playing

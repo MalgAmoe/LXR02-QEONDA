@@ -844,39 +844,6 @@ static volatile uint8_t refresh_i, refresh_j;
 
 uint8_t sendDisplayBuffer()
 {
-#if 0
-	// turn off the cursor
-	lcd_turnOn(1,0);
-	for(uint8_t i=0;i<2;i++)
-	{
-		for(uint8_t j=0;j<16;j++)
-		{
-			if(currentDisplayBuffer[i][j] != editDisplayBuffer[i][j])
-			{
-				//something has changed
-
-				//we have to omit the zero termination sign
-				if(editDisplayBuffer[i][j] == '\0')
-				{
-					//make a clear space out of zero termination
-					editDisplayBuffer[i][j] = ' ';
-				}
-
-				//set cursor to current position
-				lcd_setcursor(j,(uint8_t)(i+1));
-				//send the new character
-				lcd_data(editDisplayBuffer[i][j]);
-				//update currentDisplayBuffer
-				currentDisplayBuffer[i][j] = editDisplayBuffer[i][j];
-			}	
-		}
-
-	}
-
-	// set cursor position and make visible or not
-	lcd_setcursor((uint8_t)(visibleCursor >> 2), (uint8_t)(((visibleCursor & 2) >> 1)+1));
-	lcd_turnOn(1,(visibleCursor & 1));
-#else
 	switch(display_refresh_state)
 	{
 	case 0:
@@ -999,7 +966,6 @@ uint8_t sendDisplayBuffer()
 		}
 		break;
 	}
-#endif
 
 	return display_refresh_state;
 }
@@ -1341,16 +1307,12 @@ static void menu_repaintLoadSavePage()
 				*/
 			}
 			// write the full preset name
-#if 0
-			memcpy(&editDisplayBuffer[1][5],(const void*)savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer],8);
-#else
 			for(int i=0; i<8;i++)
 			{
 				editDisplayBuffer[1][5+i] = characterOrder[(uint8_t)nameEditBuffer[i]];
 			}
 
 
-#endif
 		}
 
 		// bottom row - for save page, we show editing box or underline cursor as applicable
@@ -1902,21 +1864,11 @@ void menu_handleSaveScreenKnobValue(uint8_t potNr, uint8_t value)
 			switch(x)
 			{
 			case 0: //Upper Case
-#if 0
-				savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] =
-					(char)toupper(savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1]);
-#else
 				nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] = 	(char)toUpperCase(nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1]);
-#endif
 				break;
 
 			case 1: //lower case
-#if 0
-				savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] =
-					(char)tolower(savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1]);
-#else
 				nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] = 	(char)toLowerCase(nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1]);
-#endif
 				break;
 			}
 			menu_repaint();
@@ -1925,16 +1877,10 @@ void menu_handleSaveScreenKnobValue(uint8_t potNr, uint8_t value)
 			// scroll through letters
 		case 2: //switch(potNr)
 
-#if 0
-			    //32 to 127 => default ascii range numbers/letters
-				x = (uint8_t)(value/(range/(127-32.f)) + 32); //32 - 127
-				savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] = x;
-#else
 				//0 to NUM_CHARS
 				x = (uint8_t)((value/(float)range) * (NUM_CHARS-1));
 				nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] = x;// characterOrder[x];
 
-#endif
 
 				menu_repaint();
 				break;
@@ -2482,9 +2428,6 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 		case SAVE_STATE_EDIT_NAME7: // switch(menu_saveOptions.state) char 7
 		case SAVE_STATE_EDIT_NAME8: // switch(menu_saveOptions.state) char 8
 			DISABLE_CONV_WARNING
-#if 0
-			savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] += inc;
-#else
 			if(inc < 0)
 			{
 				if(nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] != 0)
@@ -2494,18 +2437,11 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 			{
 				nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1]	+= inc;
 			}
-#endif
 
-#if 0
-			//32 to 127 => default ascii range numbers/letters
-			if( savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] < 32) savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] = 32;
-			else if( savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] > 127) savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] = 127;
-#else
 
 				//0 to NUM_CHARS
 
 
-#endif
 
 
 			//presetNameBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] += inc;
