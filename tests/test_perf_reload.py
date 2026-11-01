@@ -61,7 +61,7 @@ static uint8_t menu_getActivePage(void){return menu_activePage;}
 static void menu_repaint(void){displayMrp=activeParameters[PAR_MORPH];displaySrt=activeParameters[PAR_VOICE_DECIMATION_ALL];repaints++;}
 static void menu_repaintAll(void){menu_repaint();}
 static void preset_touchTimer(int t){(void)t;}
-static void menu_resetPerformanceFilter(void){activeParameters[PAR_PERF_FILTER]=63;activeParameters[PAR_PERF_RESONANCE]=0;}
+static void menu_resetPerformanceFilter(void){activeParameters[PAR_PERF_HP]=0;activeParameters[PAR_PERF_LP]=127;activeParameters[PAR_PERF_RESONANCE]=0;}
 static void seq_setStepIndexToStart(void){}
 static void seq_setShuffle(float x){(void)x;}
 static int led_idx2StepLed(int x){return x;}
@@ -109,12 +109,19 @@ static void setup(int run,int md,int busy,int linked){
 }
 static void show(const char*s){printf("%s MRP=%d source=%d engine=%d probe=%d display=%d/%d selected=%d linked=%d mode=%d pending=%d sweep=%d/%d notes=%d calls=%d nonzeroTicks=%d oldSourceTicks=%d loads=%d lastKit=%d\n",s,activeParameters[PAR_MORPH],activeParameters[PAR_VOICE_DECIMATION_ALL],engineSrt,engineProbe,displayMrp,displaySrt,menu_selectedPresetNr[0],seq_patternSet.kitNr[0],activeParameters[PAR_PATTERN_MODE],seq_loadPendigFlag,morph_state,morph_index,notes,calls,nonzeroTicks,oldSourceTicks,loads,lastKit);}
 int main(void){
+ /* Actual ordinary RAM-load body must retain all session controls. */
+ for(int immediate=0;immediate<2;immediate++){
+  setup(0,0,0,0);activeParameters[PAR_MORPH]=0;
+  activeParameters[PAR_PERF_HP]=100;activeParameters[PAR_PERF_LP]=20;activeParameters[PAR_PERF_RESONANCE]=99;
+  preset_loadDrumsetRam(0,0,immediate);drain();
+  assert(activeParameters[PAR_PERF_HP]==100 && activeParameters[PAR_PERF_LP]==20 && activeParameters[PAR_PERF_RESONANCE]==99);
+ }
  for(int run=0;run<2;run++)for(int md=0;md<3;md++)for(int busy=0;busy<4;busy++)for(int linked=0;linked<2;linked++)for(int perf=0;perf<2;perf++){
  inject=0;setup(run,md,busy,linked);menu_activePage=perf?PERF_PAGE:0;
  int before=repaints;
  press_reload();
  assert(activeParameters[PAR_MORPH]==0);assert(nonzeroTicks==0);
- assert(activeParameters[PAR_PERF_FILTER]==63 && activeParameters[PAR_PERF_RESONANCE]==0);
+ assert(activeParameters[PAR_PERF_HP]==0 && activeParameters[PAR_PERF_LP]==127 && activeParameters[PAR_PERF_RESONANCE]==0);
  assert(activeParameters[PAR_VOICE_DECIMATION_ALL]==((!run&&md==1&&linked)?63:127));
  /* Stopped activation itself repaints both eligible fixture pages. */
  assert(repaints-before==(!run)+perf);

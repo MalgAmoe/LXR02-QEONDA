@@ -250,7 +250,8 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_P3, CAT_FX, LONG_P3},/*TEXT_FX_P3*/
 		{SHORT_P4, CAT_FX, LONG_P4},/*TEXT_FX_P4*/
 		{SHORT_KCM, CAT_GLOBAL, LONG_PATTERN_MODE},/*TEXT_AUTO_SWITCH_KIT*/
-		{SHORT_PERF_FILTER, CAT_GLOBAL, LONG_PERF_FILTER},
+		{SHORT_PERF_HP, CAT_GLOBAL, LONG_PERF_HP},
+		{SHORT_PERF_LP, CAT_GLOBAL, LONG_PERF_LP},
 		{SHORT_FIL_RESO, CAT_GLOBAL, LONG_RESONANCE},
 
 
@@ -527,8 +528,8 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_P1_VAL*/ 			DTYPE_0B127,							//240
 	    /*PAR_P2_VAL*/ 			DTYPE_0B127,
 	    /*PAR_SHUFFLE*/ 		DTYPE_0B127,
-	    /*PAR_UNUSED / PAR_PERF_FILTER*/ DTYPE_PM63,
-	    /*PAR_PATTERN_NEXT*/ 	DTYPE_MENU | (MENU_NEXT_PATTERN<<8),
+	    /*PAR_UNUSED / PAR_PERF_HP*/ DTYPE_0B127,
+	    /*PAR_PATTERN_NEXT / PAR_PERF_RESONANCE*/ DTYPE_0B127,
 	    /*PAR_TRACK_LENGTH*/ 	DTYPE_1B64,
 	    /*PAR_GLO_SAT*/			DTYPE_0B127,
 	    /*PAR_POS_Y*/ 			DTYPE_0B127,
@@ -2832,22 +2833,24 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 // Session-only controls: never enter automation capture or MIDI dispatch.
 static uint8_t menu_setPerformanceFilter(uint16_t paramNr, int16_t value)
 {
-	if(paramNr != PAR_PERF_FILTER && paramNr != PAR_PERF_RESONANCE) return 0;
-	int16_t maximum = paramNr == PAR_PERF_FILTER ? 126 : 127;
+	if(paramNr != PAR_PERF_HP && paramNr != PAR_PERF_LP && paramNr != PAR_PERF_RESONANCE) return 0;
+	const int16_t maximum = 127;
 	if(value < 0) value = 0;
 	if(value > maximum) value = maximum;
 	activeParameters[paramNr] = (uint8_t)value;
-	MainDjFilter_setTargets(activeParameters[PAR_PERF_FILTER], activeParameters[PAR_PERF_RESONANCE]);
+	MainDjFilter_setTargets(activeParameters[PAR_PERF_HP], activeParameters[PAR_PERF_LP], activeParameters[PAR_PERF_RESONANCE]);
 	return 1;
 }
 
 void menu_resetPerformanceFilter(void)
 {
-	activeParameters[PAR_PERF_FILTER] = 63;
+	activeParameters[PAR_PERF_HP] = 0;
+	activeParameters[PAR_PERF_LP] = 127;
 	activeParameters[PAR_PERF_RESONANCE] = 0;
 	for(uint8_t i = 0; i < 2; i++)
 	{
-		if(buttonHandler_originalParameter[i] == PAR_PERF_FILTER ||
+		if(buttonHandler_originalParameter[i] == PAR_PERF_HP ||
+		   buttonHandler_originalParameter[i] == PAR_PERF_LP ||
 		   buttonHandler_originalParameter[i] == PAR_PERF_RESONANCE)
 		{
 			buttonHandler_originalParameter[i] = 0;
@@ -3493,7 +3496,8 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 	break;
 
 
-	case PAR_PERF_FILTER:
+	case PAR_PERF_HP:
+	case PAR_PERF_LP:
 	case PAR_PERF_RESONANCE:
 		menu_setPerformanceFilter(paramNr, value);
 		return;

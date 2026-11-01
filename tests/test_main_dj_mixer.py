@@ -91,7 +91,8 @@ int main(void){
  unsigned failures=0;
  const unsigned routes[]={MIXER_ROUTING_DAC1_STEREO,MIXER_ROUTING_DAC2_STEREO,MIXER_ROUTING_DAC1_L,MIXER_ROUTING_DAC1_R,MIXER_ROUTING_DAC2_L,MIXER_ROUTING_DAC2_R,MIXER_ROUTING_FX_BUS,MIXER_ROUTING_FX_BUS};
  const char *names[]={"St1","St2","L1","R1","L2","R2","FX->St1","FX->St2"};
- for(unsigned t=0;t<8;t++)for(unsigned half=0;half<2;half++){
+ const uint8_t settings[][3]={{126,127,127},{0,20,127},{90,100,127},{100,20,127}};
+ for(unsigned setting=0;setting<4;setting++)for(unsigned t=0;t<8;t++)for(unsigned half=0;half<2;half++){
   mixer_audioRouting[0]=routes[t];fxBus.audioRouting=t==7?MIXER_ROUTING_DAC2_STEREO:MIXER_ROUTING_DAC1_STEREO;
   for(unsigned i=0;i<256;i++)dma_buffer[i]=dma_buffer2[i]=12345;
   MainDjFilter_reset();for(unsigned j=0;j<120;j++)render(half);
@@ -104,13 +105,13 @@ int main(void){
    assert(dma_buffer[128*half+i]==(st2?1000:0));
   }
   int16_t a[128],b[128];memcpy(a,dma_buffer+128*half,sizeof a);memcpy(b,dma_buffer2+128*half,sizeof b);
-  MainDjFilter_setTargets(126,127);for(unsigned j=0;j<120;j++)render(half);
+  MainDjFilter_setTargets(settings[setting][0],settings[setting][1],settings[setting][2]);for(unsigned j=0;j<120;j++)render(half);
   int st1Changed=memcmp(b,dma_buffer2+128*half,sizeof b)!=0;
   int st2Changed=memcmp(a,dma_buffer+128*half,sizeof a)!=0;
   int mainRoute=t==0||t==2||t==3||t==6;
   int dcRejected=1;
-  if(mainRoute)for(unsigned i=0;i<128;i++)dcRejected &= dma_buffer2[128*half+i]>=-1 && dma_buffer2[128*half+i]<=1;
-  int ok=mainRoute?(st1Changed&&!st2Changed&&dcRejected):(!st1Changed&&!st2Changed);
+  if(mainRoute && settings[setting][0])for(unsigned i=0;i<128;i++)dcRejected &= dma_buffer2[128*half+i]>=-1 && dma_buffer2[128*half+i]<=1;
+  int ok=mainRoute?(!st2Changed&&dcRejected&&(settings[setting][0]?st1Changed:1)):(!st1Changed&&!st2Changed);
   printf("%s half=%u: St1 changed=%d St2 changed=%d expected main-only: %s\\n",names[t],half,st1Changed,st2Changed,ok?"PASS":"FAIL");
   for(unsigned i=0;i<128;i++){
    assert(dma_buffer[128*(1-half)+i]==12345);
@@ -118,7 +119,7 @@ int main(void){
   }
   failures+=!ok;
  }
- printf("%u/16 intended main-only routing checks failed\\n",failures);
+ printf("%u/64 intended main-only routing checks failed\\n",failures);
  return failures?1:0;
 }
 '''
