@@ -14,8 +14,9 @@ encoder selection traverses all twelve controls.
 | B | Shuffle / HP / LP / shared resonance |
 | C | Compressor threshold / ratio / attack / release |
 
-Buttons 1–7 play rolls. Holding button 8 gates programmed triggers while leaving
-manual rolls available. Release, leaving PERF or Stop cancels the break. Existing
+Buttons 1–7 play rolls. **Momentary pattern mute:** holding button 8 suppresses programmed hits while leaving
+manual rolls available. The sequencer keeps running; release brings the pattern back in, still in time.
+Leaving PERF or Stop also cancels this mute. Existing
 armed roll recording remains available.
 
 ## Master filters
