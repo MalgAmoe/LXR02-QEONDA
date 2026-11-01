@@ -41,7 +41,10 @@ jobs:
           tar -xf "$archive"
           echo "$RUNNER_TEMP/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi/bin" >> "$GITHUB_PATH"
       - name: Host tests
+        env:
+          CC: clang
         run: |
+          clang --version
           cmake --preset host-tests
           cmake --build --preset host-tests --parallel 4
           ctest --preset host-tests

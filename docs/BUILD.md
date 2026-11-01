@@ -9,7 +9,8 @@ compiling, see [the README](../README.md#download-and-install).
 - [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads)
   **14.3.rel1 (GCC 14.3.1)**, the reference compiler used for current firmware and CI.
   Select the `arm-none-eabi` package for your host, including its C library.
-- A native C compiler for host tests, separate from the ARM compiler.
+- Clang for host tests, separate from the ARM compiler. Native x86 GCC does not
+  support the `__fp16` storage type used by the delay tests.
 
 Put the Arm toolchain's `bin` directory on PATH so both CMake and post-link tools such
 as `arm-none-eabi-objcopy` can find it. Check with `arm-none-eabi-gcc --version`.
@@ -49,6 +50,7 @@ the source revision and image SHA-256. Cross-platform byte-identical builds are 
 ## Host tests
 
 ```sh
+export CC=clang
 cmake --preset host-tests
 cmake --build --preset host-tests --parallel 4
 ctest --preset host-tests
