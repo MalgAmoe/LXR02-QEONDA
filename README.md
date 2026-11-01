@@ -95,11 +95,6 @@ The resulting image is `build/release/LXR_QEONDA_V0.1.img`; install it using the
 ## Documentation
 
 [Host tests](tests/README.md) documents setup and limits; host passes are not hardware certification.
-Detailed user, build/test and current-status guides are maintained **outside this application
-repository** in the parent workspace: `analysis/USER-GUIDE.md`, `analysis/BUILD-TEST.md`,
-`analysis/STATUS.md`. They are not included in a standalone clone, so these are workspace
-locations, not links promised to work on GitHub. The original full README is preserved in
-workspace `analysis/documentation-history/README-before-reorganization.md`.
 
 ## Acknowledgments
 
@@ -121,6 +116,5 @@ complete corresponding source under the same licence. There is no warranty.
 
 Erica Synths, LXR and LXR-02 names/logos are trademarks, not licensed by the GPL. Hardware
 is Erica Synths’ intellectual property, not part of this repository or the GPL licence.
-Third-party components retain their own licences; see NOTICE. The complete pre-reorganization
-legal explanation and historical announcement remain in the workspace README snapshot;
-LICENSE and NOTICE are unchanged and authoritative.
+Third-party components retain their own licences; see [NOTICE.md](NOTICE.md).
+LICENSE and NOTICE are authoritative.
