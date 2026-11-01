@@ -39,6 +39,10 @@ extern char currentFolder[13];
 //extern char presetNameBuffer[8];
 //extern uint8_t activePresetNr; //currently loaded kit
 
+// Call only after explicit unmount, before clearing/remounting FATFS.
+// Returns failure for an abandoned pending write; caller must report it.
+// Does not save, reset dirty flags, or retry writes on replacement media.
+FRESULT preset_invalidateUnmountedFiles(void);
 void preset_init(uint8_t presetNr);
 
 #define SKIP_NEXT_KIT_AUTOLOAD 2

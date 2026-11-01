@@ -51,6 +51,21 @@ static FRESULT preset_writeResult = FR_OK;
 static FIL *preset_writeFileHandle;
 static uint8_t preset_writeOpen;
 static uint8_t preset_writeSession;
+// Foreground only, immediately after explicit unmount. Never close/replay an
+// old FIL on replacement media. Return abandoned-write failure for the caller
+// to acknowledge; sticky failure remains until the next explicit open.
+FRESULT preset_invalidateUnmountedFiles(void)
+{
+    FRESULT abandoned = FR_OK;
+    if(preset_writeOpen)
+        abandoned = preset_writeResult != FR_OK ? preset_writeResult : FR_INVALID_OBJECT;
+    preset_writeOpen = 0;
+    preset_writeSession = 1;
+    preset_writeFileHandle = (FIL*)&SDFile;
+    preset_writeResult = abandoned != FR_OK ? abandoned : FR_INVALID_OBJECT;
+    memset((FIL*)&SDFile, 0, sizeof(SDFile));
+    return abandoned;
+}
 static FRESULT preset_closeFile(FIL *file)
 {
     if(preset_writeSession && file == preset_writeFileHandle)

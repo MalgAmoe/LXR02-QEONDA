@@ -8,11 +8,13 @@ helpers=s[s.index('static FRESULT preset_writeResult'):s.index('unsigned char pr
 c=r'''
 #include <assert.h>
 #include <stdint.h>
+#include <string.h>
 typedef int FRESULT; typedef int FIL; typedef char TCHAR; typedef unsigned UINT;typedef unsigned char BYTE;
 #define FR_OK 0
 #define FR_DENIED 7
 #define FR_INVALID_OBJECT 9
 #define FA_WRITE 2
+static FIL SDFile;
 static int shortWrite,writeError,closeError,openError,writes,closes,opens;
 static FRESULT f_open(FIL*f,const TCHAR*p,BYTE m){(void)f;(void)p;(void)m;opens++;return openError;}
 static FRESULT f_write(FIL*f,const void*p,UINT n,UINT*w){(void)f;(void)p;writes++;*w=shortWrite?n-1:n;return writeError;}

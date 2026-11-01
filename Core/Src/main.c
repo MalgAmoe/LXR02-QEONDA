@@ -927,6 +927,8 @@ lcd_process_display_interrupt = 1;
 			const uint8_t bg = soundengine_backgroundAudioBegin();
 			MX_FATFS_ReInit();
 			f_mount(0, (TCHAR const*)SDPath, 0); //un-mount
+            res = preset_invalidateUnmountedFiles();
+            if(res != FR_OK) menu_showSdError(res);
 			memset((FATFS*)&SDFatFS,0,sizeof(FATFS)); //clear FS object to force reinit
 			res = f_mount((FATFS*)&SDFatFS, (TCHAR const*)SDPath,1);
 			if( res != FR_OK)
