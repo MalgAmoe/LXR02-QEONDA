@@ -13,7 +13,6 @@
 
 
 #include "Soundengine/DSPAudio/Oscillator.h"
-#include <math.h>
 #include "Soundengine/DSPAudio/random.h"
 #include "Soundengine/DSPAudio/Samples.h"
 #include "Soundengine/MIDI/MidiParser.h"
@@ -107,8 +106,9 @@ int16_t calcSine(OscInfo* osc)
 }
 
 //-----------------------------------------------------------
-// Preserve STM32 conversion behavior: negative FM products map to zero.
-// Normal control products are bounded; this does not introduce bipolar FM.
+// These three FM blocks intentionally depend on the production ARM compiler
+// emitting vcvt.u32.f32 (bounded negative products map to zero on target).
+// Negative float-to-unsigned conversion is not portable C; verify ARM codegen.
 IN_ITCM_RAM void calcFmSineBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size,const float gain)
 {
 	uint8_t i;
@@ -117,7 +117,7 @@ IN_ITCM_RAM void calcFmSineBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf,
 		const uint32_t oscPhase = osc->phase;
 		int16_t oscOut ;
 
-		const uint32_t index =  oscPhase + (((uint32_t)fmaxf(modBuffer[i]*osc->fmMod, 0.f))<<17);
+		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<17);
 		uint32_t  itg	= index>>20;
 
 	#if INTERPOLATE_FM_OSC
@@ -165,7 +165,7 @@ IN_ITCM_RAM void calcFmBlock(OscInfo* osc, const int16_t table[][1024], int16_t*
 	{
 		const uint32_t oscPhase = osc->phase;
 		int16_t oscOut ;
-		const uint32_t index =  oscPhase + (((uint32_t)fmaxf(modBuffer[i]*osc->fmMod, 0.f))<<19);
+		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<19);
 
 		uint32_t  itg	= index>>22; //10 bit index, 22 bit fractional part
 
@@ -196,7 +196,7 @@ void calcPwmFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size
 	{
 		const uint32_t oscPhase = osc->phase;
 		int16_t oscOut ;
-		const uint32_t index =  oscPhase + (((uint32_t)fmaxf(modBuffer[i]*osc->fmMod, 0.f))<<19);
+		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<19);
 		const uint32_t index2 = index + pwmOffset;
 
 		 uint32_t  itg	 = index>>22;
