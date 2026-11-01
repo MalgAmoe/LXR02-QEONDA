@@ -892,6 +892,8 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			//if((mode == SELECT_MODE_LAST_STEP_TRACK) || (mode == SELECT_MODE_LAST_STEP_ALL))
 			//{
 
+				activeParameters[PAR_MORPH] = 0;
+
 				//tell sequencer to change/reload current pattern
 				frontPanel_sendData(SEQ_CC, SEQ_CHANGE_PAT, seq_activePattern);
 
@@ -901,6 +903,9 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				//reload kit to edit buffer
 				preset_loadDrumsetRam(menu_selectedPresetNr[SAVE_TYPE_KIT],0, 0);
 				preset_touchTimer(PRESET_KIT_TIMER);
+				if (menu_getActivePage() == PERF_PAGE) {
+					menu_repaint();
+				}
 			//}
 		}
 			break;
