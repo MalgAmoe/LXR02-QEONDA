@@ -94,6 +94,9 @@ The resulting image is `build/release/LXR_QEONDA_V0.1.img`; install it using the
 
 ## Documentation
 
+- [Detailed controls and project compatibility](docs/USER-GUIDE.md)
+- [Build requirements and verification](docs/BUILD.md)
+
 [Host tests](tests/README.md) documents setup and limits; host passes are not hardware certification.
 
 ## Acknowledgments
