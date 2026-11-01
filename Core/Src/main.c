@@ -337,6 +337,8 @@ int main(void)
 
   //we have to read out the pots once to have a defined state before loading the preset data
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buf, ADC_BUF_LEN);
+  // Controls read the circular DMA buffer directly; keep error IRQs, skip completion IRQs.
+  __HAL_DMA_DISABLE_IT(&hdma_adc1, DMA_IT_HT | DMA_IT_TC);
   adc_checkPots();
   adc_checkPots();
 
