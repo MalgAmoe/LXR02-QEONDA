@@ -1,4 +1,4 @@
-# LXR V2 firmware (desktop, STM32F765VG)
+# LXR QEONDA 0.1 (desktop, STM32F765VG)
 
 Firmware for the LXR V2 desktop drum machine: an STM32F765 (Cortex-M7, 216 MHz) running the
 drum voices, FX bus, step sequencer, MIDI (DIN + USB), SD-card preset storage and the LCD/button UI.
@@ -10,12 +10,22 @@ drum voices, FX bus, step sequencer, MIDI (DIN + USB), SD-card preset storage an
 > at your own risk: Erica Synths provides no support for self-built or modified firmware. See
 > [Licence, trademarks and hardware](#licence-trademarks-and-hardware) below and [NOTICE.md](NOTICE.md).
 
+## QEONDA features
+
+Custom firmware based on Erica Synths’ upstream LXR V2 desktop firmware. QEONDA adds a
+held performance break with manual rolls, Shift+Reload morph reset with PERF refresh,
+and local MIX OUT order St1 → FX → St2 → L1 → R1 → L2 → R2 (stored/MIDI values unchanged).
+It also includes targeted synthesis, MIDI and staged-save/storage corrections.
+Version remains **0.1**; distinguish builds by Git revision and image hash.
+See [host tests](tests/README.md) for commands and verification limits.
+
 ## Updating your LXR
 
-Every LXR has a built-in updater (the bootloader) that installs new firmware from the SD card. You
-don't need any extra hardware:
+A functioning compatible desktop bootloader normally installs application updates from the SD card
+without extra hardware. The bootloader is a separate project; the inherited device instructions below
+were not independently reverified in this documentation pass:
 
-1. [Build the firmware](#building-the-firmware). This creates the update file `LXR_V2_V<version>.img`.
+1. [Build the firmware](#building-the-firmware). This creates the update file `LXR_QEONDA_V0.1.img`.
 2. [Copy it to the SD card and install it](#installing-the-update) on the LXR.
 
 ### Building the firmware
@@ -63,7 +73,7 @@ When the build has finished it shows where the update file is and how to install
 ```
 ======================================================================
   Firmware update file:
-    .../lxr_desktop_app/build/release/LXR_V2_V1.7.img
+    .../lxr-desktop-app/build/release/LXR_QEONDA_V0.1.img
   ...
 ```
 
@@ -72,8 +82,9 @@ The version in the file name, and on the LXR's start-up screen, is set by `proje
 
 ### Installing the update
 
-1. Copy `LXR_V2_V<version>.img` from `build/release/` to the top folder of the SD card. Delete any
-   older `LXR*.img` files from the card: the updater installs the first one it finds.
+1. Copy `LXR_QEONDA_V0.1.img` from `build/release/` to the top folder of the SD card. Keep only one active
+   `LXR*.img` in the updater scan; preserve older images outside that scan as backups.
+   Do not delete existing backups without permission.
    On a Mac, eject the card in Finder before you take it out. Finder also leaves hidden files starting
    with `._` on the card; the updater ignores them.
 2. Switch the LXR off and put the card in.
@@ -82,8 +93,8 @@ The version in the file name, and on the LXR's start-up screen, is set by `proje
 4. The display shows "Checking Firmware...", then "Loading Firmware" with the progress in percent.
 5. When it shows "Update OK!" the LXR restarts by itself with the new firmware.
 
-The updater itself is never changed by an update. If an update fails or is interrupted (for example by
-a power cut), the LXR can always be updated again the same way.
+Application-only updates do not replace the bootloader. Retrying an interrupted update normally
+requires a functioning compatible bootloader and readable card; recovery is not guaranteed.
 
 ### Troubleshooting
 
@@ -104,7 +115,7 @@ If the updater stops with one of these messages, switch the LXR off, fix the cau
 |---|---|
 | `cmake --preset debug` | Debug build: `-O3 -g3` with `DEBUG` defined, output in `build/debug/`. The release build uses `-O3 -g0`. Both need `-O3` for the audio engine to keep up in real time. |
 | `-DARM_TOOLCHAIN_DIR=<bin folder>` | Use a toolchain that isn't on `PATH`, e.g. `/Applications/ArmGNUToolchain/14.3.rel1/arm-none-eabi/bin` (macOS) or `C:/toolchain_arm-none-eabi/11.3rel1/bin` (Windows) |
-| `-DLXR_ITCM_OPT=<flag>` | Optimisation for the code in the fast ITCM memory, see [Memory map](#memory-map) (default `-O2`) |
+| `-DLXR_ITCM_OPT=<flag>` | Optimisation for the code in the fast ITCM memory, see [Memory map](#memory-map) (default empty: inherits normal optimisation) |
 | `-DLXR_GENERATE_LISTING=ON` | Also write a disassembly listing (`.list`) |
 
 Options are passed when configuring, e.g. `cmake --preset release -DLXR_GENERATE_LISTING=ON`.
@@ -114,7 +125,7 @@ All files the build creates (in `build/<preset>/`):
 
 | File                     | Purpose                                                        |
 |--------------------------|----------------------------------------------------------------|
-| `LXR_V2_V<version>.img`  | **Update file for the SD card** (see [Installing the update](#installing-the-update)) |
+| `LXR_QEONDA_V0.1.img`  | **Update file for the SD card** (see [Installing the update](#installing-the-update)) |
 | `LXR_V2_STM32F765.elf`   | Firmware with debug information, for a debugger               |
 | `LXR_V2_STM32F765.bin`   | Raw firmware image (from 0x08008000)                          |
 | `LXR_V2_STM32F765.hex`   | Intel HEX of the same                                         |
@@ -160,9 +171,10 @@ The `build/` folder is never committed to git.
 | DTCM     | 0x20000000                | 128 KB | `INDTCM`/`INDTCMZ` data, DMA buffers, the stack       |
 | RAM      | 0x20020000                | 384 KB | `.data`, `.bss`, heap                                 |
 
-The ITCM is tight. Current GCC releases generate too much code at `-O3` for it, so the translation
-units that contain ITCM code are compiled with `LXR_ITCM_OPT` (default `-O2`). The linker prints
-region usage after every build.
+ITCM capacity is 16 KB. `LXR_ITCM_OPT` defaults to empty, inheriting normal optimisation;
+`-O2` is an explicit override, not the default. The resonant filter separately uses
+`-fno-thread-jumps` to control code duplication. The linker prints region usage after every build;
+fit depends on compiler, revision and flags, not a universal GCC `-O3` overflow rule.
 
 ## Source layout and CMake targets
 
@@ -218,7 +230,7 @@ cmake --preset release -DLXR_BOOTLOADER_DIR=path/to/LXR_V2_STM32F765_Bootloader
 
 The build checks that the bootloader is valid for this device: it must fit in the 32 KB bootloader
 sector and accept desktop (`LXRV2IMG`) update images, so the firmware, a full image or the Eurorack
-bootloader are rejected. It then also writes `LXR_V2_V<version>_full.hex`/`.bin` (bootloader +
+bootloader are rejected. It then also writes `LXR_QEONDA_V0.1_full.hex`/`.bin` (bootloader +
 firmware, the whole flash from 0x08000000) and enables:
 
 ```sh
@@ -234,7 +246,8 @@ To go back to a firmware-only build, clear the setting: `-DLXR_BOOTLOADER_HEX=` 
 > build started from an IDE) it refuses. For scripts and factory programming, set the environment
 > variable `LXR_CONFIRM_BOOTLOADER_OVERWRITE=yes` to skip the question.
 
-The bootloader write-protects its own flash sector (sector 0) every time it boots, so on a unit that
+Inherited bootloader guidance (verify against the separate bootloader revision before use):
+the bootloader write-protects its own flash sector (sector 0) every time it boots, so on a unit that
 has run before, sector 0 cannot simply be erased. `flash_full` therefore clears that protection first;
 the new bootloader sets it again on its first boot. Other programming tools need the same step
 (in STM32CubeProgrammer: Option bytes → Write protection → uncheck nWRP0).
@@ -277,5 +290,5 @@ under their own licences. See [NOTICE.md](NOTICE.md#third-party-components).
 
 
 <sup>
-Use code OPENLXR15 on the Erica Synths website for a discount on the LXR (active for 1 week since open-source announcment) :)
+Historical upstream announcement (present validity unverified): use code OPENLXR15 on the Erica Synths website for a discount on the LXR (active for 1 week since open-source announcment) :)
 </sup>

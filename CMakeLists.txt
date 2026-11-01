@@ -165,7 +165,7 @@ if(NOT bootloader)
 endif()
 
 if(bootloader)
-    # LXR_V2_V<version>_full.hex/.bin: bootloader at 0x08000000 + firmware at 0x08008000.
+    # LXR_QEONDA_V0.1_full.hex/.bin: bootloader at 0x08000000 + firmware at 0x08008000.
     lxr_add_combined_image(full_image
         OUTPUT_NAME LXR_QEONDA_V${PROJECT_VERSION}_full
         BOOTLOADER ${bootloader}

@@ -1,9 +1,8 @@
 # Host unit tests
 
-These tests compile firmware source files with your computer's own C compiler (Clang or GCC)
-and run them on the computer, so they need no LXR, debug probe or Arm toolchain. They use
-AddressSanitizer and UndefinedBehaviorSanitizer, so an out-of-bounds access or undefined
-behaviour in the code under test also fails the test.
+The registered suite mixes native C tests and Python-driven extracted-source harnesses using
+your computer's C compiler (Clang or GCC). It needs no LXR, debug probe or Arm toolchain.
+Sanitizer flags and host models vary by harness; passing tests do not certify target behavior.
 
 ## Running
 
@@ -15,9 +14,12 @@ cmake --build --preset host-tests
 ctest --preset host-tests
 ```
 
-You need CMake, Ninja and a C compiler: on macOS the Xcode Command Line Tools, on Linux e.g.
+You need CMake, Ninja, Python 3 and a C compiler: on macOS the Xcode Command Line Tools, on Linux e.g.
 `sudo apt install build-essential`. MSVC isn't supported; on Windows use WSL or MSYS2.
-Set `-DLXR_TEST_SANITIZERS=OFF` when configuring if your compiler has no sanitizers.
+`-DLXR_TEST_SANITIZERS=OFF` controls CMake-native targets only; some Python harnesses
+hardcode sanitizer flags and still require a compatible compiler. Separate FM target-codegen
+verification (`check_fm_arm_codegen.py`) requires a release ELF and Arm objdump; it is not
+a requirement for the registered host suite.
 
 The tests are a separate CMake project (see `LXR_HOST_TESTS` in the top-level
 `CMakeLists.txt`), so they don't change the firmware build. They are built in `build/host-tests/`.
@@ -30,7 +32,8 @@ See [INTEGRATION.md](INTEGRATION.md) for attribution, scope and the hardware che
 |---|---|
 | `shim/` | Stand-ins for `stm32f7xx_hal.h` and `stm32f7xx.h`: integer types, CMSIS intrinsics (`__CLZ`, `__SSAT`, `__QADD16`, ...) in portable C, and opaque HAL handle types. It comes first on the include path, so the firmware headers are used unchanged. |
 | `framework/lxr_test.h` | `CHECK`, `CHECK_EQ`, `CHECK_MEM_EQ`, `RUN_TEST`, `TEST_REPORT`. A failed check prints the file, line and both values, then the test carries on. |
-| `test_*.c` | One test program each. |
+| `test_*.c` | Native test programs. |
+| `test_*.py` | Extracted-source harnesses with individual stubs, models and compiler flags. |
 | `CMakeLists.txt` | `lxr_add_host_test()` builds a test program from its test file and the firmware files it tests, and registers it with CTest. |
 
 The compiler defines `LXR_HOST_TEST`. The firmware uses it only to leave out the

@@ -152,10 +152,10 @@ endforeach()
 set(LXR_APP_MODULES ${LXR_APP_MODULES} PARENT_SCOPE)
 
 # --- ITCM fit -----------------------------------------------------------------
-# Functions tagged IN_ITCM_RAM are linked into the 16 KB instruction TCM. Newer
-# GCC releases generate more code at -O3 than the GCC 10/11 the project was
-# developed with, which overflows ITCM. LXR_ITCM_OPT overrides the optimisation
-# level for just the translation units that contain ITCM code.
+# Functions tagged IN_ITCM_RAM are linked into the 16 KB instruction TCM.
+# Historical compiler/revision combinations overflowed it; fit is build-dependent.
+# LXR_ITCM_OPT defaults empty (normal optimisation); an explicit override applies
+# only to the translation units that contain ITCM code.
 set(LXR_ITCM_SOURCES
     Src/Preset/presetManager.c
     Src/Soundengine/cs4344_cs5343.c
