@@ -42,6 +42,10 @@ workspace `analysis/documentation-history/README-before-reorganization.md`.
 
 ## Acknowledgments
 
+A massive thank you to [Erica Synths](https://www.ericasynths.lv/) for making the
+[LXR desktop firmware source](https://github.com/erica-synths/lxr-desktop-app) available
+and allowing the community to study, modify and build on it. This machine is even more a beast now :)
+
 Thanks to [OpenElixir-02](https://github.com/tunefish777/openelixir-02) and contributors
 for work informing investigations and fixes, particularly audio scheduling, circular DMA
 and save-time audio stability. It is a separate project; this does not imply inclusion of
