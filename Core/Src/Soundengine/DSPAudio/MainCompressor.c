@@ -95,7 +95,8 @@ unsigned MainCompressor_beginBlock(void)
         float d=-comp.goalThreshold;
         float r=d<=-3.f?0.f:d>=3.f?comp.goalSlope*d:
                 comp.goalSlope*(d+3.f)*(d+3.f)/12.f;
-        float makeupDb=r; // Fully compensate the reduction at the 0 dBFS reference.
+        // Gradually increasing margin below full 0 dBFS reference compensation.
+        float makeupDb=r-4.f*r/(r+12.f);
         if (p[1]) comp.makeupGoal=powf(10.f,makeupDb/20.f);
         for (unsigned i=0;i<4;++i) comp.previous[i]=p[i];
         comp.initialized=1;

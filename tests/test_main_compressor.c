@@ -84,10 +84,13 @@ int main(void) {
         if(error>curveWorst)curveWorst=error;
         assert(error<0.001);
       }
-      /* Full reference reduction at 0 dBFS, without a separate cap. */
-      double expectedMakeup=1.0/oracle(1.0);
+      /* Independent double reference: growing margin, no makeup ceiling. */
+      double referenceDb=-20.0*log10(oracle(1.0));
+      double marginDb=4.0*referenceDb/(referenceDb+12.0);
+      double expectedMakeup=pow(10.0,(referenceDb-marginDb)/20.0);
+      assert(marginDb>=0 && marginDb<4.0);
       assert(fabs(comp.makeupGoal/expectedMakeup-1.0)<1.e-5);
-      if(th==0 && ratio==19) assert(comp.makeupGoal>190.f);
+      if(th==0 && ratio==19) assert(fabs(20.0*log10(comp.makeupGoal)-42.4333333333)<0.001);
     }
     printf("static curve worst %.8f dB\n",curveWorst);
     double worst=0, worstFast=0;
