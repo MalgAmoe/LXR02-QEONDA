@@ -1,6 +1,7 @@
 name: Firmware release
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
     types: [closed]
@@ -11,23 +12,25 @@ permissions:
 jobs:
   release:
     if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' &&
       github.event.pull_request.merged == true &&
       github.event.pull_request.head.ref == 'development' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: write
     concurrency:
-      group: firmware-release-${{ github.event.pull_request.merge_commit_sha }}
+      group: firmware-release-${{ github.event.pull_request.merge_commit_sha || github.sha }}
       cancel-in-progress: false
     env:
-      RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+      RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
       RELEASE_TAG: v0.1-build.${{ github.run_number }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           persist-credentials: false
       - name: Install pinned Arm GNU toolchain
         shell: bash
