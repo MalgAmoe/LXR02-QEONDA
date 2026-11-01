@@ -50,6 +50,10 @@ three banks; the four knobs control the following, left to right:
 
 - **Momentary pattern mute:** hold PERF step button **8** to suppress programmed triggers.
   Manual rolls on buttons 1–7 remain available. Release, leave PERF or press Stop to cancel.
+- **Pattern selection view:** Shift+Pattern or Load+Pattern keeps the current voice,
+  FX or PERF page and its controls available while step buttons select patterns and
+  bar buttons select banks. Other starting pages open PERF A. Voice or PERF exits;
+  pattern saving stays separate. See the [user guide](docs/USER-GUIDE.md#pattern-selection-without-losing-controls).
 - **Master filters:** independent HP and LP act on **St1 only**, after FX. HP **0** and
   LP **127** bypass their respective filters. Resonance affects both. These are temporary
   session controls: ordinary loads retain them; startup and Shift+Reload reset them.
