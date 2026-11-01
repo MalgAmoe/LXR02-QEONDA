@@ -81,7 +81,10 @@ int main(void) {
         if(error>curveWorst)curveWorst=error;
         assert(error<0.001);
       }
-      assert(comp.makeupGoal<=powf(10,12.f/20.f)+1.e-5f);
+      /* Half the reference reduction at 0 dBFS, without a separate cap. */
+      double expectedMakeup=1.0/sqrt(oracle(1.0));
+      assert(fabs(comp.makeupGoal/expectedMakeup-1.0)<1.e-5);
+      if(th==0 && ratio==19) assert(comp.makeupGoal>13.8f);
     }
     printf("static curve worst %.8f dB\n",curveWorst);
     double worst=0, worstFast=0;

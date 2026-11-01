@@ -96,7 +96,6 @@ unsigned MainCompressor_beginBlock(void)
         float r=d<=-3.f?0.f:d>=3.f?comp.goalSlope*d:
                 comp.goalSlope*(d+3.f)*(d+3.f)/12.f;
         float makeupDb=0.5f*r;
-        if (makeupDb>12.f) makeupDb=12.f;
         if (p[1]) comp.makeupGoal=powf(10.f,makeupDb/20.f);
         for (unsigned i=0;i<4;++i) comp.previous[i]=p[i];
         comp.initialized=1;
