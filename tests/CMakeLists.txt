@@ -189,3 +189,7 @@ add_test(NAME test_sd_remount
 add_test(NAME test_perf_reload
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_perf_reload.py)
+
+add_test(NAME test_output_order
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_output_order.py)

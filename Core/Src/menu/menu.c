@@ -2826,6 +2826,16 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 
 }
 
+// Local UI order only; stored routing numbers remain canonical.
+static uint8_t menu_stepAudioOutput(uint8_t value, int8_t diff)
+{
+	int16_t rank = value == 6 ? 1 : (value <= 5 ? (value ? value + 1 : 0) : 0);
+	rank += diff;
+	if(rank < 0) rank = 0;
+	else if(rank > 6) rank = 6;
+	return (uint8_t)(rank == 1 ? 6 : (rank ? rank - 1 : 0));
+}
+
 //-----------------------------------------------------------------
 // called when edit mode is active
 // encoder controls parameter value
@@ -2845,7 +2855,11 @@ static void menu_encoderChangeParameter(int8_t inc)
 	paramValue = &activeParameters[paramNr];
 
 	//increase parameter value
-	if(inc>0) //positive increase
+	if(paramNr >= PAR_AUDIO_OUT1 && paramNr <= PAR_AUDIO_OUT6)
+	{
+		*paramValue = menu_stepAudioOutput(*paramValue, inc);
+	}
+	else if(inc>0) //positive increase
 	{
 		if(*paramValue != 255) //omit wrap for 0B255 dtypes
 			*paramValue = (uint8_t)(*paramValue + inc);
@@ -3701,6 +3715,9 @@ static void menu_processSpecialCaseValues(uint16_t paramNr/*, const uint8_t *val
 //-----------------------------------------------------------------
 static uint8_t limitPotValue(int8_t diff, uint16_t paramNr)
 {
+	if(paramNr >= PAR_AUDIO_OUT1 && paramNr <= PAR_AUDIO_OUT6)
+		return menu_stepAudioOutput(activeParameters[paramNr], diff);
+
 	uint8_t originalValue;
 	if(paramNr >= END_OF_SOUND_PARAMETERS)
 	{
