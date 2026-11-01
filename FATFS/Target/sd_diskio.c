@@ -31,16 +31,14 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
-/* Software milliseconds, NOT the SDMMC peripheral DTIMER cycle count.
- * Conservative per-call allowance for slow/multi-sector cards; policy, not an
- * SD-standard latency guarantee. Keep failures responsive versus UINT32_MAX.
- */
-#define SD_TRANSFER_TIMEOUT_MS 30000U
-/* Allow slow programming to settle without polling forever. A CMD13 query has
- * its own finite CPU-counter budget and may overrun this elapsed-time budget;
- * this is NOT a hard wall-clock deadline. Requires a progressing HAL tick.
- */
-#define SD_READY_TIMEOUT_MS 5000U
+/* use the default SD timout as defined in the platform BSP driver*/
+#if defined(SDMMC_DATATIMEOUT)
+#define SD_TIMEOUT SDMMC_DATATIMEOUT
+#elif defined(SD_DATATIMEOUT)
+#define SD_TIMEOUT SD_DATATIMEOUT
+#else
+#define SD_TIMEOUT 30 * 1000
+#endif
 
 #define SD_DEFAULT_BLOCK_SIZE 512
 
@@ -90,17 +88,17 @@ const Diskio_drvTypeDef  SD_Driver =
 
 /* Private functions ---------------------------------------------------------*/
 
-/* Shared read/write completion wait; never retries the data transfer. */
+/* Shared read/write completion wait; never retries the data transfer.
+ * Accepted policy: no readiness timeout. Healthy slow cards are not rejected
+ * by an elapsed budget; persistent BUSY may wait indefinitely. Terminal status
+ * errors still return immediately. */
 static DRESULT SD_WaitReady(void)
 {
-  uint32_t start = HAL_GetTick();
-
   for (;;)
   {
     uint8_t state = BSP_SD_GetCardState();
-    uint32_t elapsed = (uint32_t)(HAL_GetTick() - start);
 
-    if (state == SD_TRANSFER_ERROR || elapsed >= SD_READY_TIMEOUT_MS)
+    if (state == SD_TRANSFER_ERROR)
     {
       return RES_ERROR;
     }
@@ -174,7 +172,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 
   if(BSP_SD_ReadBlocks((uint32_t*)buff,
                        (uint32_t) (sector),
-                       count, SD_TRANSFER_TIMEOUT_MS) == MSD_OK)
+                       count, SD_TIMEOUT) == MSD_OK)
   {
     res = SD_WaitReady();
   }
@@ -201,7 +199,7 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 
   if(BSP_SD_WriteBlocks((uint32_t*)buff,
                         (uint32_t)(sector),
-                        count, SD_TRANSFER_TIMEOUT_MS) == MSD_OK)
+                        count, SD_TIMEOUT) == MSD_OK)
   {
     res = SD_WaitReady();
   }

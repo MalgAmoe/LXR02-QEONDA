@@ -27,40 +27,55 @@ static DRESULT transfer(int write){return write?disk_write(0,buf,0,1):disk_read(
 static void io_tests(void){
  char path[4];assert(!FATFS_LinkDriver(&SD_Driver,path));
  for(int w=getenv("WRITE_ONLY")?1:0;w<2;w++){
-  state=4;calls=0;iocalls=0;assert(transfer(w)==RES_OK);assert(calls==1 && iocalls==1);if(!getenv("BASELINE"))assert(timeout==30000);
+  state=4;calls=0;iocalls=0;assert(transfer(w)==RES_OK);assert(calls==1 && iocalls==1);assert(timeout==SDMMC_DATATIMEOUT);
   busy_left=3;calls=0;assert(transfer(w)==RES_OK);assert(calls==4);
   ioresult=1;calls=0;iocalls=0;assert(transfer(w)==RES_ERROR);assert(calls==0 && iocalls==1);ioresult=0;
-  int states[]={5,6,7,255,0,8,3};
+  int states[]={255,0,8,3};
   for(unsigned i=0;i<sizeof(states)/sizeof(states[0]);i++){
    if(getenv("STATUS_ONLY") && states[i]!=255)continue;
    state=states[i];calls=0;iocalls=0;tick=UINT32_MAX-200;guard_enabled=1;
    if(setjmp(guard)){fprintf(stderr,"FAIL: %s state %d still polling after 100000 calls\n",w?"write":"read",state);exit(2);}
    assert(transfer(w)==RES_ERROR);assert(iocalls==1);
-   if(state>=5 && state<=7)assert(calls==50);else assert(calls==1);
+   assert(calls==1);
    guard_enabled=0;
   }
  }
  assert(!FATFS_UnLinkDriver(path));
- puts("PASS read/write: ready, finite busy, HAL error, persistent busy including tick wrap, terminal status errors; no data retries; 30000ms transfer budget");
+ puts("PASS read/write: ready, finite busy, HAL error, terminal status errors; no data retries; original SD timeout");
 }
-/* A synchronous CMD13 can consume the remaining budget and still return READY.
- * Reject that late result, including exactly at the boundary and tick wrap. */
+/* No production elapsed-time policy: slow READY and long finite BUSY succeed.
+ * Only this test harness interrupts truly endless BUSY; not a driver timeout. */
 static void query_budget_tests(void){
  char path[4];assert(!FATFS_LinkDriver(&SD_Driver,path));
  for(int w=0;w<2;w++){
   for(int wrap=0;wrap<2;wrap++){
-   const uint32_t durations[]={4999,5000,5001};
-   for(unsigned i=0;i<3;i++){
+   const uint32_t durations[]={4999,5000,5001,30001};
+   for(unsigned i=0;i<4;i++){
     tick=wrap?UINT32_MAX-200:0;tickstep=0;query_ms=durations[i];
-    state=HAL_SD_CARD_TRANSFER;busy_left=0;calls=0;iocalls=0;
-    assert(transfer(w)==(durations[i]<5000?RES_OK:RES_ERROR));
-    assert(calls==1 && iocalls==1 && timeout==30000);
+    state=HAL_SD_CARD_TRANSFER;busy_left=3;calls=0;iocalls=0;
+    guard_enabled=1;
+    if(setjmp(guard)){fprintf(stderr,"FAIL: finite busy did not finish\n");exit(2);}
+    assert(transfer(w)==RES_OK);
+    assert(calls==4 && iocalls==1 && timeout==SDMMC_DATATIMEOUT);
+    guard_enabled=0;
+    busy_left=0;calls=0;iocalls=0;
+    assert(transfer(w)==RES_OK); /* Even a single slow READY is accepted. */
+    assert(calls==1 && iocalls==1 && timeout==SDMMC_DATATIMEOUT);
    }
+  }
+  for(int busy=HAL_SD_CARD_SENDING;busy<=HAL_SD_CARD_PROGRAMMING;busy++){
+   state=busy;calls=0;iocalls=0;guard_enabled=1;
+   if(setjmp(guard)==0){
+    (void)transfer(w);
+    fprintf(stderr,"FAIL: persistent busy returned\n");exit(2);
+   }
+   assert(calls==100000 && iocalls==1);
+   guard_enabled=0;
   }
  }
  query_ms=0;tickstep=100;
  assert(!FATFS_UnLinkDriver(path));
- puts("PASS read/write query budget: READY before/at/after 5000ms, including tick wrap");
+ puts("PASS read/write: long finite BUSY then READY, slow READY >5s/>30s, tick wrap; endless BUSY stopped only by test harness");
 }
 static void init_tests(void){
  char path[4];assert(!FATFS_LinkDriver(&SD_Driver,path));
