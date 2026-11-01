@@ -1,6 +1,6 @@
 # Host-test and MIDI bank-select integration
 
-> Historical import record: local base, branch, version blocker and no-device statements below describe that session, not current deployment policy. Current development/accepted revision is QEONDA 0.1 `00d2088`. The specific CC0 device checklist remains unverified; general hardware acceptance does not certify it.
+> Historical import record: local base, branch, version blocker and no-device statements below describe that session, not current deployment policy. See the workspace `AGENTS.md` for current development and installed/accepted status. The specific CC0 device checklist remains unverified; general hardware acceptance does not certify it.
 
 Imported from Justin Worrall's community branches, retaining source licence notices:
 

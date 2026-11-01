@@ -36,9 +36,11 @@ See [INTEGRATION.md](INTEGRATION.md) for attribution, scope and the hardware che
 | `test_*.py` | Extracted-source harnesses with individual stubs, models and compiler flags. |
 | `CMakeLists.txt` | `lxr_add_host_test()` builds a test program from its test file and the firmware files it tests, and registers it with CTest. |
 
-The compiler defines `LXR_HOST_TEST`. The firmware uses it only to leave out the
-`.itcm_text`/`.dtcm` section attributes (`Core/Inc/Soundengine/config.h`, `Core/Inc/main.h`),
-which don't exist on the host.
+CMake-native test targets define `LXR_HOST_TEST`; individual Python harnesses
+select their own definitions and stubs. This macro omits target-only section
+attributes and, in the master DSP modules, CMSIS includes and interrupt-mask
+transactions. Host passes therefore do not verify target interrupt synchronization
+or scheduling; those require separate target verification.
 
 ## Adding a test
 
