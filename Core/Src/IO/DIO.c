@@ -25,32 +25,36 @@ uint8_t dout_outputData[NUM_OUTS/8];
 
 uint8_t button43_old;
 
-// Start/Stop responds immediately, but rearms only after a stable release.
-// Other buttons (including performance controls) retain their original handling.
-#define PLAY_RELEASE_DEBOUNCE_MS 20u
-static uint8_t playReleasePending;
-static uint32_t playReleaseSince;
+// Play and bar/bank buttons respond immediately; rearm after stable release.
+// Each button is independent. Other controls retain raw-edge handling.
+#define RELEASE_DEBOUNCE_MS 20u
+static uint8_t releasePending[3];
+static uint32_t releaseSince[3];
 
-static void dio_debouncePlay(void)
+static uint8_t dio_debounceRelease(uint8_t slot, uint8_t current, uint8_t previous)
 {
-	const uint8_t group = BUT_START_STOP / 8;
-	const uint8_t mask = 1u << (BUT_START_STOP % 8);
-	if(din_inputData[group] & mask)
-	{
-		playReleasePending = 0;
-	}
-	else if(din_inputData_old[group] & mask)
-	{
+	if(current) releasePending[slot] = 0;
+	else if(previous) {
 		const uint32_t now = HAL_GetTick();
-		if(!playReleasePending)
-		{
-			playReleasePending = 1;
-			playReleaseSince = now;
+		if(!releasePending[slot]) {
+			releasePending[slot] = 1;
+			releaseSince[slot] = now;
 		}
-		if((uint32_t)(now - playReleaseSince) < PLAY_RELEASE_DEBOUNCE_MS)
-			din_inputData[group] |= mask; // Keep logical button held through bounce.
-		else
-			playReleasePending = 0;
+		if((uint32_t)(now - releaseSince[slot]) < RELEASE_DEBOUNCE_MS)
+			return previous;
+		releasePending[slot] = 0;
+	}
+	return current;
+}
+
+static void dio_debounceButtons(void)
+{
+	const uint8_t buttons[] = { BUT_START_STOP, BUT_PAGE_UP };
+	for(uint8_t i = 0; i < 2; i++) {
+		const uint8_t group = buttons[i] / 8;
+		const uint8_t mask = 1u << (buttons[i] % 8);
+		if(dio_debounceRelease(i, din_inputData[group] & mask, din_inputData_old[group] & mask))
+			din_inputData[group] |= mask;
 	}
 }
 
@@ -96,8 +100,10 @@ void dio_init(SPI_HandleTypeDef* _hspi1)
 	spi1 = _hspi1;
 
 	button43_old = 0;
-	playReleasePending = 0;
-	playReleaseSince = 0;
+	for(uint8_t i = 0; i < 3; i++) {
+		releasePending[i] = 0;
+		releaseSince[i] = 0;
+	}
 }
 
 
@@ -122,7 +128,7 @@ void dio_process()
 
 
 	//--- handle buttons ---
-	dio_debouncePlay();
+	dio_debounceButtons();
 
 	for(int i=0; i<NUM_INPUTS/8; i++)
 	{
@@ -154,7 +160,8 @@ void dio_process()
 	}
 
 	//Handle lone non shift register button
-	const uint8_t currentValue = SW_43_GPIO_Port->IDR & SW_43_Pin;
+	const uint8_t currentValue = dio_debounceRelease(2,
+		SW_43_GPIO_Port->IDR & SW_43_Pin, button43_old);
 	if(currentValue != button43_old)
 	{
 		button43_old = currentValue;
