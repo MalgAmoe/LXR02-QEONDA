@@ -21,6 +21,7 @@
 extern uint8_t buttonHandler_selectedStep;
 extern volatile uint16_t buttonHandler_originalParameter[2];	//saves parameter number for step automation reset (stgep assign)
 extern uint8_t buttonHandler_originalValue[2]; 
+extern uint8_t buttonHandler_bulkOriginal[2]; // per-slot persistent bulk baseline
 extern uint8_t buttonHandler_resetLock1;
 extern uint8_t buttonHandler_resetLock2;
 

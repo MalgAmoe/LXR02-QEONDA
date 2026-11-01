@@ -13,6 +13,7 @@
  */
 #include <frontPanelParser_ui.h>
 #include "buttonHandler.h"
+#include "Soundengine/MIDI/CortexParser.h"
 #include "menu/menu.h"
 #include "ledHandler.h"
 #include "lcd.h"
@@ -43,6 +44,7 @@ static uint32_t buttonHandler_buttonTimer = 0;
 static int8_t buttonHandler_buttonTimerStepNr = NO_STEP_SELECTED;
 volatile uint16_t buttonHandler_originalParameter[2];//saves parameter number for step automation reset (stgep assign)
 uint8_t buttonHandler_originalValue[2];//saves the parameter value for reset
+uint8_t buttonHandler_bulkOriginal[2] = {0, 0};
 uint8_t buttonHandler_resetLock1 = 0;
 uint8_t buttonHandler_resetLock2 = 0;
 // uint8_t buttonHandler_resetLock[NUM_AUTOMATION_PAR];
@@ -116,6 +118,7 @@ static void buttonHandler_armTimerActionStep(int8_t stepNr) {
     activeParameters[parNr] = step->param1Val;
 
     buttonHandler_originalParameter[0] = parNr;
+    buttonHandler_bulkOriginal[0] = 0;
     buttonHandler_resetLock1 = 1;
   }
 
@@ -128,6 +131,7 @@ static void buttonHandler_armTimerActionStep(int8_t stepNr) {
     activeParameters[parNr] = step->param2Val;
   
     buttonHandler_originalParameter[1] = parNr;
+    buttonHandler_bulkOriginal[1] = 0;
     buttonHandler_resetLock2 = 1;
   }
   ///////////////
@@ -136,6 +140,14 @@ static void buttonHandler_armTimerActionStep(int8_t stepNr) {
 
 }
 //--------------------------------------------------------
+static void buttonHandler_restoreOriginal(uint8_t slot, uint8_t status, uint8_t data1, uint8_t data2)
+{
+  if(buttonHandler_bulkOriginal[slot])
+    menu_restoreHeldParameter(buttonHandler_originalParameter[slot], data2);
+  else
+    frontPanel_sendData(status, data1, data2);
+}
+
 static void buttonHandler_disarmTimerActionStep() {
   ///////
   // buttonHandler_armedAutomationStep != NO_STEP_SELECTED;
@@ -214,13 +226,13 @@ static void buttonHandler_disarmTimerActionStep() {
         //&revert to original value
         if (buttonHandler_originalParameter[0] < 128) // => Sound Parameter
         {
-          frontPanel_sendData(MIDI_CC,
+          buttonHandler_restoreOriginal(0, MIDI_CC,
               (uint8_t) (buttonHandler_originalParameter[0]),
               buttonHandler_originalValue[0]);
         } 
         else if (buttonHandler_originalParameter[0] >= 128 && (buttonHandler_originalParameter[0] < END_OF_SOUND_PARAMETERS)) // => Sound Parameter above 127
         {
-          frontPanel_sendData(CC_2,
+          buttonHandler_restoreOriginal(0, CC_2,
           (uint8_t) (buttonHandler_originalParameter[0] - 128),
           buttonHandler_originalValue[0]);
         } 
@@ -241,13 +253,13 @@ static void buttonHandler_disarmTimerActionStep() {
       {
         if (buttonHandler_originalParameter[1] < 128) // => Sound Parameter
         {
-          frontPanel_sendData(MIDI_CC,
+          buttonHandler_restoreOriginal(1, MIDI_CC,
           (uint8_t) (buttonHandler_originalParameter[1]),
           buttonHandler_originalValue[1]);
         }
         else if (buttonHandler_originalParameter[1] >= 128 && (buttonHandler_originalParameter[1] < END_OF_SOUND_PARAMETERS)) // => Sound Parameter above 127
         {
-          frontPanel_sendData(CC_2,
+          buttonHandler_restoreOriginal(1, CC_2,
           (uint8_t) (buttonHandler_originalParameter[1] - 128),
           buttonHandler_originalValue[1]);
         }
@@ -260,7 +272,9 @@ static void buttonHandler_disarmTimerActionStep() {
       }
 		}
         buttonHandler_originalParameter[0] = 0;
+        buttonHandler_bulkOriginal[0] = 0;
         buttonHandler_originalParameter[1] = 0;
+        buttonHandler_bulkOriginal[1] = 0;
 		return;
 	}
 

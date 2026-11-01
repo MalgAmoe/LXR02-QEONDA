@@ -84,9 +84,10 @@ static void menu_repaintAll(void){}
 static void menu_parseGlobalParam(unsigned p,unsigned v){(void)p;(void)v;}
 static int8_t buttonHandler_armedAutomationStep=-1;
 static uint16_t buttonHandler_originalParameter[2];
-static uint8_t buttonHandler_originalValue[2],buttonHandler_resetLock1,buttonHandler_resetLock2;
+static uint8_t buttonHandler_bulkOriginal[2],buttonHandler_originalValue[2],buttonHandler_resetLock1,buttonHandler_resetLock2;
 """
-preview+=extract(panel,'buttonHandler_armTimerActionStep')+extract(panel,'buttonHandler_disarmTimerActionStep')+r"""
+preview+='static void menu_restoreHeldParameter(uint16_t p,uint8_t v){restoredParameter=p;restoredValue=v; }\n'
+preview+=extract(panel,'buttonHandler_restoreOriginal')+extract(panel,'buttonHandler_armTimerActionStep')+extract(panel,'buttonHandler_disarmTimerActionStep')+r"""
 int main(void){
  buttonHandler_armTimerActionStep(-1);buttonHandler_armTimerActionStep(64);
  assert(buttonHandler_armedAutomationStep==-1);

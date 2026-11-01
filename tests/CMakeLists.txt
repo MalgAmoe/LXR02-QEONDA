@@ -226,3 +226,7 @@ endforeach()
 add_test(NAME test_master_compressor_lifecycle
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_master_compressor_lifecycle.py)
+
+add_test(NAME test_change_all
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_change_all.py)

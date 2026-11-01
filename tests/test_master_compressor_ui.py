@@ -23,7 +23,7 @@ c+='''
 #define NO_STEP_SELECTED -1
 static uint8_t editModeActive,saveScreenPots[4];
 static uint16_t buttonHandler_originalParameter[2];
-static uint8_t buttonHandler_originalValue[2],buttonHandler_resetLock1,buttonHandler_resetLock2;
+static uint8_t buttonHandler_bulkOriginal[2],buttonHandler_originalValue[2],buttonHandler_resetLock1,buttonHandler_resetLock2;
 static unsigned updates,capture;static uint16_t lastParameter;static uint8_t lastValue;
 static void MainCompressor_setParameter(uint16_t p,uint8_t v){updates++;lastParameter=p;lastValue=v;}
 static void screensaver_touch(void){}
@@ -43,7 +43,8 @@ for name,size in [('shortNames',4),('longNames',16)]:
  c+=table+'\n'
 names=re.search(r'const Name valueNames\[NUM_NAMES\]\s*=\s*\{.*?\};',menu,re.S)[0]
 c+='typedef struct {uint8_t shortName,category,longName;} Name;\n'+names+'\n'
-c+=''.join(fn(n) for n in ('menu_formatMasterCompressor','menu_setMasterCompressor','menu_stepAudioOutput','menu_encoderChangeParameter','limitPotValue','menu_parseKnobValue','has2ndPage','checkScrollSign','menu_switchSubPage','menu_moveToMenuItem'))
+c+='static uint8_t limitPotValueFromOriginal(int8_t diff,uint16_t paramNr,uint8_t originalValue);\nstatic uint8_t limitPotValue(int8_t diff, uint16_t paramNr);\nstatic uint8_t buttonHandler_getShift(void){return 0;}\nstatic void frontParser_dispatchNonRecording(uint8_t s,uint8_t a,uint8_t b){assert(0); }\n'
+c+=''.join(fn(n) for n in ('menu_getHeldOriginal','menu_dispatchParameter','menu_applyKnobParameter','menu_restoreHeldParameter','menu_dispatchHeldOriginal','menu_updateHeldOriginal','menu_changeAllKnob','menu_formatMasterCompressor','menu_setMasterCompressor','menu_stepAudioOutput','menu_encoderChangeParameter','limitPotValueFromOriginal','limitPotValue','menu_parseKnobValue','has2ndPage','checkScrollSign','menu_switchSubPage','menu_moveToMenuItem'))
 pages=(ROOT/'Core/Inc/menu/menuPages.h').read_text();a=pages.index('//Page 10');b=pages.index('//Page 11',a)
 records=re.findall(r'\{\s*(TEXT_.*?PAR_NONE|TEXT_BPM.*?)\s*\}',clean(pages[a:b]),re.S)
 # Parse actual first two records, all 16 fields per record.

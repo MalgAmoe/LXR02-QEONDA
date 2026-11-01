@@ -726,4 +726,6 @@ void numtostru(char *buf, uint8_t num);
 //void numtostrs(char *buf, int8_t num);
 
 void menu_showSaveCleanupWarning(void);
+/* Nonrecording held-source restore, including morph and selector dispatch. */
+void menu_restoreHeldParameter(uint16_t paramNr, uint8_t value);
 #endif

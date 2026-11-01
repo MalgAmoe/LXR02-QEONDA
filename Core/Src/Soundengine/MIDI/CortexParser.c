@@ -32,6 +32,49 @@
 
 #include "ledHandler.h"
 
+/* Direct UI bulk edits: no automation capture, armed-step suppression or parser state. */
+static void frontParser_applyLfoTarget(uint8_t data1, uint8_t data2)
+{
+		uint8_t upper = data1;
+		uint8_t lower = data2;
+		// **PATROT note that the only valid values for the following are listed in
+		// the modTargets array in the AVR code
+		uint8_t value = ((upper&0x01)<<7) | lower;
+
+		uint8_t lfoNr = (upper&0xfe)>>1;
+
+		switch(lfoNr)
+		{
+		case 0:
+		case 1:
+		case 2:	modNode_setDestination(&voiceArray[lfoNr].lfo.modTarget, value);break;
+
+		case 3:	modNode_setDestination(&snareVoice.lfo.modTarget,value);		break;
+		case 4:	modNode_setDestination(&cymbalVoice.lfo.modTarget, value);		break;
+		case 5:	modNode_setDestination(&hatVoice.lfo.modTarget, value);			break;
+		default:
+			break;
+		}
+
+}
+
+void frontParser_dispatchNonRecording(uint8_t status, uint8_t data1, uint8_t data2)
+{
+	MidiMsg msg = {0};
+	msg.status = status;
+	msg.data1 = data1;
+	msg.data2 = data2;
+	if(status == MIDI_CC)
+	{
+		msg.data1 = (data1 + 1) & 0x7f;
+		midiParser_ccHandler(msg, 1, 0, 0.f);
+	}
+	else if(status == FRONT_CC_2)
+		midiParser_ccHandler(msg, 1, 0, 0.f);
+	else if(status == FRONT_CC_LFO_TARGET)
+		frontParser_applyLfoTarget(data1, data2);
+}
+
 static void frontParser_handleMidiMessage();
 static void frontParser_handleSysexData(unsigned char data);
 static void frontParser_handleSeqCC();
@@ -464,27 +507,7 @@ static void frontParser_handleMidiMessage()
 
 	case FRONT_CC_LFO_TARGET: //cortex_midiMsg.status
 	{
-		uint8_t upper = cortex_midiMsg.data1;
-		uint8_t lower = cortex_midiMsg.data2;
-		// **PATROT note that the only valid values for the following are listed in
-		// the modTargets array in the AVR code
-		uint8_t value = ((upper&0x01)<<7) | lower;
-
-		uint8_t lfoNr = (upper&0xfe)>>1;
-
-		switch(lfoNr)
-		{
-		case 0:
-		case 1:
-		case 2:	modNode_setDestination(&voiceArray[lfoNr].lfo.modTarget, value);break;
-
-		case 3:	modNode_setDestination(&snareVoice.lfo.modTarget,value);		break;
-		case 4:	modNode_setDestination(&cymbalVoice.lfo.modTarget, value);		break;
-		case 5:	modNode_setDestination(&hatVoice.lfo.modTarget, value);			break;
-		default:
-			break;
-		}
-
+		frontParser_applyLfoTarget(cortex_midiMsg.data1, cortex_midiMsg.data2);
 	}
 		break; // case FRONT_CC_LFO_TARGET
 

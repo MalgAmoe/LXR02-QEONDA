@@ -22,7 +22,7 @@ c+='''
 #define NO_STEP_SELECTED -1
 #define NUM_SUB_PAGES 8
 static uint16_t buttonHandler_originalParameter[2];
-static uint8_t buttonHandler_originalValue[2],buttonHandler_resetLock1,buttonHandler_resetLock2;
+static uint8_t buttonHandler_bulkOriginal[2],buttonHandler_originalValue[2],buttonHandler_resetLock1,buttonHandler_resetLock2;
 static uint8_t editModeActive,saveScreenPots[4];
 static int8_t buttonHandler_armedAutomationStep=-1;
 static unsigned targets,resets,capture; static uint8_t targetH,targetL,targetR;
@@ -38,7 +38,8 @@ static void seq_setActiveAutomationTrack(unsigned p){assert(0);}
 static void modNode_setDestination(int *p,int v){assert(0);}
 static uint8_t preset_getMorphValue(unsigned p,unsigned v){assert(0);return 0;}
 '''
-c+=''.join(fn(n) for n in ('menu_setPerformanceFilter','menu_resetPerformanceFilter','menu_stepAudioOutput','menu_encoderChangeParameter','limitPotValue','menu_parseKnobValue','menu_moveToMenuItem'))
+c+='static uint8_t limitPotValueFromOriginal(int8_t diff,uint16_t paramNr,uint8_t originalValue);\nstatic uint8_t limitPotValue(int8_t diff, uint16_t paramNr);\nstatic uint8_t buttonHandler_getShift(void){return 0;}\nstatic void frontParser_dispatchNonRecording(uint8_t s,uint8_t a,uint8_t b){assert(0); }\n'
+c+=''.join(fn(n) for n in ('menu_getHeldOriginal','menu_dispatchParameter','menu_applyKnobParameter','menu_restoreHeldParameter','menu_dispatchHeldOriginal','menu_updateHeldOriginal','menu_changeAllKnob','menu_setPerformanceFilter','menu_resetPerformanceFilter','menu_stepAudioOutput','menu_encoderChangeParameter','limitPotValueFromOriginal','limitPotValue','menu_parseKnobValue','menu_moveToMenuItem'))
 # Real arm/restoration and Shift+Reload case; pattern/LED/load endpoints are stubs.
 buttons=(ROOT/'Core/Src/buttonHandler.c').read_text()
 c+=r"""
@@ -66,6 +67,7 @@ static int led_idx2StepLed(int p){return p;}
 static void led_setBlinkLed(int p,int on){}
 """
 c+=fn('buttonHandler_armTimerActionStep',buttons)
+c+=fn('buttonHandler_restoreOriginal',buttons)
 c+=fn('buttonHandler_disarmTimerActionStep',buttons)
 reload_case=re.search(r'case SEQ_RELOAD:\s*\{.*?(?=case SEQ_CONFIG:)',clean(buttons),re.S)[0]
 c+='static void shiftReload(void){switch(0){case 0:'+reload_case.split(':',1)[1]+'}}\n'

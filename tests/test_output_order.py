@@ -71,7 +71,7 @@ static uint8_t getMaxEntriesForMenu(uint8_t menuId){switch(menuId){
 ''' + re.search(r'case MENU_AUDIO_OUT:.*?(?=case MENU_FILTER:)', fn(menu, 'getMaxEntriesForMenu'), re.S)[0] + '''
 default: assert(0); return 0;}}
 '''
-c += ''.join(fn(menu, n) for n in ('menu_stepAudioOutput','menu_encoderChangeParameter','limitPotValue'))
+c += ''.join(fn(menu, n) for n in ('menu_stepAudioOutput','menu_encoderChangeParameter','limitPotValueFromOriginal','limitPotValue'))
 c += 'static const uint16_t routes[7] = {' + ','.join(rows) + '};\n'
 c += '''
 static const uint8_t order[7]={0,6,1,2,3,4,5};
