@@ -245,9 +245,12 @@ int main(void){
   for(int p=0;p<16;p++)assert(!leds[led_idx2StepLed(p)]);
   assert(buttonHandler_getMode()==SELECT_MODE_PERF && menuIndex==index && menu_activePage==PERF_PAGE);
  }
- reset(PERF_PAGE,0);enter(0);buttonHandler_selectButtonPressed(0);assert(menuIndex==4 && buttonHandler_getMode()==12);
- buttonHandler_selectButtonPressed(0);assert(menuIndex==8 && buttonHandler_getMode()==12);
- buttonHandler_selectButtonPressed(0);assert(menuIndex==0 && buttonHandler_getMode()==12);
+ /* Subpage buttons remain inert in ordinary pattern selection. */
+ for(int page=0;page<3;page++)for(int button=0;button<8;button++){
+  reset((int[]){2,FX_MODE_PAGE,PERF_PAGE}[page],8);enter(0);
+  buttonHandler_selectButtonPressed(button);
+  assert(menuIndex==8 && buttonHandler_getMode()==SELECT_MODE_PATTERN_LIVE);
+ }
  reset(1,11);enter(0);shift=1;buttonHandler_handleModeButtons(0);shift=0;
  assert(buttonHandler_getMode()==SELECT_MODE_STEP && enteredStep==1);
  /* Old held step, old held roll, and new pattern-pad release after exit. */
@@ -272,7 +275,7 @@ int main(void){
  /* Voice/subpage navigation stays live; FX context isn't arbitrary voice subpages. */
  reset(1,2);enter(0);buttonHandler_voiceButtonPressed(6);
  assert(menu_activePage==6 && menu_activeVoice==6 && buttonHandler_getMode()==12);
- buttonHandler_selectButtonPressed(3);assert(menu_getSubPage()==3 && buttonHandler_getMode()==12);
+ uint8_t retainedIndex=menuIndex;buttonHandler_selectButtonPressed(3);assert(menuIndex==retainedIndex && buttonHandler_getMode()==12);
  reset(FX_MODE_PAGE,17);enter(0);buttonHandler_voiceButtonPressed(5);buttonHandler_selectButtonPressed(7);
  assert(menu_activePage==FX_MODE_PAGE && menuIndex==17 && buttonHandler_getMode()==12);
  for(unsigned type=0;type<6;type++){
@@ -300,13 +303,12 @@ int main(void){
   int page=(int[]){2,FX_MODE_PAGE,PERF_PAGE}[context];
   reset(page,8);enter(0);menu_activePatternBank=3;led_initPatternSelectLeds();
   buttonHandler_buttonPressed(BUT_COPY);
-  assert(buttonHandler_getMode()==((int[]){SELECT_MODE_VOICE,SELECT_MODE_FX,SELECT_MODE_PERF})[context]);
+  assert(buttonHandler_getMode()==SELECT_MODE_PATTERN_LIVE);
   assert(menu_activePage==page && menuIndex==8 && copyClear_Mode==MODE_COPY_TRACK);
-  assert(!leds[LED_PAGE_UP] && !leds[LED_PAGE_DOWN]);pads(0,0);
-  if(context==2)for(int pad=0;pad<16;pad++)assert(!leds[led_idx2StepLed(pad)]);
+  assert(leds[LED_PAGE_UP] && leds[LED_PAGE_DOWN]);
   copyClear_reset();unsigned before=changes;
   buttonHandler_seqButtonPressed(4);buttonHandler_seqButtonReleased(4);
-  assert(changes==before && stepWrites==(context==0));
+  assert(changes==before+1 && pending==52 && !stepWrites);
  }
  /* Held pad -> shifted shortcut -> PERF exit -> Shift up -> pad up. */
  reset(PERF_PAGE,8);buttonHandler_setMode(SELECT_MODE_PERF);buttonHandler_seqButtonPressed(4);shift=1;
@@ -315,7 +317,8 @@ int main(void){
  menu_activePatternBank=3;led_initPatternSelectLeds();
  buttonHandler_buttonPressed(BUT_COPY);
  assert(copyClear_Mode==MODE_CLEAR);
- assert(menu_activePage==PERF_PAGE && menuIndex==8 && buttonHandler_getMode()==SELECT_MODE_PERF);
+ assert(menu_activePage==PERF_PAGE && menuIndex==8 && buttonHandler_getMode()==SELECT_MODE_PATTERN_LIVE);
+ shift=0;buttonHandler_handleModeButtons(SELECT_MODE_PERF);
  shift=0;buttonHandler_buttonReleased(BUT_SHIFT);buttonHandler_seqButtonReleased(4);
  assert(!stepWrites && !rolls && !heldSeqButtons && !consumedSeqReleases);
  assert(!leds[LED_PAGE_UP] && !leds[LED_PAGE_DOWN]);pads(0,0);

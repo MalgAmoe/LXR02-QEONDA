@@ -645,8 +645,6 @@ static void buttonHandler_handleSelectButton(uint8_t buttonNr) {
 			//switch menu back to voice editing
 			menu_switchPage(menu_getActiveVoice());
 		case SELECT_MODE_VOICE:
-		case SELECT_MODE_PATTERN_LIVE:
-			if(buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE && menu_activePage == FX_MODE_PAGE) break;
 
 			//change sub page -> osc, filter, mod etc...
 			menu_switchSubPage(buttonNr, 1);
@@ -718,6 +716,7 @@ static void buttonHandler_handleSelectButton(uint8_t buttonNr) {
 		case SELECT_MODE_PAT_GEN:
 
 		case SELECT_MODE_MENU:
+		case SELECT_MODE_PATTERN_LIVE:
 		case SELECT_MODE_PATTERN:
 		case SELECT_MODE_SONG:
 			break;
@@ -2032,17 +2031,6 @@ void buttonHandler_buttonPressed(uint8_t buttonNr) {
 		break;
 
 	case BUT_COPY:
-		if(buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE) {
-			buttonHandler_setMode(menu_activePage == PERF_PAGE ? SELECT_MODE_PERF :
-				(menu_activePage == FX_MODE_PAGE ? SELECT_MODE_FX : SELECT_MODE_VOICE));
-			led_clearAllBlinkLeds();
-			led_setMode2(buttonHandler_getMode());
-			if(menu_activePage == PERF_PAGE) {
-				led_clearSequencerLeds();
-				led_setValue(seq_isPerformanceBreak(), led_idx2StepLed(7));
-				led_updateBarLeds();
-			} else led_updateSeqLeds();
-		}
 		if (buttonHandler_getShift()) {
 
 			//SONG MODE: while in song mode SHIFT+COPY = CLEAR and removes the current line from the pattern table
