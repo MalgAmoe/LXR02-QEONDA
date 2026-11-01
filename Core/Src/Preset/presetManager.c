@@ -926,7 +926,7 @@ FRESULT preset_saveDrumsetSD(uint8_t presetNr, uint8_t isMorph)
 //----------------------------------------------------
 // The on-disk legacy prefix is fixed, independent of appended parameter IDs.
 #define PRESET_LEGACY_GLOBAL_BYTES 30
-static const uint8_t preset_masterCompDefaults[4] = {30, 0, 17, 20};
+static const uint8_t preset_masterCompDefaults[4] = {36, 0, 17, 20};
 
 static void preset_applyMasterComp(const uint8_t values[4])
 {

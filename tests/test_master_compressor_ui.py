@@ -109,6 +109,7 @@ int main(void){
  char text[3];
  assert(menu_formatMasterCompressor(MASTER_COMP_THRESHOLD,0,text)&&!memcmp(text,"-48",3));
  menu_formatMasterCompressor(MASTER_COMP_THRESHOLD,30,text);assert(!memcmp(text,"-18",3));
+ menu_formatMasterCompressor(MASTER_COMP_THRESHOLD,36,text);assert(!memcmp(text,"-12",3));
  menu_formatMasterCompressor(MASTER_COMP_THRESHOLD,48,text);assert(!memcmp(text,"  0",3));
  menu_formatMasterCompressor(MASTER_COMP_RATIO,0,text);assert(!memcmp(text,"  1",3));
  menu_formatMasterCompressor(MASTER_COMP_RATIO,19,text);assert(!memcmp(text," 20",3));

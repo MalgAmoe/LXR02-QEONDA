@@ -126,7 +126,7 @@ for name in ('loadTmpFolderFiles','preset_LoadTmpKit','preset_LoadTmpPat'):
     assert 'preset_loadGlobals' not in fn(name)
 assert 'loadTmpFolderFiles();' in main and 'preset_LoadTmpKit();' in main and 'preset_LoadTmpPat();' in main
 tests=r'''
-static const uint8_t defaults[4]={30,0,17,20}, selected[4]={48,19,30,34};
+static const uint8_t defaults[4]={36,0,17,20}, selected[4]={48,19,30,34};
 static uint8_t fixture[80];
 static void check(const uint8_t*v){assert(activeParameters[302]==v[0]);assert(activeParameters[303]==v[1]);assert(activeParameters[304]==v[2]);assert(activeParameters[305]==v[3]);assert(!memcmp(dspTargets,v,4));}
 static void reset(void){openError=closeError=readFault=shortRead=shortWriteAt=readCall=writes=0;dirError=nameError=slotError=indexError=recoverError=0;preset_writeOpen=preset_writeSession=0;cwd=0;}

@@ -10,7 +10,7 @@ _Static_assert(MASTER_COMP_THRESHOLD==302 && MASTER_COMP_RATIO==303 &&
 /* Independently designed conventional peak compressor; no circuit-model code.
  * 221 samples = 5.007ms at 44140Hz. Only control coefficients and bypass mix
  * ramp; the signal detector/curve remain full-rate with no extra gain lag. */
-static volatile uint8_t compTargets[4] = {30, 0, 17, 20};
+static volatile uint8_t compTargets[4] = {36, 0, 17, 20};
 static struct {
     float envelope, gain, makeup, makeupGoal;
     float attack, release, threshold, slope;
