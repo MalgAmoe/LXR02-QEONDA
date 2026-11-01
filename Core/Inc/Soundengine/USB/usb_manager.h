@@ -31,6 +31,11 @@
 void usb_tick();
 
 void usb_sendMidi(MidiMsg msg);
+void usb_sendMidiOwn(MidiMsg msg);
+void usb_abortMidiSource(uint8_t source);
+/* CDC lifecycle / final IN completion, called by the USB driver. */
+void usb_midiReset(void);
+void usb_midiTxComplete(void);
 uint8_t usb_getMidi(MidiMsg* msg);
 void usb_flushMidi();
 

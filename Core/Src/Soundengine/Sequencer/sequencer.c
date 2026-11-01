@@ -47,6 +47,20 @@ void seq_setPendingPatternActive();
 uint8_t seq_prescaleCounter = 0;
 
 uint8_t seq_masterStepCnt=0;				/** keeps track of the played steps between 0 and 127 independent from the track counters*/
+static volatile uint8_t seq_performanceBreak = 0;
+
+uint8_t seq_isPerformanceBreak(void)
+{
+	return seq_performanceBreak;
+}
+
+void seq_setPerformanceBreak(uint8_t held)
+{
+	if(seq_performanceBreak == (held != 0)) return;
+	seq_performanceBreak = held != 0;
+	led_setValue(seq_performanceBreak, led_idx2StepLed(7));
+}
+
 uint8_t seq_rollRate = 1;				//start with roll rate = 1/16
 uint8_t seq_rollState = 0;					/**< each bit represents a voice. if bit is set, roll is active*/
 
@@ -55,6 +69,7 @@ static int8_t 	seq_stepIndex[NUM_TRACKS];	/**< we have 16 steps con 4 bars = 64 
 
 static uint16_t seq_tempo = 120;			/**< seq speed in bpm*/
 
+static float seq_midiRemaining;
 static uint32_t	seq_lastTick = 0;			/**< stores the time the last step change occured*/
 uint8_t isStepShuffled=0;
 static float	seq_deltaT;					/**< time in [ms] until the next step
@@ -65,7 +80,7 @@ uint8_t seq_activeAutomTrack=0;
 uint8_t seq_delayedSyncStepFlag = 0;		//normally sync steps will only be advanced by external midi clocks in ext. sync mode
 											//if the shuffle needs a delayed sync step, it is indicated here.
 
-uint8_t seq_isSyncExternal = 0;
+volatile uint8_t seq_isSyncExternal = 0;
 uint8_t seq_lastMasterStep[NUM_TRACKS];		//keeps track of the last triggered master sync step of each track
 
 
@@ -80,7 +95,7 @@ static int8_t seq_armedArmedAutomationTrack = -1;
 
 static uint8_t seq_mutedTracks=0;			/**< indicate which tracks are muted */
 uint8_t seq_songModeEnabled=0;
-uint8_t seq_running = 0;					/**<  1 running, 0 if stopped*/
+volatile uint8_t seq_running = 0;					/**<  1 running, 0 if stopped*/
 
 uint8_t seq_activePattern = 0;				/**< the currently playing pattern*/
 uint8_t seq_pendingPattern = 0;				/**< next pattern to play*/
@@ -164,7 +179,6 @@ static void seq_sendProgChg(const uint8_t ptn);
 
 
 
-//static uint8_t seq_isNextStepSyncStep();
 static uint8_t seq_intIsStepActive(uint8_t voice, uint8_t stepNr, uint8_t patternNr);
 static uint8_t seq_intIsMainStepActive(uint8_t voice, uint8_t mainStepNr, uint8_t pattern);
 static void seq_resetNote(Step *step);
@@ -180,6 +194,7 @@ uint8_t seq_getMasterStepCnt()
 //------------------------------------------------------------------------------
 void seq_init()
 {
+    sync_cancelPending();
 	int i;
 
 	//give active song pointer a proper value
@@ -368,7 +383,7 @@ float seq_getDeltaTShuffleDelay(uint16_t bpm)
 	//--- calc deltaT ----
 	// for 4/4tel takt -> 1 beat = 4 main steps = 4*8 = 32 sub steps
 	// 120 bpm 4/4tel = 120 * 1 beat / 60sec = 120 * 32 in 60 sec;
-	dT 	= (1000*60)/bpm; 	//bei 12 = 500ms = time for one beat
+	dT 	= 60000.0f / bpm; 	//bei 12 = 500ms = time for one beat
 	dT /= 96.f; //we run the internal clock at 96ppq -> seq clock 32 ppq == prescaler 3, midi clock 24 ppq == prescale 4
 	dT *= 4;
 	//32.f;					// time for one beat / number of steps per beat
@@ -398,7 +413,7 @@ static void seq_calcDeltaT(uint16_t bpm, uint8_t isShuffled)
 	//--- calc deltaT ----
 	// for 4/4tel takt -> 1 beat = 4 main steps = 4*8 = 32 sub steps
 	// 120 bpm 4/4tel = 120 * 1 beat / 60sec = 120 * 32 in 60 sec;
-	seq_deltaT 	= (1000*60)/bpm; 	//bei 12 = 500ms = time for one beat
+	seq_deltaT 	= 60000.0f / bpm; 	//bei 12 = 500ms = time for one beat
 	seq_deltaT /= 96.f; //we run the internal clock at 96ppq -> seq clock 32 ppq == prescaler 3, midi clock 24 ppq == prescale 4
 	seq_deltaT *= 4;
 	//32.f;					// time for one beat / number of steps per beat
@@ -470,10 +485,10 @@ void seq_setNextPattern(const uint8_t patNr)
 static void seq_sendMidi(MidiMsg msg)
 {
 	//send to usb midi
-	usb_sendMidi(msg);
+	usb_sendMidiOwn(msg);
 
 	//send to hardware midi out jack
-	uart_sendMidi(msg);
+	uart_sendMidiOwn(msg);
 
 }
 
@@ -495,12 +510,13 @@ void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 	uint8_t midiNote; // which midi note to send
 
 	if(voiceNr > 6) return;
+	const int8_t step = seq_stepIndex[voiceNr];
 
 
 #if USE_PATTERN_EDIT_BUFFER
-	seq_parseAutomationNodes(voiceNr, &patternBackupBuffer.seq_subStepPattern[voiceNr][seq_stepIndex[voiceNr]]);
+	if(step >= 0) seq_parseAutomationNodes(voiceNr, &patternBackupBuffer.seq_subStepPattern[voiceNr][step]);
 #else
-	seq_parseAutomationNodes(voiceNr, &seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][seq_stepIndex[voiceNr]]);
+	if(step >= 0) seq_parseAutomationNodes(voiceNr, &seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][step]);
 #endif
 
 	//turn the trigger off before sending the next one
@@ -532,12 +548,9 @@ void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 		//midiNote = midi_NoteOverride[voiceNr];
 		midiNote = activeParameters[PAR_MIDI_NOTE1 + voiceNr];
 
-	//send the new note to midi/usb out
-#if USE_PATTERN_EDIT_BUFFER
-	seq_sendMidiNoteOn(midiChan, midiNote, patternBackupBuffer.seq_subStepPattern[voiceNr][seq_stepIndex[voiceNr]].volume&STEP_VOLUME_MASK);
-#else
-	seq_sendMidiNoteOn(midiChan, midiNote, seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][seq_stepIndex[voiceNr]].volume&STEP_VOLUME_MASK);
-#endif
+    // Match the actual trigger (including rolls and shifted notes), not another step's velocity.
+    seq_sendMidiNoteOn(midiChan, midiNote, vol);
+
 }
 //------------------------------------------------------------------------------
 //has to be called AFTER the last pattern switch is finished, so the playing pattern is properly put into the temp buffer
@@ -1101,6 +1114,7 @@ void seq_processFlam(uint8_t idx)
 
 	for(uint8_t track=0;track<NUM_TRACKS;track++)
 	{
+		if(seq_stepIndex[track] < 0) continue;
 		//if track is not muted
 		if(!(seq_mutedTracks & (1<<track) ) )
 		{
@@ -1125,7 +1139,7 @@ void seq_processFlam(uint8_t idx)
 			uint8_t currentActive 	= (currentStepPattern 	& (1UL<<(23-idx)) ) != 0;
 			uint8_t nextActive 		= (nextStepPattern 		& (1UL<<(23-idx)) ) != 0;
 
-			if(nextActive)
+			if(nextActive && !seq_performanceBreak)
 			{
 				lastWasNoteOn[track] = 1;
 				chokeNext = 1;
@@ -1133,7 +1147,7 @@ void seq_processFlam(uint8_t idx)
 				const uint8_t note = seq_patternSet.seq_subStepPattern[seq_activePattern][track][nextStep].note;
 				seq_triggerVoice(track,vol,note);
 			}
-			else if((currentActive) && (chokeNext == 0))
+			else if((currentActive) && (chokeNext == 0) && !seq_performanceBreak)
 			{
 				lastWasNoteOn[track] = 1;
 				chokeCurrent = 1;
@@ -1141,7 +1155,7 @@ void seq_processFlam(uint8_t idx)
 				const uint8_t note = seq_patternSet.seq_subStepPattern[seq_activePattern][track][currentStep].note;
 				seq_triggerVoice(track,vol,note);
 			}
-			else if((prevActive) && (chokeNext == 0) && (chokeCurrent == 0))
+			else if((prevActive) && (chokeNext == 0) && (chokeCurrent == 0) && !seq_performanceBreak)
 			{
 				lastWasNoteOn[track] = 1;
 				const uint8_t vol = seq_patternSet.seq_subStepPattern[seq_activePattern][track][prevStep].volume&STEP_VOLUME_MASK;
@@ -1522,12 +1536,19 @@ uint8_t seq_getExtSync()
 //------------------------------------------------------------------------------
 void seq_setExtSync(uint8_t isExt)
 {
-	seq_isSyncExternal = isExt;
+	uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    if(seq_isSyncExternal != isExt) {
+        seq_isSyncExternal = isExt;
+        sync_sourceChanged();
+    }
+    __set_PRIMASK(mask);
 }
 //------------------------------------------------------------------------------
 void seq_armAutomationStep(uint8_t stepNr, uint8_t track,uint8_t isArmed)
 {
 	if(isArmed) {
+		if(stepNr >= NUM_STEPS || track >= NUM_TRACKS) return;
 		seq_armedArmedAutomationStep 	= stepNr;
 		seq_armedArmedAutomationTrack 	= track;
 	} else {
@@ -1580,61 +1601,7 @@ void seq_triggerNextMasterStep(uint8_t stepSize)
 	}
 }
 //------------------------------------------------------------------------------
-/*
-void seq_resetDeltaAndTick()
-{
-	//if there are unplayed steps jump over them
-	while(!seq_isNextStepSyncStep())
-	{
-		seq_nextStep();
-	}
 
-	//is shuffle delay necessary?
-
-	if(seq_shuffle != 0)
-	{
-		//seq_deltaT = 0;^
-
-		seq_deltaT 	= (1000*60)/seq_tempo; 	//bei 12 = 500ms = time for one beat
-		seq_deltaT /= 96.f; //we run the internal clock at 96ppq -> seq clock 32 ppq == prescaler 3, midi clock 24 ppq == prescale 4
-		seq_deltaT *= 4;
-
-		seq_lastTick = systick_ticks;
-
-		uint8_t stepInHalfBeat = seq_masterStepCnt&0xf;
-		const float shuffleFactor = seq_shuffleTable[stepInHalfBeat] * seq_shuffle;
-		const float originalDeltaT = seq_deltaT;
-
-		seq_deltaT = shuffleFactor * originalDeltaT * 16.f;
-		seq_lastShuffle = shuffleFactor;
-
-		if(seq_deltaT <= 0)
-		{
-			seq_nextStep();
-			seq_lastTick = systick_ticks;
-			seq_calcDeltaT(seq_tempo);
-		} else
-		{
-			seq_delayedSyncStepFlag =1;
-		}
-
-		seq_prescaleCounter = 0;
-
-	}
-	else
-	{
-		//play next sync step
-		seq_nextStep();
-
-		seq_lastTick = systick_ticks;
-		seq_calcDeltaT(seq_tempo);
-
-		seq_prescaleCounter = 0;
-	}
-
-
-}
-*/
 //------------------------------------------------------------------------------
 //returns how many % [0:99] of the current step have elapsed (time to next step)
 // used for MIDI recording quantisation.
@@ -1655,47 +1622,21 @@ float seq_getElapsedStepTimePercent()
 	if(seq_getExtSync())
 	{
 
-		if(sync_delayedStepTimer != 0)
-		{
-			if(systick_ticks >= sync_delayedStepTimer)
-			{
-				sync_delayedStepTimer = 0;
-				seq_nextStep();
-				seq_prescaleCounter=0;
-
-				seq_MidiSyncQueue(0);
-			}
-		}
+        if(!sync_tryControl()) return;
+        sync_processAnalogTransport();
+        sync_pollDelayedStep();
 #if !HANDLE_SEQ_IN_CLOCK_INTERRUPT
-			while(trigger_clockReceived != 0) //analogue clock
-			{
-				trigger_clockReceived--;
-
-				//trigger_prescalerClockInput
-				//seq_nextStep();
-
-					uint8_t isStepShuffled = seq_getMasterStepCnt()%2 == 1;
-
-					if(isStepShuffled)
-					{
-						float dt = seq_getDeltaTShuffleDelay(seq_getBpm());
-						sync_delayedStepTimer = systick_ticks + dt;
-					}
-					else
-					{
-						seq_nextStep();
-						//seq_MidiSyncQueue(0);
-						seq_prescaleCounter=0;
-						seq_MidiSyncQueue(0);
-					}
-
-
-				//reset internal clock cycle for next step
-				//seq_prescaleCounter=0;
-			}
+        uint32_t mask = __get_PRIMASK();
+        __disable_irq();
+        uint8_t pulses = trigger_clockReceived;
+        trigger_clockReceived = 0;
+        __set_PRIMASK(mask);
+        while(pulses--) {
+            if(seq_getExtSync() == 1) sync_externalStep();
+        }
 
 			//midi clock flam stuff
-			if(systick_ticks-seq_lastTick >= seq_deltaT)
+			if(sync_interpolationAllowed() && systick_ticks-seq_lastTick >= seq_deltaT)
 			{
 
 
@@ -1765,6 +1706,7 @@ float seq_getElapsedStepTimePercent()
 
 
 #endif
+        sync_releaseControl();
 	}
 	else
 	{
@@ -1913,6 +1855,7 @@ uint8_t seq_isRunning() {
 //------------------------------------------------------------------------------
 void seq_resetPosition()
 {
+    sync_cancelPending();
 	led_resetBlinkTimer();
 
 	// reset all track rotations to 0. We are not saving rotated value. it's a performance tool.
@@ -1935,6 +1878,7 @@ void seq_resetPosition()
 	seq_songPositionPointer = -1;
 	//so the next seq_tick call will trigger the next step immediately
 	seq_deltaT = 0;
+    seq_midiRemaining = 0;
 	seq_sendRealtime(MIDI_STOP);
 
 	// send notes off on all channels that have notes playing and reset our bitmap to reflect that
@@ -1953,9 +1897,48 @@ void seq_resetPosition()
 		seq_setStepIndexToStart();
 }
 //------------------------------------------------------------------------------
+/* Received transport changes no track, song, master or interpolation index.
+ * Keep only the fractional wait, not a snapshot of musical state. */
+void seq_setMidiRunning(uint8_t run)
+{
+    if(!run) {
+        float elapsed = (float)(uint32_t)(systick_ticks - seq_lastTick);
+        if(sync_interpolationAllowed())
+            seq_midiRemaining = seq_deltaT > elapsed ? seq_deltaT - elapsed : 0;
+    }
+    if(run && sync_interpolationAllowed()) seq_midiRemaining = 0;
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    seq_running = run;
+    __set_PRIMASK(mask);
+}
+
+/* Call only after run/pause/await publication, with interrupts enabled. */
+void seq_midiRunCleanup(uint8_t run)
+{
+    if(!run) {
+        seq_setPerformanceBreak(0);
+        voiceControl_noteOff(0xFF);
+        trigger_reset(0);
+        midiParser_checkMtc();
+    }
+    preset_touchTimer(run ? PRESET_STOP_PAT_TIMER : PRESET_PAT_TIMER);
+}
+
+void seq_midiClockAnchor(void)
+{
+    seq_lastTick = systick_ticks;
+    seq_deltaT = seq_midiRemaining;
+}
+
 void seq_setRunning(uint8_t isRunning)
 {
+	if(!isRunning) seq_setPerformanceBreak(0);
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
 	seq_running = isRunning;
+    sync_cancelPending();
+    __set_PRIMASK(mask);
 	//jump to 1st step if sequencer is stopped
 	if(!seq_running)
 	{
@@ -2306,7 +2289,8 @@ uint8_t seq_isAutomationStepArmed()
 //------------------------------------------------------------------------
 void seq_recordAutomation(uint8_t voice, uint8_t dest, uint8_t value)
 {
-	if(seq_recordActive)
+	if(voice >= NUM_TRACKS) return;
+	if(seq_recordActive && seq_stepIndex[voice] >= 0)
 	{
 		//uint8_t quantizedStep = seq_quantize(seq_stepIndex[voice]);
 		const uint8_t step = seq_stepIndex[voice];
@@ -2366,7 +2350,7 @@ void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note)
 	uint8_t targetPattern;
 	Step *stepPtr;
 	//only record notes when seq is running and recording
-	if(seq_running && seq_recordActive)
+	if(trackNr < NUM_TRACKS && seq_running && seq_recordActive && seq_stepIndex[trackNr] >= 0)
 	{
 		//const int8_t quantizedStep = seq_quantize(seq_stepIndex[trackNr]);
 
@@ -2659,27 +2643,13 @@ uint8_t seq_getActiveAutomationTrack(void)
   return seq_activeAutomTrack;
 }
 //------------------------------------------------------------------------------
-/*
-static uint8_t seq_isNextStepSyncStep()
-{
-	if(seq_delayedSyncStepFlag)
-	{
-		seq_delayedSyncStepFlag = 0;
-		seq_prescaleCounter = 0;
-		return 0;
-	}
-	if( ((seq_stepIndex[0] & 0x3) % 4) == 3) {
-		return 1;
-	}
-	return 0;
-}
-*/
+
 //------------------------------------------------------------------------------
 
 void seq_midiNoteOff(uint8_t chan)
 {
 	uint8_t i;
-	MidiMsg msg;
+	MidiMsg msg = {0};
 
 	// we are not filtering according to tx filter because they might have turned that
 	// setting on while a note was sustaining
@@ -2711,9 +2681,9 @@ void seq_midiNoteOff(uint8_t chan)
 
 static void seq_sendRealtime(const uint8_t status)
 {
-	static MidiMsg msg = {0};
+	MidiMsg msg = {0};
 	// FILT filter out realtime msgs if appropriate
-	if((midiParser_txRxFilter & (MIDI_FILTER_SYSTEM<<4))==0)
+	if(sync_suppressRealtime() || (midiParser_txRxFilter & (MIDI_FILTER_SYSTEM<<4))==0)
 		return;
 	msg.status=status;
 	seq_sendMidi(msg);
@@ -2724,7 +2694,7 @@ static void seq_sendRealtime(const uint8_t status)
  */
 void seq_sendMidiNoteOn(const uint8_t channel, const uint8_t note, const uint8_t veloc)
 {
-	static MidiMsg msg = { .bits = { .length = 2 } };  // status + 2 data bytes
+	MidiMsg msg = { .bits = { .length = 2 } };  // status + 2 data bytes
 	// FILT filter out note msgs if appropriate
 	if((midiParser_txRxFilter & (MIDI_FILTER_NOTES<<4))==0)
 		return;
@@ -2752,7 +2722,7 @@ uint8_t seq_getStepIndex(uint8_t trackNr)
  */
 static void seq_sendProgChg(const uint8_t ptn)
 {
-	static MidiMsg msg = { .bits = { .length = 1 } };  // status + 1 data byte
+	MidiMsg msg = { .bits = { .length = 1 } };  // status + 1 data byte
 
 	// FILT filter out PC msgs if appropriate
 	if((midiParser_txRxFilter & (MIDI_FILTER_PROG_C<<4))==0)

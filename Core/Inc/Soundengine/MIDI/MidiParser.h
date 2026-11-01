@@ -28,9 +28,6 @@ float midiParser_calcDetune(uint8_t value);
 // check mtc status, might stop the sequencer
 void midiParser_checkMtc();
 
-#if 0
-void midiDebugSend(uint8_t b1, uint8_t b2);
-#endif
 
 // 0 - Off - nothing to nothing
 // 1 - U2M - usb in to midi out
@@ -55,13 +52,7 @@ extern uint8_t midiParser_originalCcValues[0xff];
 
 extern uint8_t midi_MidiChannels[8]; // last element is global channel
 //extern uint8_t midi_NoteOverride[7];
-//extern uint8_t midi_mode; not used anymore
 
-//enum MIDI_modeEnum
-//{
-//	MIDI_MODE_TRIGGER,
-//	MIDI_MODE_NOTE,
-//} MidiModes;
 
 
 enum TxRxFilterValues
@@ -74,5 +65,7 @@ enum TxRxFilterValues
 
 // high nibble is TX low nibble is RX. see above (midiParser_setFilter) for bitmap
 extern uint8_t midiParser_txRxFilter;
+
+void midiParser_resetUart(void);
 
 #endif /* MIDIPARSER_H_ */

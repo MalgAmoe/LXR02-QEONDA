@@ -8,6 +8,9 @@
  */
 
 #include "menu/menu.h"
+#include "Soundengine/DSPAudio/MainDjFilter.h"
+#include "Soundengine/DSPAudio/MainCompressor.h"
+#include <math.h>
 #include "lcd.h"
 #include <string.h>
 #include <stdlib.h>
@@ -32,6 +35,7 @@
 
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/Soundengine.h"
+#include "Soundengine/MIDI/CortexParser.h"
 
 
 uint8_t display_refresh_state = 0;
@@ -249,6 +253,13 @@ const Name valueNames[NUM_NAMES] =
 		{SHORT_P3, CAT_FX, LONG_P3},/*TEXT_FX_P3*/
 		{SHORT_P4, CAT_FX, LONG_P4},/*TEXT_FX_P4*/
 		{SHORT_KCM, CAT_GLOBAL, LONG_PATTERN_MODE},/*TEXT_AUTO_SWITCH_KIT*/
+		{SHORT_PERF_HP, CAT_GLOBAL, LONG_PERF_HP},
+		{SHORT_PERF_LP, CAT_GLOBAL, LONG_PERF_LP},
+		{SHORT_FIL_RESO, CAT_GLOBAL, LONG_RESONANCE},
+		{SHORT_MASTER_THRESHOLD, CAT_GLOBAL, LONG_MASTER_THRESHOLD},
+		{SHORT_RATIO, CAT_GLOBAL, LONG_MASTER_RATIO},
+		{SHORT_ATTACK, CAT_GLOBAL, LONG_MASTER_ATTACK},
+		{SHORT_MASTER_RELEASE, CAT_GLOBAL, LONG_MASTER_RELEASE},
 
 
 };
@@ -524,8 +535,8 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_P1_VAL*/ 			DTYPE_0B127,							//240
 	    /*PAR_P2_VAL*/ 			DTYPE_0B127,
 	    /*PAR_SHUFFLE*/ 		DTYPE_0B127,
-	    /*PAR_UNUSED*/ 			DTYPE_0B127,
-	    /*PAR_PATTERN_NEXT*/ 	DTYPE_MENU | (MENU_NEXT_PATTERN<<8),
+	    /*PAR_UNUSED / PAR_PERF_HP*/ DTYPE_0B127,
+	    /*PAR_PATTERN_NEXT / PAR_PERF_RESONANCE*/ DTYPE_0B127,
 	    /*PAR_TRACK_LENGTH*/ 	DTYPE_1B64,
 	    /*PAR_GLO_SAT*/			DTYPE_0B127,
 	    /*PAR_POS_Y*/ 			DTYPE_0B127,
@@ -565,6 +576,7 @@ const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
 	    /*PAR_MIDI_NOTE6*/		DTYPE_NOTE_NAME,
 	    /*PAR_MIDI_NOTE7*/		DTYPE_NOTE_NAME,
 		/*PAR_PATTERN_MODE*/ DTYPE_MENU | (MENU_PAT_MODE<<8),
+		DTYPE_0B127, DTYPE_0B127, DTYPE_0B127, DTYPE_0B127,
 };
 
 
@@ -722,6 +734,28 @@ void copyEditBufferToName(uint8_t presetNr, uint8_t nameType)
 	}
 }
 //-----------------------------------------------------------------
+/** Updates the menu after kit kitNr has been loaded from RAM with
+ *  preset_loadDrumsetRam(), from the Load page or from outside the menu
+ *  (MIDI bank select).
+ */
+void menu_kitLoaded(uint8_t kitNr)
+{
+	menu_loadedPresetNr[CURRENT_KIT] = kitNr;
+	// **LFOTARGFIX - save the gap index
+	menu_TargetVoiceGapIndex = getModTargetGapIndex(activeParameters[PAR_TARGET_LFO1 + menu_activeVoice]);
+
+	// While a kit is being saved, the selected slot is where it will be saved to: leave it.
+	if(menu_activePage == SAVE_PAGE && menu_saveOptions.category == SAVE_TYPE_KIT
+			&& menu_saveOptions.state != SAVE_STATE_EDIT_PRESET_NR)
+		return;
+
+	menu_selectedPresetNr[SAVE_TYPE_KIT] = kitNr;
+	// The Load/Save page shows a copy of the selected kit's name, refresh it.
+	if((menu_activePage == LOAD_PAGE || menu_activePage == SAVE_PAGE)
+			&& menu_saveOptions.category == SAVE_TYPE_KIT)
+		copyNameToEditBuffer(kitNr, menu_saveOptions.nameBuffer);
+}
+//-----------------------------------------------------------------
 void menu_setShownPattern(uint8_t patternNr)
 {
 	menu_shownPattern = patternNr;
@@ -822,39 +856,6 @@ static volatile uint8_t refresh_i, refresh_j;
 
 uint8_t sendDisplayBuffer()
 {
-#if 0
-	// turn off the cursor
-	lcd_turnOn(1,0);
-	for(uint8_t i=0;i<2;i++)
-	{
-		for(uint8_t j=0;j<16;j++)
-		{
-			if(currentDisplayBuffer[i][j] != editDisplayBuffer[i][j])
-			{
-				//something has changed
-
-				//we have to omit the zero termination sign
-				if(editDisplayBuffer[i][j] == '\0')
-				{
-					//make a clear space out of zero termination
-					editDisplayBuffer[i][j] = ' ';
-				}
-
-				//set cursor to current position
-				lcd_setcursor(j,(uint8_t)(i+1));
-				//send the new character
-				lcd_data(editDisplayBuffer[i][j]);
-				//update currentDisplayBuffer
-				currentDisplayBuffer[i][j] = editDisplayBuffer[i][j];
-			}	
-		}
-
-	}
-
-	// set cursor position and make visible or not
-	lcd_setcursor((uint8_t)(visibleCursor >> 2), (uint8_t)(((visibleCursor & 2) >> 1)+1));
-	lcd_turnOn(1,(visibleCursor & 1));
-#else
 	switch(display_refresh_state)
 	{
 	case 0:
@@ -977,12 +978,16 @@ uint8_t sendDisplayBuffer()
 		}
 		break;
 	}
-#endif
 
 	return display_refresh_state;
 }
 //-----------------------------------------------------------------
 void menu_tick()
+{
+	sendDisplayBuffer();
+}
+// Page work belongs in foreground, not the highest-priority LCD interrupt.
+void menu_uiTick()
 {
 
 	if((menu_activePage == PATTERN_SAVE_PAGE_OK) || (menu_activePage == KIT_SAVE_PAGE_OK))
@@ -1018,9 +1023,6 @@ void menu_tick()
 		//TODO could possibly be sped up by aborting and restarting running transfer instead of queing a new one
 	}
 
-
-
-	sendDisplayBuffer();
 }
 //-----------------------------------------------------------------
 void menu_repaintAll()
@@ -1317,16 +1319,12 @@ static void menu_repaintLoadSavePage()
 				*/
 			}
 			// write the full preset name
-#if 0
-			memcpy(&editDisplayBuffer[1][5],(const void*)savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer],8);
-#else
 			for(int i=0; i<8;i++)
 			{
 				editDisplayBuffer[1][5+i] = characterOrder[(uint8_t)nameEditBuffer[i]];
 			}
 
 
-#endif
 		}
 
 		// bottom row - for save page, we show editing box or underline cursor as applicable
@@ -1390,6 +1388,31 @@ static void menu_repaintLoadSavePage()
 	}
 }
 //-----------------------------------------------------------------
+// Three LCD cells: dB, ratio denominator (:1), or milliseconds.
+static uint8_t menu_formatMasterCompressor(uint16_t parameter, uint8_t value, char *text)
+{
+	if(parameter < MASTER_COMP_THRESHOLD || parameter > MASTER_COMP_RELEASE) return 0;
+	if(parameter == MASTER_COMP_THRESHOLD) {
+		int v = (int)value - 48;
+		if(v < 0) { text[0]='-'; text[1]=(char)('0'+(-v)/10); text[2]=(char)('0'+(-v)%10); }
+		else { text[0]=' '; text[1]=' '; text[2]='0'; }
+	} else if(parameter == MASTER_COMP_RATIO) {
+		numtostrpu(text, value+1, ' ');
+	} else {
+		float ms = parameter == MASTER_COMP_ATTACK ? 0.1f * powf(1000.0f, value/30.0f) : 10.0f * powf(50.0f, value/34.0f);
+		if(ms < 9.95f) {
+			unsigned tenths = (unsigned)(ms*10.0f+0.5f);
+			text[0]=(char)('0'+tenths/10); text[1]='.'; text[2]=(char)('0'+tenths%10);
+		} else {
+			unsigned n=(unsigned)(ms+0.5f);
+			text[0]=n>=100?(char)('0'+n/100):' ';
+			text[1]=n>=10?(char)('0'+(n/10)%10):' ';
+			text[2]=(char)('0'+n%10);
+		}
+	}
+	return 1;
+}
+
 static uint8_t has2ndPage(uint8_t menuPage)
 {
 	const uint8_t textType = pgm_read_byte(&menuPages[menu_activePage][menuPage].top1 + 4);
@@ -1403,6 +1426,7 @@ static uint8_t has2ndPage(uint8_t menuPage)
 //-----------------------------------------------------------------
 static uint8_t checkScrollSign(uint8_t activePage, uint8_t activeParameter)
 {
+	if(menu_activePage == PERF_PAGE) return activePage ? '<' : (activeParameter > 3 ? '*' : '>');
 	const uint8_t is2ndPage = (uint8_t)(activeParameter>3);
 
 	//**GMENU show '*' when both left and right movement are possible in the global settings menu
@@ -1567,7 +1591,8 @@ void menu_repaintGeneric()
 				(const char PROGMEM *)(&longNames[pgm_read_byte(&valueNames[parName].longName)]));
 
 			//Bottom row -> parameter value (set below)
-			switch(parameter_dtypes[parNr] & 0xFF)
+			if(menu_formatMasterCompressor(parNr, curParmVal, &editDisplayBuffer[1][13])) {}
+			else switch(parameter_dtypes[parNr] & 0xFF)
 			{
 			case DTYPE_TARGET_SELECTION_VELO: //switch(parameters_dtypes[parNr] & 0x0F)
 			case DTYPE_TARGET_SELECTION_LFO:
@@ -1700,6 +1725,7 @@ void menu_repaintGeneric()
 			//convert the parameter uint8_t value to a 3 place char
 			if(parNr==PAR_NONE) {
 				memcpy(valueAsText,menuText_blank,3);
+			} else if(menu_formatMasterCompressor(parNr, curParmVal, valueAsText)) {
 			} else { //not if(parNr==PAR_NONE)
 
 				switch(parameter_dtypes[parNr] & 0xFF) {
@@ -1878,21 +1904,11 @@ void menu_handleSaveScreenKnobValue(uint8_t potNr, uint8_t value)
 			switch(x)
 			{
 			case 0: //Upper Case
-#if 0
-				savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] =
-					(char)toupper(savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1]);
-#else
 				nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] = 	(char)toUpperCase(nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1]);
-#endif
 				break;
 
 			case 1: //lower case
-#if 0
-				savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] =
-					(char)tolower(savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1]);
-#else
 				nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] = 	(char)toLowerCase(nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1]);
-#endif
 				break;
 			}
 			menu_repaint();
@@ -1901,16 +1917,10 @@ void menu_handleSaveScreenKnobValue(uint8_t potNr, uint8_t value)
 			// scroll through letters
 		case 2: //switch(potNr)
 
-#if 0
-			    //32 to 127 => default ascii range numbers/letters
-				x = (uint8_t)(value/(range/(127-32.f)) + 32); //32 - 127
-				savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] = x;
-#else
 				//0 to NUM_CHARS
 				x = (uint8_t)((value/(float)range) * (NUM_CHARS-1));
 				nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] = x;// characterOrder[x];
 
-#endif
 
 				menu_repaint();
 				break;
@@ -1922,6 +1932,18 @@ void menu_handleSaveScreenKnobValue(uint8_t potNr, uint8_t value)
 		} //switch(potNr)
 	}		
 
+}
+//-----------------------------------------------------------------
+void menu_showSaveCleanupWarning(void)
+{
+    const uint8_t bg = soundengine_backgroundAudioBegin();
+    lcd_process_display_interrupt = 0;
+    while(sendDisplayBuffer() != 0);
+    lcd_clear(); lcd_home(); lcd_string("Saved");
+    lcd_setcursor(0,2); lcd_string("Cleanup pending");
+    HAL_Delay(2000);
+    lcd_process_display_interrupt = 1;
+    soundengine_backgroundAudioEnd(bg);
 }
 //-----------------------------------------------------------------
 void menu_showSdError(uint8_t res)
@@ -2036,6 +2058,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 							//nothing to do here
 							break;
 						case SAVE_TYPE_PATTERN:
+                        {
 
 
 
@@ -2047,15 +2070,24 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 										#else
 
 										#endif
-											preset_savePatternSD(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);
+											FRESULT saveResult = preset_savePatternSD(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);
 										#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
 													HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
 										#else
 
 										#endif
+                            if(saveResult != FR_OK) {
+                                menu_showSdError(saveResult);
+                                menu_resetSaveParameters();
+                                return;
+                            }
+                            if(preset_fileCleanupWarning) menu_showSaveCleanupWarning();
+
+                        }
 							break;
 
 						case SAVE_TYPE_KIT:
+                        {
 
 
 							preset_saveDrumsetRam(menu_selectedPresetNr[SAVE_TYPE_KIT],0);
@@ -2066,18 +2098,26 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 							#else
 
 							#endif
-														preset_saveDrumsetSD(menu_selectedPresetNr[SAVE_TYPE_KIT],0);
+														FRESULT saveResult = preset_saveDrumsetSD(menu_selectedPresetNr[SAVE_TYPE_KIT],0);
 							#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
 										HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
 							#else
 
 							#endif
+                            if(saveResult != FR_OK) {
+                                menu_showSdError(saveResult);
+                                menu_resetSaveParameters();
+                                return;
+                            }
+                            if(preset_fileCleanupWarning) menu_showSaveCleanupWarning();
+
 
 							menu_loadedPresetNr[CURRENT_KIT] = menu_selectedPresetNr[SAVE_TYPE_KIT];
 							menu_activePage = KIT_SAVE_PAGE_OK;
 							sucessTimer = systick_ticks;
 							menu_repaint();
 
+                        }
 							break;
 
 						case SAVE_TYPE_MORPH:
@@ -2087,7 +2127,10 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 						case SAVE_TYPE_GLO:
 						{
 							FRESULT res;
-							res = preset_saveGlobals();
+							const uint8_t bg = soundengine_backgroundAudioBegin();
+							res = preset_initTmpFolder();
+							if(res == FR_OK) res = preset_saveGlobals();
+							soundengine_backgroundAudioEnd(bg);
 							if(res != FR_OK) menu_showSdError(res);
 						}
 							break;
@@ -2095,16 +2138,19 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 						case SAVE_TYPE_PROJECT:
 						{
 							FRESULT res;
-							if(!seq_isRunning())
-							{
-								HAL_TIM_Base_Stop(&htim2);	//calc sample interrupt - prio 1
-							}
 
 							res = preset_saveProject(menu_selectedPresetNr[SAVE_TYPE_PROJECT]);
-							if(!seq_isRunning())
-							{
-								  HAL_TIM_Base_Start_IT(&htim2);	//calc sample interrupt - prio 1
-							}
+                            if(res == FR_OK && preset_projectCleanupWarning) {
+                                const uint8_t bg = soundengine_backgroundAudioBegin();
+                                lcd_process_display_interrupt = 0;
+                                while(sendDisplayBuffer() != 0);
+                                lcd_clear(); lcd_home(); lcd_string("Project saved");
+                                lcd_setcursor(0,2); lcd_string("Cleanup pending");
+                                HAL_Delay(2000);
+                                lcd_process_display_interrupt = 1;
+                                soundengine_backgroundAudioEnd(bg);
+                            }
+
 
 							if(res != FR_OK) menu_showSdError(res);
 						}
@@ -2192,9 +2238,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 #if 1
 
 					preset_loadDrumsetRam(menu_selectedPresetNr[menu_saveOptions.category],0, 0);
-					menu_TargetVoiceGapIndex = getModTargetGapIndex(activeParameters[PAR_TARGET_LFO1 + menu_activeVoice]);
-
-					menu_loadedPresetNr[CURRENT_KIT] = menu_selectedPresetNr[menu_saveOptions.category];
+					menu_kitLoaded(menu_selectedPresetNr[menu_saveOptions.category]);
 					//update autosave kit
 					preset_touchTimer(PRESET_KIT_TIMER);
 					//store selected kit in current pattern
@@ -2285,8 +2329,12 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 					break;
 */
 				case SAVE_TYPE_GLO:
+				{
+					const uint8_t bg = soundengine_backgroundAudioBegin();
 					preset_loadGlobals();
-					menu_resetSaveParameters();						
+					soundengine_backgroundAudioEnd(bg);
+					menu_resetSaveParameters();
+				}
 					break;
 #if USE_SAMPLES
 				case SAVE_TYPE_SAMPLES:
@@ -2420,9 +2468,6 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 		case SAVE_STATE_EDIT_NAME7: // switch(menu_saveOptions.state) char 7
 		case SAVE_STATE_EDIT_NAME8: // switch(menu_saveOptions.state) char 8
 			DISABLE_CONV_WARNING
-#if 0
-			savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] += inc;
-#else
 			if(inc < 0)
 			{
 				if(nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] != 0)
@@ -2432,18 +2477,11 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 			{
 				nameEditBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1]	+= inc;
 			}
-#endif
 
-#if 0
-			//32 to 127 => default ascii range numbers/letters
-			if( savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] < 32) savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] = 32;
-			else if( savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] > 127) savefileNames[menu_selectedPresetNr[menu_saveOptions.category]][menu_saveOptions.nameBuffer][menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] = 127;
-#else
 
 				//0 to NUM_CHARS
 
 
-#endif
 
 
 			//presetNameBuffer[menu_saveOptions.state - SAVE_STATE_EDIT_NAME1] += inc;
@@ -2828,26 +2866,87 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 
 }
 
+// Project-local controls: no kit timer, step capture, or MIDI dispatch.
+static uint8_t menu_setMasterCompressor(uint16_t parameter, int32_t value)
+{
+	if(parameter < MASTER_COMP_THRESHOLD || parameter > MASTER_COMP_RELEASE) return 0;
+	static const uint8_t maxima[4] = {48,19,30,34};
+	if(value < 0) value = 0;
+	if(value > maxima[parameter - MASTER_COMP_THRESHOLD]) value = maxima[parameter - MASTER_COMP_THRESHOLD];
+	activeParameters[parameter] = (uint8_t)value;
+	MainCompressor_setParameter(parameter, (uint8_t)value);
+	return 1;
+}
+
+// Session-only controls: never enter automation capture or MIDI dispatch.
+static uint8_t menu_setPerformanceFilter(uint16_t paramNr, int16_t value)
+{
+	if(paramNr != PAR_PERF_HP && paramNr != PAR_PERF_LP && paramNr != PAR_PERF_RESONANCE) return 0;
+	const int16_t maximum = 127;
+	if(value < 0) value = 0;
+	if(value > maximum) value = maximum;
+	activeParameters[paramNr] = (uint8_t)value;
+	MainDjFilter_setTargets(activeParameters[PAR_PERF_HP], activeParameters[PAR_PERF_LP], activeParameters[PAR_PERF_RESONANCE]);
+	return 1;
+}
+
+void menu_resetPerformanceFilter(void)
+{
+	activeParameters[PAR_PERF_HP] = 0;
+	activeParameters[PAR_PERF_LP] = 127;
+	activeParameters[PAR_PERF_RESONANCE] = 0;
+	for(uint8_t i = 0; i < 2; i++)
+	{
+		if(buttonHandler_originalParameter[i] == PAR_PERF_HP ||
+		   buttonHandler_originalParameter[i] == PAR_PERF_LP ||
+		   buttonHandler_originalParameter[i] == PAR_PERF_RESONANCE)
+		{
+			buttonHandler_originalParameter[i] = 0;
+			buttonHandler_originalValue[i] = 0;
+			if(i == 0) buttonHandler_resetLock1 = 0;
+			else buttonHandler_resetLock2 = 0;
+		}
+	}
+	MainDjFilter_reset();
+}
+
+// Local UI order only; stored routing numbers remain canonical.
+static uint8_t menu_stepAudioOutput(uint8_t value, int8_t diff)
+{
+	int16_t rank = value == 6 ? 1 : (value <= 5 ? (value ? value + 1 : 0) : 0);
+	rank += diff;
+	if(rank < 0) rank = 0;
+	else if(rank > 6) rank = 6;
+	return (uint8_t)(rank == 1 ? 6 : (rank ? rank - 1 : 0));
+}
+
 //-----------------------------------------------------------------
 // called when edit mode is active
 // encoder controls parameter value
 // given a delta, will apply that to the current parameter
 static void menu_encoderChangeParameter(int8_t inc)
 {
-	preset_touchTimer(PRESET_KIT_TIMER);
 
 	const uint8_t activeParameter	= menuIndex & MASK_PARAMETER;
 	const uint8_t activePage		= (menuIndex&MASK_PAGE)>>PAGE_SHIFT;
 
 	//get address from top1-8 from activeParameter (base adress top1 + offset)
 	uint16_t paramNr		= pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter);
+	if(paramNr == PAR_NONE) return;
+	if(menu_setMasterCompressor(paramNr, (int32_t)activeParameters[paramNr] + inc)) return;
+	preset_touchTimer(PRESET_KIT_TIMER);
+	if(menu_setPerformanceFilter(paramNr, (int16_t)activeParameters[paramNr] + inc)) return;
 	//uint8_t *paramValue = &mainParameters[paramNr];
 	uint8_t *paramValue;
 
 	paramValue = &activeParameters[paramNr];
 
 	//increase parameter value
-	if(inc>0) //positive increase
+	if(paramNr >= PAR_AUDIO_OUT1 && paramNr <= PAR_AUDIO_OUT6)
+	{
+		*paramValue = menu_stepAudioOutput(*paramValue, inc);
+	}
+	else if(inc>0) //positive increase
 	{
 		if(*paramValue != 255) //omit wrap for 0B255 dtypes
 			*paramValue = (uint8_t)(*paramValue + inc);
@@ -3034,6 +3133,12 @@ static void menu_encoderChangeParameter(int8_t inc)
 // or not change it if boundaries are reached
 static void menu_moveToMenuItem(int8_t inc)
 {
+	if(menu_activePage == PERF_PAGE) {
+		int16_t next = menuIndex + (inc > 0 ? 1 : -1);
+		if(next >= 0 && next <= 11) menuIndex = (uint8_t)next;
+		return;
+	}
+
 
 	int8_t activeParameter	= menuIndex & MASK_PARAMETER; // will be 0 to 7
 	int8_t activePage		= (int8_t)(menuIndex >> PAGE_SHIFT); // will be 0 to 31
@@ -3157,6 +3262,11 @@ void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle)
 {
 	//leave edit mode if active
 	editModeActive = 0;
+
+	if(menu_activePage == PERF_PAGE && toggle) {
+		menuIndex = menuIndex < 4 ? 4 : (menuIndex < 8 ? 8 : 0);
+		return;
+	}
 
 	//get current position
 	uint8_t activeParameter	= menuIndex & MASK_PARAMETER;
@@ -3309,7 +3419,11 @@ void menu_switchPage(uint8_t pageNr)
 		{
 			menu_switchSubPage(menu_getSubPage(),1);
 		}
-		else menu_switchSubPage(0,0);
+		else {
+			menuIndex = 0; // entering PERF always starts at A
+			menu_activePage = PERF_PAGE;
+			menu_switchSubPage(0,0);
+		}
 	}
 
 	case MENU_LAST_STEP_PAGE:
@@ -3417,6 +3531,7 @@ void menu_sendAllGlobals()
 // This includes values for the currently active step in the sequencer
 void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 {
+	if(menu_setMasterCompressor(paramNr, value)) return;
 	switch(paramNr)
 	{
 
@@ -3446,9 +3561,11 @@ void menu_parseGlobalParam(uint16_t paramNr, uint8_t value)
 	break;
 
 
-	case UNUSED_PAR_GLO_SAT:
-
-		break;
+	case PAR_PERF_HP:
+	case PAR_PERF_LP:
+	case PAR_PERF_RESONANCE:
+		menu_setPerformanceFilter(paramNr, value);
+		return;
 
 	case PAR_POS_Y:
 		frontPanel_sendData(SEQ_CC,SEQ_SET_ACTIVE_TRACK,menu_getActiveVoice());
@@ -3701,17 +3818,10 @@ static void menu_processSpecialCaseValues(uint16_t paramNr/*, const uint8_t *val
 	}
 }
 //-----------------------------------------------------------------
-static uint8_t limitPotValue(int8_t diff, uint16_t paramNr)
+static uint8_t limitPotValueFromOriginal(int8_t diff, uint16_t paramNr, uint8_t originalValue)
 {
-	uint8_t originalValue;
-	if(paramNr >= END_OF_SOUND_PARAMETERS)
-	{
-		originalValue = activeParameters[paramNr];
-	}
-	else
-	{
-		originalValue = activeParameters[paramNr];
-	}
+	if(paramNr >= PAR_AUDIO_OUT1 && paramNr <= PAR_AUDIO_OUT6)
+		return menu_stepAudioOutput(originalValue, diff);
 
 	//prevent  overflow
 	uint8_t newValue;
@@ -3822,6 +3932,10 @@ static uint8_t limitPotValue(int8_t diff, uint16_t paramNr)
 	}
 	return newValue;
 }
+static uint8_t limitPotValue(int8_t diff, uint16_t paramNr)
+{
+	return limitPotValueFromOriginal(diff, paramNr, activeParameters[paramNr]);
+}
 //-----------------------------------------------------------------
 #if 0
 //used in normal pot model, can probably be removed
@@ -3914,10 +4028,230 @@ uint8_t getMenuIndx(void)
   return menuIndex;
 }
 //-----------------------------------------------------------------
+static void menu_dispatchParameter(uint8_t nonRecording, uint8_t status, uint8_t data1, uint8_t data2)
+{
+	if(nonRecording)
+		frontParser_dispatchNonRecording(status, data1, data2);
+	else
+		frontPanel_sendData(status, data1, data2);
+}
+
+/* Held previews must not become the baseline for persistent bulk edits. */
+static uint8_t menu_getHeldOriginal(uint16_t paramNr)
+{
+	if(buttonHandler_getArmedAutomationStep() != NO_STEP_SELECTED)
+	{
+		if(buttonHandler_resetLock1 && buttonHandler_originalParameter[0] == paramNr)
+			return buttonHandler_originalValue[0];
+		if(buttonHandler_resetLock2 && buttonHandler_originalParameter[1] == paramNr)
+			return buttonHandler_originalValue[1];
+	}
+	return activeParameters[paramNr];
+}
+
+/* Shared setter: ordinary edits retain the existing special setters and morphing. */
+static void menu_applyKnobParameter(uint16_t paramNr, uint8_t dtypeValue, int16_t diff, uint8_t nonRecording)
+{
+	//update parameter value to the new value
+	//mainParameters[paramNr] = dtypeValue;
+	if(paramNr >= END_OF_SOUND_PARAMETERS)
+	{
+		activeParameters[paramNr] = dtypeValue;
+	}
+	else
+	{
+		activeParameters[paramNr] = dtypeValue;
+	}
+
+	switch(parameter_dtypes[paramNr] & 0xFF)
+	{
+	case DTYPE_TARGET_SELECTION_VELO:
+	{
+		//**Velo - limit param start and end to range for the target voice
+		// this is a value from 1 to 6, so we adjust to be 0 based
+		uint8_t value = dtypeValue;
+		uint8_t voiceNr =  (paramNr - PAR_VEL_DEST_1);
+		if(dtypeValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
+			if(diff < 0) // going down, allow 0
+				value=0;
+			else // going up fix to start
+				value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
+		} else if (dtypeValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
+			value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
+		}
+
+		activeParameters[paramNr] = value;
+		//**VELO knob value range. convert to param before sending
+		// the value we have is an index into modTargets, we need a parameter
+		value = (uint8_t)pgm_read_word(&modTargets[value].param);
+
+		/*
+		uint8_t upper,lower;
+		upper = (uint8_t)(((value&0x80)>>7) | ((((uint8_t)(paramNr - PAR_VEL_DEST_1))&0x3f)<<1));
+		lower = value&0x7f;
+		menu_dispatchParameter(nonRecording, CC_VELO_TARGET,upper,lower);
+		*/
+
+		modNode_setDestination(&velocityModulators[(uint8_t)(paramNr - PAR_VEL_DEST_1)], value);
+	}
+		break;
+
+	case DTYPE_VOICE_LFO:
+	{
+		// **LFOTARGFIX - ensure that the lfo mod target is pointing to the same type of modulation
+		// on the new voice
+		const uint8_t newTargVal=getModTargetIdxFromGapIdx((uint8_t)(dtypeValue-1), nonRecording
+			? getModTargetGapIndex(menu_getHeldOriginal(PAR_TARGET_LFO1 + (paramNr - PAR_VOICE_LFO1)))
+			: menu_TargetVoiceGapIndex);
+
+		// update the lfo mod target if applicable
+		activeParameters[PAR_TARGET_LFO1 + (paramNr - PAR_VOICE_LFO1)] = newTargVal;
+
+		// determine the real param value given the index into modTargets
+		const uint8_t value =  (uint8_t)pgm_read_word(&modTargets[newTargVal].param);
+
+		uint8_t upper,lower;
+		upper = (uint8_t)(((value&0x80)>>7) | ((((uint8_t)(paramNr - PAR_VOICE_LFO1))&0x3f)<<1));
+		lower = value&0x7f;
+		menu_dispatchParameter(nonRecording, CC_LFO_TARGET,upper,lower);
+	}
+		break;
+	case DTYPE_TARGET_SELECTION_LFO:
+	{
+
+
+		//**LFO - limit param start and end to range for the target voice (not the lfo number)
+		// this is a value from 1 to 6, so we adjust to be 0 based
+		uint8_t value = dtypeValue;
+		uint8_t voiceNr = (uint8_t)((nonRecording
+			? menu_getHeldOriginal(PAR_VOICE_LFO1 + (paramNr - PAR_TARGET_LFO1))
+			: activeParameters[PAR_VOICE_LFO1 + (paramNr - PAR_TARGET_LFO1)]) - 1);
+		if(dtypeValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
+			if(diff < 0) // going down, allow 0
+				value=0;
+			else // going up fix to start
+				value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
+		} else if (dtypeValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
+			value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
+		}
+
+		activeParameters[paramNr] = value;
+
+
+		// **LFOTARGFIX - save the gap index
+		if(!nonRecording)
+			menu_TargetVoiceGapIndex = getModTargetGapIndex(value);
+
+		//**LFO convert to param value and send
+		// determine the real param value given the index into modTargets
+		value = (uint8_t)pgm_read_word(&modTargets[value].param);
+		uint8_t upper,lower;
+		upper = (uint8_t)(((value&0x80)>>7) | ((((uint8_t)(paramNr - PAR_TARGET_LFO1))&0x3f)<<1));
+		lower = value&0x7f;
+		menu_dispatchParameter(nonRecording, CC_LFO_TARGET,upper,lower);
+	}
+		break;
+
+	default: // all other sound parameters are send as CC or CC2. anything else is handled specially
+	{
+		//-----------------
+				uint8_t morph;
+
+				//Do not morph audio routing or globals
+				if((paramNr < END_OF_SOUND_PARAMETERS))
+				{
+					if((paramNr >= PAR_AUDIO_OUT1) && (paramNr <= PAR_AUDIO_OUT6)) //morph_index++;
+					{
+						//always use source kit (morph = 0) for audio routing
+						morph = 0;
+					}
+					else
+					{
+						morph = activeParameters[PAR_MORPH];
+						//morph = preset_morphValue;
+						dtypeValue = preset_getMorphValue(paramNr, morph);
+						//dtypeValue = interpolate(activeParameters[paramNr],mainParameters[activeParameters[PAR_MORPH_TARGET]][paramNr],morph);
+					}
+				}
+
+				//-----------------
+		if(paramNr<128) // => Sound Parameter below 128
+			menu_dispatchParameter(nonRecording, MIDI_CC,(uint8_t)paramNr,dtypeValue);
+		else if(paramNr>=128 && (paramNr < END_OF_SOUND_PARAMETERS)) // => Sound Parameter above 127
+			menu_dispatchParameter(nonRecording, CC_2,(uint8_t)(paramNr-128),dtypeValue);
+		else
+			menu_parseGlobalParam(paramNr,dtypeValue);
+		break;
+	}
+	}
+
+}
+
+/* Restore canonical source through the same morph and special-value setters. */
+void menu_restoreHeldParameter(uint16_t paramNr, uint8_t value)
+{
+	menu_applyKnobParameter(paramNr, value, 0, 1);
+}
+
+static void menu_dispatchHeldOriginal(uint8_t slot, uint8_t status, uint8_t data1, uint8_t data2)
+{
+	if(buttonHandler_bulkOriginal[slot])
+		menu_restoreHeldParameter(buttonHandler_originalParameter[slot], data2);
+	else
+		frontPanel_sendData(status, data1, data2);
+}
+
+/* Keep persistent edits when held-step preview is later restored. Do not allocate lanes. */
+static void menu_updateHeldOriginal(uint16_t paramNr)
+{
+	if(buttonHandler_getArmedAutomationStep() == NO_STEP_SELECTED) return;
+	if(buttonHandler_resetLock1 && buttonHandler_originalParameter[0] == paramNr)
+	{
+		buttonHandler_originalValue[0] = activeParameters[paramNr];
+		buttonHandler_bulkOriginal[0] = 1;
+	}
+	if(buttonHandler_resetLock2 && buttonHandler_originalParameter[1] == paramNr)
+	{
+		buttonHandler_originalValue[1] = activeParameters[paramNr];
+		buttonHandler_bulkOriginal[1] = 1;
+	}
+}
+
+static uint8_t menu_changeAllKnob(uint8_t subpage, uint8_t slot, int16_t diff)
+{
+	uint16_t seen[7];
+	uint8_t count = 0;
+	for(uint8_t page = VOICE1_PAGE; page <= VOICE7_PAGE; ++page)
+	{
+		uint16_t paramNr = pgm_read_word(&menuPages[page][subpage].bot1 + slot);
+		if(paramNr == PAR_NONE || paramNr >= END_OF_SOUND_PARAMETERS) continue;
+		uint8_t duplicate = 0;
+		for(uint8_t i = 0; i < count; ++i)
+			if(seen[i] == paramNr) duplicate = 1;
+		if(duplicate) continue;
+		seen[count++] = paramNr;
+		uint8_t value = limitPotValueFromOriginal(diff, paramNr, menu_getHeldOriginal(paramNr));
+		menu_applyKnobParameter(paramNr, value, diff, 1);
+		menu_updateHeldOriginal(paramNr);
+		if((parameter_dtypes[paramNr] & 0xff) == DTYPE_VOICE_LFO)
+			menu_updateHeldOriginal(PAR_TARGET_LFO1 + (paramNr - PAR_VOICE_LFO1));
+	}
+	/* The whole held session is nonrecording after bulk, including untouched
+	 * lanes. A later ordinary edit re-enables only its intentional capture. */
+	if(count && buttonHandler_getArmedAutomationStep() != NO_STEP_SELECTED)
+	{
+		if(buttonHandler_resetLock1) buttonHandler_bulkOriginal[0] = 1;
+		if(buttonHandler_resetLock2) buttonHandler_bulkOriginal[1] = 1;
+	}
+	/* Fan-out must not leave another voice's destination cached for ordinary editing. */
+	const uint8_t voice = menu_activePage == VOICE7_PAGE ? 5 : menu_activePage - VOICE1_PAGE;
+	menu_TargetVoiceGapIndex = getModTargetGapIndex(activeParameters[PAR_TARGET_LFO1 + voice]);
+	return count != 0;
+}
+
 uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 {
 	screensaver_touch();
-	preset_touchTimer(PRESET_KIT_TIMER);
 
 	const uint8_t activePage		= (menuIndex&MASK_PAGE)>>PAGE_SHIFT;
 	const uint8_t activeParameter	= menuIndex & MASK_PARAMETER;
@@ -3940,11 +4274,30 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 		else if(tmpValue>127) tmpValue = 127;
 		saveScreenPots[potNr] = tmpValue;
 
+		preset_touchTimer(PRESET_KIT_TIMER);
 		menu_handleSaveScreenKnobValue(potNr, tmpValue);
 		return 0;
 	}
 
 
+
+	/* Only physical pots on the seven ordinary voice pages participate.
+	 * Sound slots fan out even when the selected voice has no entry there. */
+	if(potNr < 4 && menu_activePage >= VOICE1_PAGE && menu_activePage <= VOICE7_PAGE
+		&& buttonHandler_getShift())
+	{
+		uint8_t changed = menu_changeAllKnob(activePage, potNr + isOn2ndPage, diff);
+		if(changed)
+		{
+			preset_touchTimer(PRESET_KIT_TIMER);
+		}
+		return changed;
+	}
+
+	if(paramNr == PAR_NONE) return 0;
+	if(menu_setMasterCompressor(paramNr, (int32_t)activeParameters[paramNr] + diff)) return 1;
+	preset_touchTimer(PRESET_KIT_TIMER);
+	if(menu_setPerformanceFilter(paramNr, (int16_t)activeParameters[paramNr] + diff)) return 1;
 
 	//parameter fetch. given the value of the pot, and the parameter number
 	// fetch the actual numeric value that the parameter should be set to
@@ -4027,11 +4380,13 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
     {
       buttonHandler_originalParameter[0] = paramNr;
       buttonHandler_originalValue[0] = activeParameters[paramNr];
+      buttonHandler_bulkOriginal[0] = 0;
       seq_setActiveAutomationTrack(0);
       buttonHandler_resetLock1 = 1;
     }
     else if (buttonHandler_originalParameter[0] == paramNr)
     {
+      buttonHandler_bulkOriginal[0] = 0;
       seq_setActiveAutomationTrack(0);
       buttonHandler_resetLock1 = 1;
     }
@@ -4039,11 +4394,13 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
     {
       buttonHandler_originalParameter[1] = paramNr;
       buttonHandler_originalValue[1] = activeParameters[paramNr];
+      buttonHandler_bulkOriginal[1] = 0;
       seq_setActiveAutomationTrack(1);
       buttonHandler_resetLock2 = 1;
     }
     else if (buttonHandler_originalParameter[1] == paramNr)
     {
+      buttonHandler_bulkOriginal[1] = 0;
       seq_setActiveAutomationTrack(1);
       buttonHandler_resetLock2 = 1;
     }
@@ -4055,17 +4412,17 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
         overwriteBufNr = 1; // Next overwrite on buf 1
         seq_setActiveAutomationTrack(0);
         buttonHandler_resetLock1 = 1;
-        seq_clearAutomation(0, seq_activePattern, 0);
+        // Replace only the armed step/lane; never clear another track.
         activeParameters[buttonHandler_originalParameter[0]] = buttonHandler_originalValue[0];
         if (buttonHandler_originalParameter[0] < 128) // => Sound Parameter
         {
-          frontPanel_sendData(MIDI_CC,
+          menu_dispatchHeldOriginal(0, MIDI_CC,
               (uint8_t) (buttonHandler_originalParameter[0]),
               buttonHandler_originalValue[0]);
         } 
         else if (buttonHandler_originalParameter[0] >= 128 && (buttonHandler_originalParameter[0] < END_OF_SOUND_PARAMETERS)) // => Sound Parameter above 127
         {
-          frontPanel_sendData(CC_2,
+          menu_dispatchHeldOriginal(0, CC_2,
           (uint8_t) (buttonHandler_originalParameter[0] - 128),
           buttonHandler_originalValue[0]);
         } 
@@ -4079,23 +4436,24 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 
         buttonHandler_originalParameter[0] = paramNr;
         buttonHandler_originalValue[0] = activeParameters[paramNr];
+      buttonHandler_bulkOriginal[0] = 0;
       }
       else if (overwriteBufNr == 1)
       {
         overwriteBufNr = 0; // Next overwrite on buf 1
         seq_setActiveAutomationTrack(1);
         buttonHandler_resetLock2 = 1;
-        seq_clearAutomation(1, seq_activePattern, 1);
+        // Replace only the armed step/lane; never clear another track.
         activeParameters[buttonHandler_originalParameter[1]] = buttonHandler_originalValue[1];
         if (buttonHandler_originalParameter[1] < 128) // => Sound Parameter
         {
-          frontPanel_sendData(MIDI_CC,
+          menu_dispatchHeldOriginal(1, MIDI_CC,
               (uint8_t) (buttonHandler_originalParameter[1]),
               buttonHandler_originalValue[1]);
         } 
         else if (buttonHandler_originalParameter[1] >= 128 && (buttonHandler_originalParameter[1] < END_OF_SOUND_PARAMETERS)) // => Sound Parameter above 127
         {
-          frontPanel_sendData(CC_2,
+          menu_dispatchHeldOriginal(1, CC_2,
           (uint8_t) (buttonHandler_originalParameter[1] - 128),
           buttonHandler_originalValue[1]);
         } 
@@ -4109,6 +4467,7 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 
         buttonHandler_originalParameter[1] = paramNr;
         buttonHandler_originalValue[1] = activeParameters[paramNr];
+      buttonHandler_bulkOriginal[1] = 0;
       }
     }
   }
@@ -4116,133 +4475,7 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 
 	
 
-	//update parameter value to the new value
-	//mainParameters[paramNr] = dtypeValue;
-	if(paramNr >= END_OF_SOUND_PARAMETERS)
-	{
-		activeParameters[paramNr] = dtypeValue;
-	}
-	else
-	{
-		activeParameters[paramNr] = dtypeValue;
-	}
-
-	switch(parameter_dtypes[paramNr] & 0xFF)
-	{
-	case DTYPE_TARGET_SELECTION_VELO:
-	{
-		//**Velo - limit param start and end to range for the target voice
-		// this is a value from 1 to 6, so we adjust to be 0 based
-		uint8_t value = dtypeValue;
-		uint8_t voiceNr =  (paramNr - PAR_VEL_DEST_1);
-		if(dtypeValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
-			if(diff < 0) // going down, allow 0
-				value=0;
-			else // going up fix to start
-				value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		} else if (dtypeValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
-			value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-		}
-
-		activeParameters[paramNr] = value;
-		//**VELO knob value range. convert to param before sending
-		// the value we have is an index into modTargets, we need a parameter
-		value = (uint8_t)pgm_read_word(&modTargets[value].param);
-
-		/*
-		uint8_t upper,lower;
-		upper = (uint8_t)(((value&0x80)>>7) | ((((uint8_t)(paramNr - PAR_VEL_DEST_1))&0x3f)<<1));
-		lower = value&0x7f;
-		frontPanel_sendData(CC_VELO_TARGET,upper,lower);
-		*/
-
-		modNode_setDestination(&velocityModulators[(uint8_t)(paramNr - PAR_VEL_DEST_1)], value);
-	}
-		break;
-
-	case DTYPE_VOICE_LFO:
-	{
-		// **LFOTARGFIX - ensure that the lfo mod target is pointing to the same type of modulation
-		// on the new voice
-		const uint8_t newTargVal=getModTargetIdxFromGapIdx((uint8_t)(dtypeValue-1),menu_TargetVoiceGapIndex);
-
-		// update the lfo mod target if applicable
-		activeParameters[PAR_TARGET_LFO1 + (paramNr - PAR_VOICE_LFO1)] = newTargVal;
-
-		// determine the real param value given the index into modTargets
-		const uint8_t value =  (uint8_t)pgm_read_word(&modTargets[newTargVal].param);
-
-		uint8_t upper,lower;
-		upper = (uint8_t)(((value&0x80)>>7) | ((((uint8_t)(paramNr - PAR_VOICE_LFO1))&0x3f)<<1));
-		lower = value&0x7f;
-		frontPanel_sendData(CC_LFO_TARGET,upper,lower);
-	}
-		break;
-	case DTYPE_TARGET_SELECTION_LFO:
-	{
-
-
- 		//**LFO - limit param start and end to range for the target voice (not the lfo number)
-		// this is a value from 1 to 6, so we adjust to be 0 based
-		uint8_t value = dtypeValue;
-		uint8_t voiceNr =  (uint8_t)(activeParameters[PAR_VOICE_LFO1+(paramNr - PAR_TARGET_LFO1)]-1);
-		if(dtypeValue < pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start)) {
-			if(diff < 0) // going down, allow 0
-				value=0;
-			else // going up fix to start
-				value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		} else if (dtypeValue > pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end)) {
-			value = pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-		}
-
-		activeParameters[paramNr] = value;
-
-
-		// **LFOTARGFIX - save the gap index
-		menu_TargetVoiceGapIndex = getModTargetGapIndex(value);
-
-		//**LFO convert to param value and send
-		// determine the real param value given the index into modTargets
-		value = (uint8_t)pgm_read_word(&modTargets[value].param);
-		uint8_t upper,lower;
-		upper = (uint8_t)(((value&0x80)>>7) | ((((uint8_t)(paramNr - PAR_TARGET_LFO1))&0x3f)<<1));
-		lower = value&0x7f;
-		frontPanel_sendData(CC_LFO_TARGET,upper,lower);
-	}
-		break;
-
-	default: // all other sound parameters are send as CC or CC2. anything else is handled specially
-	{
-		//-----------------
-				uint8_t morph;
-
-				//Do not morph audio routing or globals
-				if((paramNr < END_OF_SOUND_PARAMETERS))
-				{
-					if((paramNr >= PAR_AUDIO_OUT1) && (paramNr <= PAR_AUDIO_OUT6)) //morph_index++;
-					{
-						//always use source kit (morph = 0) for audio routing
-						morph = 0;
-					}
-					else
-					{
-						morph = activeParameters[PAR_MORPH];
-						//morph = preset_morphValue;
-						dtypeValue = preset_getMorphValue(paramNr, morph);
-						//dtypeValue = interpolate(activeParameters[paramNr],mainParameters[activeParameters[PAR_MORPH_TARGET]][paramNr],morph);
-					}
-				}
-
-				//-----------------
-		if(paramNr<128) // => Sound Parameter below 128
-			frontPanel_sendData(MIDI_CC,(uint8_t)paramNr,dtypeValue);
-		else if(paramNr>=128 && (paramNr < END_OF_SOUND_PARAMETERS)) // => Sound Parameter above 127
-			frontPanel_sendData(CC_2,(uint8_t)(paramNr-128),dtypeValue);
-		else
-			menu_parseGlobalParam(paramNr,dtypeValue);
-		break;
-	}
-	}
+	menu_applyKnobParameter(paramNr, dtypeValue, diff, 0);
 
 	return 1;
 }

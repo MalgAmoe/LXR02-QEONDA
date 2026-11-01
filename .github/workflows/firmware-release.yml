@@ -1,0 +1,77 @@
+name: Firmware release
+
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.ref == 'development' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    concurrency:
+      group: firmware-release-${{ github.event.pull_request.merge_commit_sha }}
+      cancel-in-progress: false
+    env:
+      RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+      RELEASE_TAG: v0.1-build.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          persist-credentials: false
+      - name: Install pinned Arm GNU toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive=arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi.tar.xz
+          cd "$RUNNER_TEMP"
+          curl --fail --location --retry 3 --output "$archive" \
+            "https://developer.arm.com/-/media/Files/downloads/gnu/14.3.rel1/binrel/$archive"
+          echo "8f6903f8ceb084d9227b9ef991490413014d991874a1e34074443c2a72b14dbd  $archive" | sha256sum --check
+          tar -xf "$archive"
+          echo "$RUNNER_TEMP/arm-gnu-toolchain-14.3.rel1-x86_64-arm-none-eabi/bin" >> "$GITHUB_PATH"
+      - name: Host tests
+        run: |
+          cmake --preset host-tests
+          cmake --build --preset host-tests --parallel 4
+          ctest --preset host-tests
+      - name: Build normal firmware
+        run: |
+          arm-none-eabi-gcc --version
+          cmake --preset release -DLXR_MEASUREMENT=OFF
+          cmake --build --preset release --parallel 4
+          python3 tests/check_fm_arm_codegen.py build/release
+          python3 cmake/tools/verify_release.py build/release
+      - name: Publish verified firmware
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Reject a pre-existing tag belonging to a different source commit.
+          if tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha 2>/dev/null); then
+            test "$tag_sha" = "$RELEASE_SHA" || { echo "Release tag points to another commit"; exit 1; }
+          fi
+          # A rerun uses the same tag. Never replace an already published release.
+          if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/release.json" 2>/dev/null; then
+            if grep -q '"isDraft":false' "$RUNNER_TEMP/release.json"; then
+              echo "Release already published; leaving it unchanged."
+              exit 0
+            fi
+          else
+            gh release create "$RELEASE_TAG" --target "$RELEASE_SHA" --draft \
+              --title "LXR QEONDA $RELEASE_TAG" \
+              --notes "Normal QEONDA 0.1 firmware. Source: $RELEASE_SHA. Measurement instrumentation disabled. Host tests and ARM build passed; CI is not hardware acceptance. Install LXR_QEONDA_V0.1.img; verify against SHA256SUMS."
+          fi
+          gh release upload "$RELEASE_TAG" build/release/LXR_QEONDA_V0.1.img build/release/SHA256SUMS --clobber
+          gh release edit "$RELEASE_TAG" --draft=false

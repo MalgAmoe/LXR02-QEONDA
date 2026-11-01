@@ -92,6 +92,12 @@ void Delay_calcBuffer(Delay* d, uint8_t bufferIdx)
 
 void Delay_processPingPong(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet)
 {
+    // Normal delay uses the whole buffer; ping-pong uses two half-buffer lines.
+    // Adapted from OpenElixir-02 796e9e216d7d.
+    d->oldRead &= FX_BUFFER_SIZE >> 1;
+    d->newRead &= FX_BUFFER_SIZE >> 1;
+    d->write &= FX_BUFFER_SIZE >> 1;
+
 
 	int32_t x;
 	int32_t* stereoOut = (int32_t*)outL;

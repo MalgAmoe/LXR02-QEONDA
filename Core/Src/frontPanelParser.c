@@ -47,7 +47,9 @@ void frontParser_parseNrpn(uint8_t value)
 {
 	uint16_t paramNr=frontParser_nrpnNr+128;
 
-	if(paramNr < NUM_PARAMS) {
+	// Forwarded NRPN bytes stay unchanged on the wire; store the accepted percent.
+	if(paramNr == PAR_FX_DRY_WET && value > 100) value = 100;
+	if(paramNr < MASTER_COMP_THRESHOLD) {
 			activeParameters[paramNr] = value;
 	}
 	
@@ -107,9 +109,12 @@ void frontPanel_ccHandler()
 	DISABLE_SIGN_WARNING
 	if(parNr == 255/*PAR_BANK_CHANGE*/)
 	{
-		menu_selectedPresetNr[0] = frontParser_midiMsg.data2;
-		//preset_loadDrumset(frontParser_midiMsg.data2, 0);
-		preset_loadDrumsetRam(frontParser_midiMsg.data2,0, 0);
+		// MIDI bank select (CC 0): load one of the kits held in RAM.
+		// The value is 0-127 but there are only NUM_KIT_SLOTS kits.
+		const uint8_t kitNr = frontParser_midiMsg.data2;
+		if(kitNr >= NUM_KIT_SLOTS) return;
+		preset_loadDrumsetRam(kitNr, 0, 0);
+		menu_kitLoaded(kitNr);
 		preset_touchTimer(PRESET_KIT_TIMER);
 		menu_repaint();
 		return;

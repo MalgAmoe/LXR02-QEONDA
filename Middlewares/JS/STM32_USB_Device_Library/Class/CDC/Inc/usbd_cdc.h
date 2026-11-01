@@ -139,8 +139,6 @@
  #define CIN_SINGLE_BYTE			0x0F
 
 
-#define TOTAL_MIDI_BUF_SIZE                            0x40 // each buffer is 64 bytes
-#define NUM_SUB_BUFFERS									0x2	//double buffering
 
  typedef struct UsbMidiStruct
  {
@@ -151,13 +149,7 @@
  }MidiDataUsb;
 
  //buffer for parsed midi messages
- extern MidiMsg usb_MidiMessages[USB_MIDI_INPUT_BUFFER_SIZE];
- extern uint8_t usb_MidiMessagesRead;
- extern uint8_t usb_MidiMessagesWrite;
 
- extern uint8_t  usb_MidiInBuff [TOTAL_MIDI_BUF_SIZE * NUM_SUB_BUFFERS];
- extern uint8_t* usb_MidiInWrPtr;
- extern uint8_t* usb_MidiInRdPtr;
 /**
   * @}
   */

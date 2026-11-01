@@ -143,4 +143,6 @@ extern INDTCMZ int16_t dma_buffer2[OUTPUT_DMA_SIZE*4]; 	// *4 because we need 16
 
 void codec_initCsCodec(uint32_t Addr1, uint32_t Size1,uint32_t Addr2, uint32_t Size2);
 
+extern volatile uint32_t codec_requestGeneration;
+void codec_serviceDmaRecovery(void);
 #endif /* CS4344_CS5343_H_ */

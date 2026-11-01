@@ -20,15 +20,25 @@
 
 uint8_t soundengine_calcNextSampleBlock()
 {
-	if(bCurrentSampleValid!= SAMPLE_VALID)
+	// Snapshot the request atomically; DMA callbacks may preempt the renderer.
+	uint32_t mask = __get_PRIMASK();
+	__disable_irq();
+	const uint8_t half = bCurrentSampleValid;
+	const uint32_t generation = codec_requestGeneration;
+	__set_PRIMASK(mask);
+	if(half != SAMPLE_VALID)
 	{
 	#if USE_DAC2
-		mixer_calcNextSampleBlock((int16_t*)&dma_buffer[bCurrentSampleValid*(OUTPUT_DMA_SIZE*2)],(int16_t*)&dma_buffer2[bCurrentSampleValid*(OUTPUT_DMA_SIZE*2)]);
+		mixer_calcNextSampleBlock((int16_t*)&dma_buffer[half*(OUTPUT_DMA_SIZE*2)],(int16_t*)&dma_buffer2[half*(OUTPUT_DMA_SIZE*2)]);
 	#else
-		mixer_calcNextSampleBlock(&dma_buffer[bCurrentSampleValid*(OUTPUT_DMA_SIZE*2)],&dma_buffer2[(1-bCurrentSampleValid)*(OUTPUT_DMA_SIZE*2)]);
+		mixer_calcNextSampleBlock(&dma_buffer[half*(OUTPUT_DMA_SIZE*2)],&dma_buffer2[(1-half)*(OUTPUT_DMA_SIZE*2)]);
 	#endif
-		bCurrentSampleValid = SAMPLE_VALID;
-
+		mask = __get_PRIMASK();
+		__disable_irq();
+		// Do not erase a newer request if rendering missed a deadline.
+		if(codec_requestGeneration == generation)
+			bCurrentSampleValid = SAMPLE_VALID;
+		__set_PRIMASK(mask);
 		return 1;
 	}
 
@@ -76,6 +86,7 @@ void soundengine_init()
 
 void soundengine_process()
 {
+	codec_serviceDmaRecovery();
 #if CALC_SAMPLES_IN_INTERRUPT
 	__HAL_TIM_DISABLE_IT(&htim2, TIM_IT_UPDATE);
 	//HAL_TIM_Base_Stop_IT(&htim2);
@@ -113,4 +124,22 @@ void soundengine_process()
 	//preset_morph_tick();
 	//preset_morph_tick();
 
+}
+
+uint8_t soundengine_backgroundAudioBegin()
+{
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+	//fails if it is already running (then whoever started it stops it)
+	return HAL_TIM_Base_Start_IT(&htim2) == HAL_OK;
+#else
+	return 0;
+#endif
+}
+//------------------------------------------------------------------
+void soundengine_backgroundAudioEnd(uint8_t started)
+{
+#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+	if(started)
+		HAL_TIM_Base_Stop_IT(&htim2);
+#endif
 }

@@ -48,6 +48,7 @@ typedef struct ImageFileHeaderStruct
 #include "Soundengine/DSPAudio/random.h"
 #include "Soundengine/USB/usb_manager.h"
 #include "Soundengine/MIDI/Uart.h"
+#include "Soundengine/Sequencer/clockSync.h"
 
 /* Private typedef -----------------------------------------------------------*/
 
@@ -55,7 +56,7 @@ typedef struct ImageFileHeaderStruct
 /* Private define ------------------------------------------------------------*/
 // The CMake build passes FIRMWARE_VERSION from project(VERSION); this is the fallback for STM32CubeIDE.
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION " 2.00"
+#define FIRMWARE_VERSION " 0.1"
 #endif
 //#define f_unmount(path) f_mount(0, path, 0)
 
@@ -161,7 +162,7 @@ void sd_formatRoutine()
 		f_mount(&fs, "", 0);
 
 		//create glo.cfg file
-		preset_createGlobals();
+		if(preset_createGlobals() != FR_OK) lcd_string("Settings unsaved");
 
 		//load init sound
 		preset_init(0);
@@ -328,6 +329,7 @@ int main(void)
 
  
   menu_init();
+  menu_resetPerformanceFilter();
   //HAL_ADC_Start(&hadc1);
 
 
@@ -351,10 +353,10 @@ int main(void)
 #else
 	//print boot up message
 lcd_clear();
-lcd_string("Sonic Potions");
+lcd_string("LXR QEONDA");
 //goto 2nd line
 lcd_setcursor(0,2);
-lcd_string("LXR2 Drums V");
+lcd_string("Firmware");
 lcd_string(FIRMWARE_VERSION);
 #endif
 
@@ -479,7 +481,7 @@ if(sd_card_ok)
 			lcd_string(PSTR("glo.cfg error"));
 			lcd_setcursor(0,2);
 			lcd_string("Using defaults.");
-			preset_createGlobals();
+			if(preset_createGlobals() != FR_OK) lcd_string("Settings unsaved");
 			HAL_Delay(1000);
 
 		}
@@ -845,6 +847,7 @@ if(sd_card_ok)
 	{
 		preset_loadDrumsetRam(seq_patternSet.kitNr[seq_activePattern], 0, 1);
 		menu_selectedPresetNr[SAVE_TYPE_KIT] = seq_patternSet.kitNr[seq_activePattern];
+		menu_loadedPresetNr[CURRENT_KIT] = seq_patternSet.kitNr[seq_activePattern];
 	}
 #endif
 
@@ -922,8 +925,11 @@ lcd_process_display_interrupt = 1;
 	  //check SD card
 	  if((BSP_SD_IsDetected() == SD_PRESENT) &&  (lastSdState == SD_NOT_PRESENT))
 	  {
+			const uint8_t bg = soundengine_backgroundAudioBegin();
 			MX_FATFS_ReInit();
 			f_mount(0, (TCHAR const*)SDPath, 0); //un-mount
+            res = preset_invalidateUnmountedFiles();
+            if(res != FR_OK) menu_showSdError(res);
 			memset((FATFS*)&SDFatFS,0,sizeof(FATFS)); //clear FS object to force reinit
 			res = f_mount((FATFS*)&SDFatFS, (TCHAR const*)SDPath,1);
 			if( res != FR_OK)
@@ -939,6 +945,7 @@ lcd_process_display_interrupt = 1;
 				}
 			}
 
+			soundengine_backgroundAudioEnd(bg);
 	  }
 	  lastSdState = BSP_SD_IsDetected();
 
@@ -957,6 +964,8 @@ lcd_process_display_interrupt = 1;
   checkMainLoc = -11;
 	  //get the encoder values
 	  menu_parseEncoder(encode_read4(),encode_readButton());
+	  if(lcd_process_display_interrupt)
+		  menu_uiTick();
 	//  menu_tick();
 	  led_tickHandler();
 	//  menu_tick();
@@ -981,9 +990,10 @@ lcd_process_display_interrupt = 1;
 
 	  //check if we have some usb midi messages and process them
 	  MidiMsg msg;
-	  if(usb_getMidi(&msg)) {
-		  midiParser_parseMidiMessage(msg);
-	  }
+	  if(sync_tryControl()) {
+          if(usb_getMidi(&msg)) midiParser_parseMidiMessage(msg);
+          sync_releaseControl();
+      }
 
 		//process midi on midi port
 			uart_processMidi();
@@ -1546,10 +1556,10 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Stream4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 5, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
   /* DMA1_Stream5_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 5, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
   /* DMA2_Stream0_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 3, 0);

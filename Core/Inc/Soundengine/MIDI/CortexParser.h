@@ -26,6 +26,8 @@ extern uint8_t frontParser_sysexActive;
 extern uint8_t frontParser_activeFrontTrack;
 
 void frontParser_parseUartData(unsigned char data);
+/* Apply local sound edits without capturing automation or altering parser state. */
+void frontParser_dispatchNonRecording(uint8_t status, uint8_t data1, uint8_t data2);
 
 //void frontParser_updateTrackLeds(const uint8_t trackNr, uint8_t patternNr);
 

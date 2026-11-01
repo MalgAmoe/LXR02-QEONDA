@@ -20,6 +20,8 @@
 //-------------------------------------------------
 float DecayEg_calcSlopeValue(float val, float slope)
 {
+	// Minimum slope is singular at the trigger level; preserve infinite decay.
+	if(slope == -1.f && val == 1.f) return 1.f;
 	return (1+slope)*val/(1+slope*fabsf(val));
 }
 //-------------------------------------------------
@@ -73,7 +75,8 @@ void DecayEg_setDecay(DecayEg* eg, uint8_t data2)
 //--------------------------------------------------
 IN_ITCM_RAM void DecayEg_setSlope(DecayEg* eg, uint8_t data2)
 {
-	const float amount 	= ((data2/127.f)-0.5f)*2;
+	// Keep slopes 0..126 unchanged; finite maximum as in OpenElixir-02.
+	const float amount 	= data2 < 127 ? ((data2/127.f)-0.5f)*2 : 0.5f*1.999f;
 	eg->slope 			= 2*amount/(1-amount);
 }
 //--------------------------------------------------

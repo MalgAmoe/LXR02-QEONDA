@@ -425,7 +425,7 @@ const char shortNames[][4]  =
 #if USE_CODEC_EQ
 	{"eq "},
 	{"lim"},
-	{"rel"},
+	{"rel"}, {"thr"},
 	{"max"},
 	{"min"},
 #endif
@@ -480,6 +480,9 @@ const char shortNames[][4]  =
 	{"kcm"},
 	{"flm"},
 	{"shf"},
+	{"HP"},
+	{"LP"},
+	{"rel"}, {"thr"},
 
 };
 //-----------------------------------------------------------------
@@ -610,6 +613,9 @@ const char longNames[][16] =
 	{"KitChMde"},
 	{"Flam"},
 	{"Shift"},
+	{"High Pass"},
+	{"Low Pass"},
+	{"Thr dB"}, {"Ratio :1"}, {"Atk ms"}, {"Rel ms"},
 };
 
 

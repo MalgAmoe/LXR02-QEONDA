@@ -88,6 +88,27 @@ const Diskio_drvTypeDef  SD_Driver =
 
 /* Private functions ---------------------------------------------------------*/
 
+/* Shared read/write completion wait; never retries the data transfer.
+ * Accepted policy: no readiness timeout. Healthy slow cards are not rejected
+ * by an elapsed budget; persistent BUSY may wait indefinitely. Terminal status
+ * errors still return immediately. */
+static DRESULT SD_WaitReady(void)
+{
+  for (;;)
+  {
+    uint8_t state = BSP_SD_GetCardState();
+
+    if (state == SD_TRANSFER_ERROR)
+    {
+      return RES_ERROR;
+    }
+    if (state == SD_TRANSFER_OK)
+    {
+      return RES_OK;
+    }
+  }
+}
+
 static DSTATUS SD_CheckStatus(BYTE lun)
 {
   Stat = STA_NOINIT;
@@ -153,11 +174,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
                        (uint32_t) (sector),
                        count, SD_TIMEOUT) == MSD_OK)
   {
-    /* wait until the read operation is finished */
-    while(BSP_SD_GetCardState()!= MSD_OK)
-    {
-    }
-    res = RES_OK;
+    res = SD_WaitReady();
   }
 
   return res;
@@ -184,11 +201,7 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
                         (uint32_t)(sector),
                         count, SD_TIMEOUT) == MSD_OK)
   {
-	/* wait until the Write operation is finished */
-    while(BSP_SD_GetCardState() != MSD_OK)
-    {
-    }
-    res = RES_OK;
+    res = SD_WaitReady();
   }
 
   return res;

@@ -40,7 +40,7 @@
 #define HANDLE_SEQ_IN_CLOCK_INTERRUPT 0
 
 #if !HANDLE_SEQ_IN_CLOCK_INTERRUPT
-extern uint8_t trigger_clockReceived;
+extern volatile uint8_t trigger_clockReceived;
 #endif
 
 enum
@@ -105,6 +105,7 @@ void trigger_reset(uint8_t value);
 //void trigger_setGatemode(uint8_t onOff);	//if gate mode is on, the trigger out will be high until a note off is send
 //void trigger_allOff();
 void trigger_ResetPosition();
+extern uint8_t trigger_prescaleCounterClockInput;
 
 
 #endif /* TRIGGEROUT_H_ */

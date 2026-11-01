@@ -272,6 +272,10 @@ enum NamesEnum
 	TEXT_PATTERN_MODE,
 
 
+	TEXT_PERF_HP,
+	TEXT_PERF_LP,
+	TEXT_PERF_RESONANCE,
+	TEXT_MASTER_THRESHOLD, TEXT_MASTER_RATIO, TEXT_MASTER_ATTACK, TEXT_MASTER_RELEASE,
 	NUM_NAMES
 };
 //-----------------------------------------------------------------
@@ -379,7 +383,10 @@ enum shortNamesEnum
 	SHORT_P4,
 	SHORT_KCM,
 	SHORT_FLAM,
-	SHORT_SHIFT
+	SHORT_SHIFT,
+	SHORT_PERF_HP,
+	SHORT_PERF_LP,
+	SHORT_MASTER_RELEASE, SHORT_MASTER_THRESHOLD
 
 	
 };
@@ -508,7 +515,10 @@ enum longNamesEnum
 	LONG_P4,
 	LONG_PATTERN_MODE,
 	LONG_FLAM,
-	LONG_SHIFT
+	LONG_SHIFT,
+	LONG_PERF_HP,
+	LONG_PERF_LP,
+	LONG_MASTER_THRESHOLD, LONG_MASTER_RATIO, LONG_MASTER_ATTACK, LONG_MASTER_RELEASE
 	
 };
 
@@ -613,6 +623,7 @@ enum Datatypes
 //-----------------------------------------------------------------
 extern const enum Datatypes parameter_dtypes[NUM_PARAMS];
 extern uint8_t mainParameters[NUM_KIT_SLOTS][END_OF_SOUND_PARAMETERS];		// keeps all kits from sd card in memory
+void menu_resetPerformanceFilter(void);
 extern uint8_t activeParameters[NUM_PARAMS];					// keeps the currently used kit in memory -> editBuffer
 //extern uint8_t morphParameters[END_OF_SOUND_PARAMETERS];
 extern uint8_t *morphParameters;
@@ -649,9 +660,11 @@ void menu_repaintAll();
 //-----------------------------------------------------------------
 //repaint the screen. show all changes*/
 void menu_repaint();
+void menu_kitLoaded(uint8_t kitNr);
 //-----------------------------------------------------------------
 //For nonblocking display refreshs
 void menu_tick();
+void menu_uiTick(void);
 //-----------------------------------------------------------------
 //blocking display refresh
 //void menu_fastRefreshDisplay();
@@ -712,4 +725,7 @@ void numtostru(char *buf, uint8_t num);
 // non space padded signed
 //void numtostrs(char *buf, int8_t num);
 
+void menu_showSaveCleanupWarning(void);
+/* Nonrecording held-source restore, including morph and selector dispatch. */
+void menu_restoreHeldParameter(uint16_t paramNr, uint8_t value);
 #endif

@@ -80,68 +80,117 @@ void DMA1_Stream7_IRQHandler(void)
 #else
 
 volatile int error = 0;
+volatile uint32_t codec_requestGeneration = 0;
+static volatile uint8_t codec_recoveryPending = 0;
+volatile uint32_t codec_recoveryFailures = 0;
+volatile uint8_t codec_recoveryFault = 0;
+static uint8_t codec_recoveryAttempts = 0;
+static uint32_t codec_recoveryLastAttempt = 0;
 
-#define SWITCH_FLAG 1
-
-IN_ITCM_RAM void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
+/* With the DMA FIFO off (direct mode) a FIFO error flag doesn't lose data, but the HAL
+ * treats it as fatal and stops the I2S DMA: don't report it */
+static void codec_ignoreFifoErrors(I2S_HandleTypeDef *hi2s)
 {
+	__HAL_DMA_DISABLE_IT(hi2s->hdmatx, DMA_IT_FE);
+}
 
-	if(bCurrentSampleValid!= SAMPLE_VALID)
-	{
-		error++;
-	}
-
+/* The DMA of both DACs runs in circular mode over two blocks. After one half has been
+ * sent, the next block is rendered into it while the DMA sends the other half. Nothing
+ * has to restart the DMA in time, so a late interrupt can't leave a gap in the output
+ * (it used to run in normal mode and was restarted here, from the lowest priority
+ * interrupt). The rendering follows DAC 2 (SPI3); both DACs run in step. */
+static inline void codec_blockSent(I2S_HandleTypeDef *hi2s, const uint8_t half)
+{
 	if(hi2s->Instance == SPI2)
 	{
-
-		//Master Out
-		dmaPtr2++;
-	 //error=dmaPtr2;
-		  /* Wait the DMA Stream to be effectively disabled */
-		 //  while (DMA_GetCmdStatus(DMA1_Stream7) != DISABLE)
-		 //  {}
-
-		   /* Clear the Interrupt flag */
-		 //  DMA_ClearFlag(DMA1_Stream7, DMA_FLAG_TCIF7);
-
-		   /* Re-Configure the buffer address and size */
-		//   DMA_InitStructure.DMA_Memory0BaseAddr = (uint32_t) &dma_buffer[(OUTPUT_DMA_SIZE*2)*(dmaPtr&0x1)];
-		 //  DMA_InitStructure.DMA_BufferSize = OUTPUT_DMA_SIZE*2;
-
-		   /* Configure the DMA Stream with the new parameters */
-		   //DMA_Init(DMA1_Stream7, &DMA_InitStructure);
-
-		   /* Enable the I2S DMA Stream*/
-		   //DMA_Cmd(DMA1_Stream7, ENABLE);
-		   HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)&dma_buffer2[(OUTPUT_DMA_SIZE*2)*(dmaPtr2&0x1)], OUTPUT_DMA_SIZE*2);
-
-
-#if !SWITCH_FLAG
-		   //now start next sample block calculation
-			 bCurrentSampleValid = 1-(dmaPtr2&0x1);
-#if CALC_SAMPLES_IN_INTERRUPT
-			 __HAL_TIM_SetCounter(&htim2, 1950);
-#endif
-#endif
-
 	}
 	else if(hi2s->Instance == SPI3)
 	{
-		//Out 2
-		dmaPtr++;
-		HAL_I2S_Transmit_DMA(&hi2s3, (uint16_t*)&dma_buffer[(OUTPUT_DMA_SIZE*2)*(dmaPtr&0x1)], OUTPUT_DMA_SIZE*2);
-
-#if SWITCH_FLAG
-		   //now start next sample block calculation
-			 bCurrentSampleValid = 1-(dmaPtr&0x1);
+		//the previous block wasn't ready in time: the DMA sent old data
+		if(bCurrentSampleValid != SAMPLE_VALID)
+		{
+			error++;
+		}
+		//now start the next block calculation, into the half that was just sent
+		bCurrentSampleValid = half;
+		codec_requestGeneration++;
 #if CALC_SAMPLES_IN_INTERRUPT
-			 __HAL_TIM_SetCounter(&htim2, 1450);
+		//the audio interrupt (only enabled during SD card access) renders it right away
+		__HAL_TIM_SetCounter(&htim2, 1450);
 #endif
-#endif
-
 	}
-
 }
+IN_ITCM_RAM void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
+{
+	codec_blockSent(hi2s, 0);
+}
+IN_ITCM_RAM void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
+{
+	codec_blockSent(hi2s, 1);
+}
+/* Recover outside the high-priority callback: HAL stop/abort may wait on hardware.
+ * Restart both DACs together rather than resetting just one buffer position. */
+void HAL_I2S_ErrorCallback(I2S_HandleTypeDef *hi2s)
+{
+	if(hi2s->Instance != SPI2 && hi2s->Instance != SPI3) return;
+	codec_recoveryPending = 1;
+	error++;
+}
+
+void codec_serviceDmaRecovery(void)
+{
+	if(!codec_recoveryPending || codec_recoveryFault) return;
+	if(codec_recoveryAttempts && (uint32_t)(HAL_GetTick() - codec_recoveryLastAttempt) < 100) return;
+	codec_recoveryLastAttempt = HAL_GetTick();
+	codec_recoveryAttempts++;
+	const uint32_t failuresBefore = codec_recoveryFailures;
+	const uint32_t timerEnabled = htim2.Instance->DIER & TIM_IT_UPDATE;
+	__HAL_TIM_DISABLE_IT(&htim2, TIM_IT_UPDATE);
+	HAL_NVIC_DisableIRQ(DMA1_Stream4_IRQn);
+	HAL_NVIC_DisableIRQ(DMA1_Stream5_IRQn);
+	codec_recoveryPending = 0;
+	HAL_StatusTypeDef stop2 = HAL_I2S_DMAStop(&hi2s2);
+	HAL_StatusTypeDef stop3 = HAL_I2S_DMAStop(&hi2s3);
+	/* TE already makes DMA READY; Abort reports NO_XFER in that case.
+	 * A timeout or any other stop failure must not be treated as success. */
+	const uint8_t ready2 = stop2 == HAL_OK ||
+		(hi2s2.hdmatx->ErrorCode == HAL_DMA_ERROR_NO_XFER &&
+		 !(hi2s2.ErrorCode & HAL_I2S_ERROR_TIMEOUT));
+	const uint8_t ready3 = stop3 == HAL_OK ||
+		(hi2s3.hdmatx->ErrorCode == HAL_DMA_ERROR_NO_XFER &&
+		 !(hi2s3.ErrorCode & HAL_I2S_ERROR_TIMEOUT));
+	if(ready2 && ready3)
+	{
+		for(unsigned i = 0; i < OUTPUT_DMA_SIZE*4; ++i)
+			dma_buffer[i] = dma_buffer2[i] = 0;
+		bCurrentSampleValid = SAMPLE_VALID;
+		codec_requestGeneration++;
+		HAL_StatusTypeDef start2 = HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)dma_buffer2, OUTPUT_DMA_SIZE*4);
+		HAL_StatusTypeDef start3 = HAL_I2S_Transmit_DMA(&hi2s3, (uint16_t*)dma_buffer, OUTPUT_DMA_SIZE*4);
+		if(start2 != HAL_OK || start3 != HAL_OK)
+		{
+			HAL_I2S_DMAStop(&hi2s2);
+			HAL_I2S_DMAStop(&hi2s3);
+			codec_recoveryFailures++;
+		}
+		codec_ignoreFifoErrors(&hi2s2);
+		codec_ignoreFifoErrors(&hi2s3);
+	}
+	else codec_recoveryFailures++;
+	if(codec_recoveryFailures != failuresBefore)
+	{
+		// Bounded foreground retries; terminal fault requires a reboot.
+		codec_recoveryPending = codec_recoveryAttempts < 3;
+		codec_recoveryFault = !codec_recoveryPending;
+	}
+	else codec_recoveryAttempts = 0;
+	HAL_NVIC_ClearPendingIRQ(DMA1_Stream4_IRQn);
+	HAL_NVIC_ClearPendingIRQ(DMA1_Stream5_IRQn);
+	HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
+	HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
+	if(timerEnabled) __HAL_TIM_ENABLE_IT(&htim2, TIM_IT_UPDATE);
+}
+
 #endif
 //----------------------------------------------------------------------------------
 void codec_initDma_DAC()
@@ -222,6 +271,7 @@ void codec_start_dac1(uint32_t Addr, uint32_t Size)
 {
 
 	HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)Addr, (uint16_t) Size);
+	codec_ignoreFifoErrors(&hi2s2);
 #if 0
 	/* Configure the buffer address and size */
 	DMA_InitStructure.DMA_Memory0BaseAddr = (uint32_t)Addr;
@@ -432,6 +482,7 @@ void codec_InitGPIO_DAC2(void)
 void codec_start_dac2(uint32_t Addr, uint32_t Size)
 {
 	HAL_I2S_Transmit_DMA(&hi2s3, (uint16_t*)Addr, (uint16_t) Size);
+	codec_ignoreFifoErrors(&hi2s3);
 #if 0
 	/* Configure the buffer address and size */
 	DMA_InitStructure2.DMA_Memory0BaseAddr = (uint32_t)Addr;

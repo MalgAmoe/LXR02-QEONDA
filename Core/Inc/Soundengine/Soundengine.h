@@ -33,4 +33,7 @@
 void soundengine_init();
 void soundengine_process();
 uint8_t soundengine_calcNextSampleBlock();
+uint8_t soundengine_backgroundAudioBegin(void);
+void soundengine_backgroundAudioEnd(uint8_t started);
+
 #endif /* INC_SOUNDENGINE_SOUNDENGINE_H_ */

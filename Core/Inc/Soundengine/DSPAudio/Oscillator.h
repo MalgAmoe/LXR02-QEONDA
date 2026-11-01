@@ -71,23 +71,18 @@ void initOsc();
 //-----------------------------------------------------------
 void calcSineBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain);
 //-----------------------------------------------------------
-int16_t calcSine(OscInfo* osc);
 //-----------------------------------------------------------
 void calcFmSineBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain);
 //-----------------------------------------------------------
-int16_t calcFmSine(OscInfo* osc, OscInfo* modOsc);
 //-----------------------------------------------------------
 void calcFmBlock(OscInfo* osc, const int16_t table[][1024], int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain);
 //-----------------------------------------------------------
-int16_t calcFm(OscInfo* osc, OscInfo* modOsc,  const int16_t table[][1024]);
 //-----------------------------------------------------------
 void calcWavetableOscBlock(OscInfo* osc, const int16_t table[][1024], int16_t* buf, const uint8_t size ,const float gain);
 //-----------------------------------------------------------
-int16_t calcWavetableOsc(OscInfo* osc, const int16_t table[][1024]);
 //-----------------------------------------------------------
 void calcNoiseBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain);
 //-----------------------------------------------------------
-int16_t calcNoise(OscInfo* osc);
 //-----------------------------------------------------------
 //int16_t calcSampleOscFm(OscInfo* osc, OscInfo* modOsc);
 //-----------------------------------------------------------

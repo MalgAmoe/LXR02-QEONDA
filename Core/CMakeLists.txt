@@ -58,6 +58,8 @@ add_library(lxr_ui OBJECT
 
 # Kit/pattern/project storage on the SD card.
 add_library(lxr_preset OBJECT
+    Src/Preset/SafeStorage.c
+    Src/Preset/SlotFiles.c
     Src/Preset/initKit.c
     Src/Preset/presetManager.c
 )
@@ -74,6 +76,8 @@ add_library(lxr_dsp OBJECT
     Src/Soundengine/DSPAudio/DrumVoice.c
     Src/Soundengine/DSPAudio/HiHat.c
     Src/Soundengine/DSPAudio/lfo.c
+    Src/Soundengine/DSPAudio/MainDjFilter.c
+    Src/Soundengine/DSPAudio/MainCompressor.c
     Src/Soundengine/DSPAudio/mixer.c
     Src/Soundengine/DSPAudio/modulationNode.c
     Src/Soundengine/DSPAudio/Oscillator.c
@@ -117,6 +121,7 @@ add_library(lxr_midi OBJECT
     Src/Soundengine/MIDI/MidiParser.c
     Src/Soundengine/MIDI/MidiVoiceControl.c
     Src/Soundengine/MIDI/ParameterArray.c
+    Src/Soundengine/MIDI/MidiStream.c
     Src/Soundengine/MIDI/Uart.c
 )
 
@@ -149,10 +154,10 @@ endforeach()
 set(LXR_APP_MODULES ${LXR_APP_MODULES} PARENT_SCOPE)
 
 # --- ITCM fit -----------------------------------------------------------------
-# Functions tagged IN_ITCM_RAM are linked into the 16 KB instruction TCM. Newer
-# GCC releases generate more code at -O3 than the GCC 10/11 the project was
-# developed with, which overflows ITCM. LXR_ITCM_OPT overrides the optimisation
-# level for just the translation units that contain ITCM code.
+# Functions tagged IN_ITCM_RAM are linked into the 16 KB instruction TCM.
+# Historical compiler/revision combinations overflowed it; fit is build-dependent.
+# LXR_ITCM_OPT defaults empty (normal optimisation); an explicit override applies
+# only to the translation units that contain ITCM code.
 set(LXR_ITCM_SOURCES
     Src/Preset/presetManager.c
     Src/Soundengine/cs4344_cs5343.c
@@ -183,3 +188,8 @@ endif()
 # jump-threads the loop back edge through that switch and duplicates the whole
 # loop body per case (ResonantFilter.c: 2772 B -> 6720 B at -O3, 8028 B at -O2).
 set_property(SOURCE Src/Soundengine/DSPAudio/ResonantFilter.c APPEND PROPERTY COMPILE_OPTIONS -fno-thread-jumps)
+
+# USB RX framing and bounded raw queue.
+target_sources(lxr_midi PRIVATE Src/Soundengine/MIDI/MidiUsbRx.c)
+
+target_sources(lxr_midi PRIVATE Src/Soundengine/MIDI/MidiUsbTx.c)

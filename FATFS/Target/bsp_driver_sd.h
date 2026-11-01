@@ -48,6 +48,7 @@
   */
 #define   SD_TRANSFER_OK                ((uint8_t)0x00)
 #define   SD_TRANSFER_BUSY              ((uint8_t)0x01)
+#define   SD_TRANSFER_ERROR             ((uint8_t)0x02)
 
 #define SD_PRESENT               ((uint8_t)0x01)
 #define SD_NOT_PRESENT           ((uint8_t)0x00)
