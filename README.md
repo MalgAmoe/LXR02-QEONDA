@@ -7,7 +7,7 @@ identify individual builds; use the release tag, Git revision and image hash to 
 
 ## Features
 
-- Held PERF step-8 break with independent manual rolls.
+- Momentary pattern mute: hold button 8 in PERF mode to mute programmed hits while keeping rolls available. Release to bring the pattern back in, still in time.
 - Shift+Reload morph/filter reset and PERF refresh.
 - Local MIX OUT order St1 → FX → St2 → L1 → R1 → L2 → R2; stored/MIDI values unchanged.
 - Independent St1 master HP/LP and project master compressor with automatic makeup and ratio1 bypass.
@@ -48,7 +48,7 @@ three banks; the four knobs control the following, left to right:
 | B | Shuffle / high-pass / low-pass / shared resonance |
 | C | Compressor threshold / ratio / attack / release |
 
-- **Performance break:** hold PERF step button **8** to suppress programmed triggers.
+- **Momentary pattern mute:** hold PERF step button **8** to suppress programmed triggers.
   Manual rolls on buttons 1–7 remain available. Release, leave PERF or press Stop to cancel.
 - **Master filters:** independent HP and LP act on **St1 only**, after FX. HP **0** and
   LP **127** bypass their respective filters. Resonance affects both. These are temporary
