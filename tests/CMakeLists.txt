@@ -155,3 +155,7 @@ lxr_add_host_test(test_midi_usb_tx
 add_test(NAME test_midi_routing
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_midi_routing.py)
+
+add_test(NAME test_compressor
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_compressor.py)

@@ -177,7 +177,7 @@ void Compressor_process(Compressor *c, int16_t *fxBuffer,int16_t* outL, int16_t*
 			gr = dB2lin(gr);
 			//debugWatch = gr;
 
-			left[i]  = fxBuffer[idx1] * gr * c->markupGain;//gain;
+			left[i]  = __SSAT(fxBuffer[idx1] * gr * c->markupGain, 16);//gain;
 
 
 			//--- Output transfer ---
