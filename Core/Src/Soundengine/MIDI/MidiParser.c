@@ -60,18 +60,8 @@ static union {
 //tx is high nibble
 uint8_t midiParser_txRxFilter = 0xFF;
 
-enum State
-{
-	MIDI_STATUS,  		// waiting for status byte
-	MIDI_DATA1,  		// waiting for data byte1
-	MIDI_DATA2,  		// waiting for data byte2
-	SYSEX_DATA,  		// read sysex data byte
-	IGNORE				// set when unknown status byte received, stays in ignore mode until next known status byte
-  };
-
 // 2^(1/12) factor for 1 semitone
 #define SEMITONE_UP 1.0594630943592952645618252949463f
-#define SEMITONE_DOWN 0.94387431268169349664191315666753f
 
 #define NUM_LFO 6
 uint8_t midiParser_selectedLfoVoice[NUM_LFO] = {0,0,0,0,0,0};

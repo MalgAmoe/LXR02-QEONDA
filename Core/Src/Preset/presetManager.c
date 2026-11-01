@@ -713,18 +713,6 @@ void preset_processTimer()
 }
 
 
-/*------------------------------------------------------------/
-/ Remove all contents of a directory
-/ This function works regardless of FF_FS_RPATH.
-/------------------------------------------------------------*/
-
-
-
-
-FRESULT empty_directory(const char *path)
-{
-    return storage_emptyDirectory(path);
-}
 //----------------------------------
 
 uint8_t preset_isNameEmpty(char* name)
@@ -1411,71 +1399,6 @@ static void preset_sendMainStepDataToSeq( uint16_t mainStepData)
 /** send step data from SD card to the sequencer*/
 
 //----------------------------------------------------
-void preset_queryPatternInfoFromSeq(uint8_t patternNr, uint8_t* next, uint8_t* repeat)
-{
-	frontParser_newSeqDataAvailable = 0;
-	//request pattern info
-	frontPanel_sendByte(patternNr);	
-
-	//wait until data arrives
-	uint8_t newSeqDataLocal = 0;
-	uint16_t now = systick_ticks;
-	while((newSeqDataLocal==0))
-	{
-		//we have to call the uart parser to handle incoming messages from the sequencer
-		uart_checkAndParse();
-		
-		newSeqDataLocal = frontParser_newSeqDataAvailable;
-		
-		if(systick_ticks-now >= 31)
-		{
-			//timeout
-			now = systick_ticks;
-			//request step again
-			frontPanel_sendByte(patternNr);	
-		}
-	}
-	
-	//the stepdata struct is used as buffer for the data
-	*next = frontParser_stepData.volume; 
-	*repeat =  frontParser_stepData.prob;
-}
-//----------------------------------------------------
-void preset_queryMainStepDataFromSeq(uint16_t stepNr, uint16_t *mainStepData, uint8_t *length)
-{
-	frontParser_newSeqDataAvailable = 0;
-
-	//request step data
-	//the max number for 14 bit data is 16383!!!
-	//current max step nr is 7*8 = 56
-	frontPanel_sendByte((stepNr>>7)&0x7f);		//upper nibble 7 bit
-	frontPanel_sendByte(stepNr&0x7f);	//lower nibble 7 bit
-
-	//wait until data arrives
-	uint8_t newSeqDataLocal = 0;
-	uint16_t now = systick_ticks;
-	while((newSeqDataLocal==0))
-	{
-		//we have to call the uart parser to handle incoming messages from the sequencer
-		uart_checkAndParse();
-		
-		newSeqDataLocal = frontParser_newSeqDataAvailable;
-		
-		if(systick_ticks-now >= 31)
-		{
-			//timeout
-			now = systick_ticks;
-			//request step again
-			frontPanel_sendByte((stepNr>>7)&0x7f);		//upper nibble 7 bit
-			frontPanel_sendByte(stepNr&0x7f);
-		}
-	}
-	
-	// we are reusing these members for purposes other than those that were originally intended
-	*mainStepData =(uint16_t) ((frontParser_stepData.volume<<8) | frontParser_stepData.prob);
-	*length=frontParser_stepData.note;
-};
-
 //----------------------------------------------------
 static void preset_writePatternData(uint8_t patternNr)
 {
