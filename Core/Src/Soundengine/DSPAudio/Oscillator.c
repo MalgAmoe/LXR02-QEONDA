@@ -82,28 +82,6 @@ IN_ITCM_RAM void calcSineBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,c
 	}
 }
 //-----------------------------------------------------------
-int16_t calcSine(OscInfo* osc)
-{
-	const uint32_t oscPhase = osc->phase;
-	int16_t oscOut;
-
-	const uint32_t index =  oscPhase;
-	uint32_t  itg	= index>>20;
-
-#if INTERPOLATE_OSC
-	oscOut = sine_table[itg++];
-	//float frac	= (index&0x7ffff)*0.0000019073486328125f;
-	//oscOut += frac*(sine_table[itg] - oscOut);
-	uint32_t frac = index&0xFFFFF;
-	oscOut = oscOut + (int16_t)(((int64_t)(sine_table[itg] - oscOut) * frac)   >>20);
-#else
-	oscOut = sine_table[itg];
-#endif
-
-	osc->phase = oscPhase + osc->phaseInc;
-	osc->output = oscOut;
-	return oscOut;
-}
 
 //-----------------------------------------------------------
 // These three FM blocks intentionally depend on the production ARM compiler
@@ -135,28 +113,6 @@ IN_ITCM_RAM void calcFmSineBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf,
 	}
 }
 //-----------------------------------------------------------
-int16_t calcFmSine(OscInfo* osc, OscInfo* modOsc)
-{
-	const uint32_t oscPhase 	= osc->phase;
-	int16_t oscOut ;
-
-	const uint32_t index =  oscPhase + (((uint32_t)(modOsc->output*osc->fmMod))<<17);
-	uint32_t  itg	= index>>20;
-
-#if INTERPOLATE_FM_OSC
-	oscOut = sine_table[itg++];
-	//const float frac	= (index&0x7ffff)*0.0000019073486328125f;
-	//oscOut += frac*(sine_table[itg] - oscOut);
-	uint32_t frac = index&0xFFFFF;
-	oscOut = oscOut + (int16_t)(((int64_t)(sine_table[itg] - oscOut) * frac)   >>20);
-#else
-	oscOut = sine_table[itg];
-#endif
-
-	osc->phase = oscPhase + osc->phaseInc;
-	osc->output = oscOut;
-	return oscOut;
-};
 //---------------------------------------------------------------
 IN_ITCM_RAM void calcFmBlock(OscInfo* osc, const int16_t table[][1024], int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain)
 {
@@ -228,30 +184,6 @@ void calcPwmFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size
 	}
 }
 //-----------------------------------------------------------
-int16_t calcFm(OscInfo* osc, OscInfo* modOsc, const int16_t table[][1024])
-{
-
-	const uint32_t oscPhase = osc->phase;
-	int16_t oscOut ;
-
-	const uint32_t index =  oscPhase + (((uint32_t)(modOsc->output*osc->fmMod))<<19);
-
-	uint32_t  itg	= index>>22;
-
-#if INTERPOLATE_FM_OSC
-	oscOut = table[osc->tableOffset][itg++];
-	//const float frac	= (index&0x003FFFFF)*2.38418579101562e-07f;
-	//oscOut += frac*(table[osc->tableOffset][itg] - oscOut);
-	uint32_t frac = index & 0x3FFFFF;
-	oscOut = oscOut + (int16_t)(((int64_t)(table[osc->tableOffset][itg] - oscOut) * frac)   >>22);
-#else
-	oscOut = table[overtoneIndex][itg];
-#endif
-
-	osc->phase = oscPhase + osc->phaseInc;
-	osc->output = oscOut;
-	return oscOut;
-}
 //-----------------------------------------------------------
 IN_ITCM_RAM void calcNextOscSampleFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain, const float pwm)
 {
@@ -309,37 +241,6 @@ IN_ITCM_RAM void calcNoiseBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,
 	}
 }
 //-----------------------------------------------------------
-int16_t calcNoise(OscInfo* osc)
-{
-	osc->phase += osc->phaseInc;
-
-	//check overflow flag, ( if osc->phase == osc->phaseInc a reset occured ==> retrigger, too
-	APSR_Type apsr;
-	apsr.w = __get_APSR();
-	if(apsr.b.V ||  (osc->phase == osc->phaseInc))
-	{
-		//overflow happened -> phaseWrapped
-
-		uint16_t rnd = GetRngValue();
-		if( rnd > 0x00ff)
-		{
-			if( rnd > 0x000f)
-			{
-				osc->output = 32767;
-			}
-			else
-			{
-				osc->output = -32768;
-			}
-
-		}
-	}
-	else
-	{
-			osc->output = 0;
-	}
-	return osc->output;
-}
 //-----------------------------------------------------------
 IN_ITCM_RAM void calcNextOscSampleBlock(OscInfo* osc, int16_t* buf, const uint8_t size, const float gain, const float pwm)
 {
@@ -404,29 +305,6 @@ IN_ITCM_RAM void calcWavetableOscBlock(OscInfo* osc, const int16_t table[][1024]
 }
 
 //---------------------------------------------------------------
-int16_t calcWavetableOsc(OscInfo* osc,  const int16_t table[][1024])
-{
-	const uint32_t oscPhase = osc->phase;
-	int16_t oscOut ;
-
-	uint32_t  itg	= oscPhase>>22;
-
-#if INTERPOLATE_OSC
-	//todo use ldm instead of ldr to laod multiple values from memory
-	oscOut = table[osc->tableOffset][itg++];
-	//const float frac = (itg&0x003FFFFF)*2.38418579101562e-07f; //2.38... => 1.f/0x3fffff
-	//oscOut += frac*(table[osc->tableOffset][itg] - oscOut);
-	uint32_t frac = oscPhase & 0x3FFFFF;
-	oscOut = oscOut + (int16_t)(((int64_t)(table[osc->tableOffset][itg] - oscOut) * frac)   >>22);
-#else
-	oscOut = table[osc->tableOffset][itg];
-#endif
-
-	osc->phase = oscPhase + osc->phaseInc;
-	osc->output = oscOut;
-	return oscOut;
-
-};
 
 //------------------------------------------------------------------
 
