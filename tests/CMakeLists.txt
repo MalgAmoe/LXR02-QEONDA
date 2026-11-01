@@ -163,3 +163,7 @@ add_test(NAME test_compressor
 add_test(NAME test_snare_hardclip
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_snare_hardclip.py)
+
+add_test(NAME test_fx_drywet
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_fx_drywet.py)

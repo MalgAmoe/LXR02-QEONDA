@@ -47,6 +47,8 @@ void frontParser_parseNrpn(uint8_t value)
 {
 	uint16_t paramNr=frontParser_nrpnNr+128;
 
+	// Forwarded NRPN bytes stay unchanged on the wire; store the accepted percent.
+	if(paramNr == PAR_FX_DRY_WET && value > 100) value = 100;
 	if(paramNr < NUM_PARAMS) {
 			activeParameters[paramNr] = value;
 	}

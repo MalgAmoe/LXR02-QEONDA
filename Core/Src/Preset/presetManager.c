@@ -319,6 +319,9 @@ FRESULT preset_LoadTmpKit()
 			if(END_OF_SOUND_PARAMETERS-bytesRead)
 				memset(para+bytesRead,0,END_OF_SOUND_PARAMETERS-bytesRead);
 
+			// Normalize the legacy active-kit load before dispatch/saving.
+			if(para[PAR_FX_DRY_WET] > 100) para[PAR_FX_DRY_WET] = 100;
+
 			//special case mod targets. normalize.
 			const uint8_t nmt=getNumModTargets();
 			for(i=0;i<6;i++) {
@@ -1148,6 +1151,9 @@ static FRESULT preset_readDrumsetData(uint8_t presetNr, uint8_t isMorph)
 		if(END_OF_SOUND_PARAMETERS-bytesRead)
 			memset(para+bytesRead,0,END_OF_SOUND_PARAMETERS-bytesRead);
 		
+		// Normalize source and morph kit caches before activation/saving.
+		if(para[PAR_FX_DRY_WET] > 100) para[PAR_FX_DRY_WET] = 100;
+
 		//special case mod targets. normalize.
 		const uint8_t nmt=getNumModTargets();
 		for(i=0;i<6;i++) {

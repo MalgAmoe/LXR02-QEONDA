@@ -150,7 +150,17 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 		float flt;
 	} value;
 
-	if(isFloatModulator)
+	// FX amount is a percentage, not a remapped 7-bit control. Bound it
+	// before narrowing float modulation and before caching the accepted byte.
+	if((msg.status & 0xF0) != MIDI_CC && msg.data1 == CC2_FX_AMOUNT)
+	{
+		if(isFloatModulator)
+			value.itg = v >= (100.f/127.f) ? 100 : v*127;
+		else
+			value.itg = msg.data2 > 100 ? 100 : msg.data2;
+		value.flt = value.itg/127.f;
+	}
+	else if(isFloatModulator)
 	{
 		value.itg = v*127;
 		value.flt = v;
