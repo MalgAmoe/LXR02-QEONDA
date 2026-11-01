@@ -19,6 +19,14 @@ It also includes targeted synthesis, MIDI and staged-save/storage corrections.
 Version remains **0.1**; distinguish builds by Git revision and image hash.
 See [host tests](tests/README.md) for commands and verification limits.
 
+## Acknowledgments
+
+Thanks to [OpenElixir-02](https://github.com/tunefish777/openelixir-02) and its
+contributors for work that informed QEONDA's bug investigations and fixes,
+particularly audio scheduling, circular DMA and save-time audio stability.
+OpenElixir is a separate LXR firmware project; this acknowledgment does not imply
+that its complete engine or feature set is included in QEONDA.
+
 ## Updating your LXR
 
 A functioning compatible desktop bootloader normally installs application updates from the SD card
