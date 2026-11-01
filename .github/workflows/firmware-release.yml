@@ -2,9 +2,10 @@ name: Firmware release
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [main]
-    types: [closed]
+  # Uncomment these three lines to also release on merged development -> main PRs.
+  # pull_request:
+  #   branches: [main]
+  #   types: [closed]
 
 permissions:
   contents: read
