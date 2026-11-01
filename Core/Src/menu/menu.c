@@ -2318,7 +2318,8 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 					FRESULT res;
 
 
-					res = preset_loadProject(menu_selectedPresetNr[SAVE_TYPE_PROJECT], 1);
+					FRESULT loadWarning;
+					res = preset_loadProjectWithWarning(menu_selectedPresetNr[SAVE_TYPE_PROJECT], 1, &loadWarning);
 
 					if(res == FR_NO_FILE)
 					{
@@ -2333,6 +2334,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 					{
 						menu_loadedPresetNr[CURRENT_PROJECT] = menu_selectedPresetNr[SAVE_TYPE_PROJECT];
 						menu_resetSaveParameters();
+						if(loadWarning != FR_OK) menu_showSdError(loadWarning);
 					}
 				}
 					break;

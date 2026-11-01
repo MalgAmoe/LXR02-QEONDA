@@ -824,9 +824,11 @@ if(sd_card_ok)
 
 #if LOAD_PROJECT_ON_BOOT
 	uint8_t lastUsedProject;
-	preset_loadLastUsedProjectNrFromSD(&lastUsedProject);
+	res = preset_loadLastUsedProjectNrFromSD(&lastUsedProject);
+	if(res != FR_OK) menu_showSdError(res);
 	//do not clean the tmp folder here, as we are just booting
-	preset_loadProject(lastUsedProject, 0);
+	FRESULT loadWarning;
+	res = preset_loadProjectWithWarning(lastUsedProject, 0, &loadWarning);
 	if(res != FR_OK)
 	{
 		menu_showSdError(res);
@@ -835,6 +837,7 @@ if(sd_card_ok)
 	{
 		menu_loadedPresetNr[CURRENT_PROJECT] = menu_selectedPresetNr[SAVE_TYPE_PROJECT] = lastUsedProject;
 		//menu_resetSaveParameters();
+		if(loadWarning != FR_OK) menu_showSdError(loadWarning);
 	}
 #else
 	for(uint8_t i=0;i<NUM_KIT_SLOTS;i++)

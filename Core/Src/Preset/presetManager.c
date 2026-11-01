@@ -975,28 +975,13 @@ FRESULT preset_saveGlobals()
 }
 //----------------------------------------------------
 // returns 1 on success
-static uint8_t preset_readGlobalData()
+static uint8_t preset_readGlobalData(uint8_t *globals)
 {
 #if USE_SD_CARD
-
-	UINT bytesRead;
-#if 0
-	int i;
-	for(i=PAR_BEGINNING_OF_GLOBALS;(i<NUM_PARAMS) &&( bytesRead!=0);i++) {
-		f_read((FIL*)&SDFile,&activeParameters[i],1,&bytesRead);
-		if(!bytesRead)
-			return 0;
-	}
-	if(!bytesRead)
-		return 0;
-	return 1;
-#else
-	const uint8_t numGlobals = NUM_PARAMS - PAR_BEGINNING_OF_GLOBALS;
-	f_read((FIL*)&SDFile,&activeParameters[PAR_BEGINNING_OF_GLOBALS],numGlobals,&bytesRead);
-	if(bytesRead != numGlobals)	return 0;
-	else return 1;
-
-#endif
+	UINT bytesRead = 0;
+	const UINT numGlobals = NUM_PARAMS - PAR_BEGINNING_OF_GLOBALS;
+	FRESULT res = f_read((FIL*)&SDFile, globals, numGlobals, &bytesRead);
+	return res == FR_OK && bytesRead == numGlobals;
 #endif
 }
 //----------------------------------------------------
@@ -1019,12 +1004,14 @@ uint8_t preset_loadGlobals()
 	if(res!=FR_OK)
 		return 0; //file open error... maybe the file does not exist?
 
-	if(!preset_readGlobalData())
+	uint8_t globals[NUM_PARAMS - PAR_BEGINNING_OF_GLOBALS];
+	if(!preset_readGlobalData(globals))
 	{
 		preset_closeFile((FIL*)&SDFile);
 		return 0;
 	}
-	preset_closeFile((FIL*)&SDFile);
+	if(preset_closeFile((FIL*)&SDFile) != FR_OK) return 0;
+	memcpy(&activeParameters[PAR_BEGINNING_OF_GLOBALS], globals, sizeof globals);
 	menu_sendAllGlobals();
 	
 	//f_unmount((TCHAR const*)SDPath);
@@ -2498,8 +2485,18 @@ void preset_loadProjectNames(uint8_t projectNr)
 
 }
 //----------------------------------------------------
+/* Compatibility: legacy callers still receive persistence errors. */
 FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 {
+	FRESULT warning;
+	FRESULT res = preset_loadProjectWithWarning(presetNr, clearTmp, &warning);
+	return res != FR_OK ? res : warning;
+}
+
+/* FR_OK means activated; warning reports startup-index persistence only. */
+FRESULT preset_loadProjectWithWarning(uint8_t presetNr, uint8_t clearTmp, FRESULT *warning)
+{
+	*warning = FR_OK;
 	seq_setPerformanceBreak(0);
     sync_cancelPending(); // never resume a paused deadline from the old project
 	FRESULT recovery = storage_recoverProject(presetNr);
@@ -2715,8 +2712,7 @@ FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)
 
 	}
 
-	{ FRESULT indexResult = preset_saveLastUsedProjectNrToSD(presetNr);
-	  if(indexResult != FR_OK) res = indexResult; }
+	*warning = preset_saveLastUsedProjectNrToSD(presetNr);
 
 	//change pattern to pat 1
 	seq_setNextPattern(0);

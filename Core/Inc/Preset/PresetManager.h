@@ -96,6 +96,9 @@ void preset_loadDefaultGlobals();
 
 FRESULT preset_saveProject(uint8_t presetNr);
 FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp);
+/* Return activation result separately from startup-index persistence warning.
+ * warning must be non-NULL. Legacy entry point returns either error. */
+FRESULT preset_loadProjectWithWarning(uint8_t presetNr, uint8_t clearTmp, FRESULT *warning);
 FRESULT preset_createProject(uint8_t presetNr);
 void preset_loadProjectNames(uint8_t projectNr);
 
