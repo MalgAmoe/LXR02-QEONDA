@@ -38,6 +38,7 @@ pre=r'''
 #define PATTERN_LOAD_PAGE 20
 #define SONG_MODE_PAGE 23
 #define SELECT_MODE_PATTERN 2
+#define SELECT_MODE_PATTERN_LIVE 12
 #define SELECT_MODE_SONG 3
 #define pgm_read_word(p) (*(p))
 '''

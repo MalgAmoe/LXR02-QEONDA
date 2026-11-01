@@ -452,7 +452,7 @@ void frontPanel_parseData(uint8_t data)
 						menu_playedPattern = frontParser_midiMsg.data2;						
 						
 						//if( (buttonHandler_getMode() == SELECT_MODE_PERF) || (buttonHandler_getMode() == SELECT_MODE_PAT_GEN) )
-						if( (buttonHandler_getMode() == SELECT_MODE_PATTERN) )
+						if( (buttonHandler_getMode() == SELECT_MODE_PATTERN || buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE) )
 						{
 							//only show pattern changes when on Pattern select page
 								
@@ -461,6 +461,7 @@ void frontPanel_parseData(uint8_t data)
 							led_clearAllBlinkLeds();
 							// re init the LEDs shwoing active/viewed pattern
 							led_initPatternSelectLeds();
+							if(buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE) menu_repaintAll();
 							//led_setValue(1,LED_PART_SELECT1+frontParser_midiMsg.data2);
 						}			
 						
@@ -530,7 +531,7 @@ void frontPanel_parseData(uint8_t data)
 						
 						case LED_SEQ_BUTTON:
 						{
-							if(menu_activePage != PERF_PAGE) //do not show active steps on perf. page
+							if(menu_activePage != PERF_PAGE && buttonHandler_getMode() != SELECT_MODE_PATTERN_LIVE) //pattern pads own their LEDs
 							{
 								//limit to 16 steps
 								uint8_t stepNr = (uint8_t)((frontParser_midiMsg.data2&0x7f)/8); //limit to 127

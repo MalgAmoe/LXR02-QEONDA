@@ -66,6 +66,7 @@ enum
 extern uint8_t menu_loadedPresetNr[NUM_CURRENT];
 extern uint32_t sucessTimer;
 
+void menu_endParameterEdit(void);
 void menu_setShownPattern(uint8_t patternNr);
 uint8_t menu_getViewedPattern();
 

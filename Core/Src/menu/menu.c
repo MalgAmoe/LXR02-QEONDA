@@ -3324,8 +3324,21 @@ uint8_t menu_getSubPage()
 	return (menuIndex&MASK_PAGE)>>PAGE_SHIFT;
 };
 //-----------------------------------------------------------------
+void menu_endParameterEdit(void)
+{
+	editModeActive = 0;
+}
+
 void menu_switchPage(uint8_t pageNr)
 {
+	// Separate dialogs retain the legacy pattern pad semantics, not voice edits.
+	if(buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE &&
+		pageNr >= NUM_TRACKS && pageNr != FX_MODE_PAGE && pageNr != PERF_PAGE) {
+		buttonHandler_setMode(SELECT_MODE_PATTERN);
+		led_clearAllBlinkLeds();
+		led_setMode2(SELECT_MODE_PATTERN);
+	}
+
 	//autosave config page settings
 	/*
 	if(menu_activePage == MENU_MIDI_PAGE)
@@ -3515,6 +3528,7 @@ void menu_switchPage(uint8_t pageNr)
 	menu_resetActiveParameter();
 
 	//force complete repaint
+	if(buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE) led_initPatternSelectLeds();
 	menu_repaintAll();
 };
 //-----------------------------------------------------------------

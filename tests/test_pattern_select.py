@@ -1,0 +1,391 @@
+#!/usr/bin/env python3
+"""Real panel/menu/LED event bodies with bounded engine/storage/LCD seams.
+Not physical-button, SD, audio scheduling or autoload timing certification.
+"""
+from pathlib import Path
+import os, re, subprocess, tempfile
+ROOT = Path(__file__).resolve().parents[1]
+def read(p): return (ROOT / p).read_text()
+def clean(s): return re.sub(r'/\*.*?\*/|//[^\n]*', '', s, flags=re.S)
+def fn(s, name):
+    s = clean(s)
+    m = re.search(r'^(?:static\s+)?(?:void|uint8_t|int8_t)\s+' + name + r'\([^;]*?\)\s*\{', s, re.M)
+    assert m, name
+    end = s.index('{', m.start()) + 1
+    depth = 1
+    while depth:
+        depth += (s[end] == '{') - (s[end] == '}'); end += 1
+    return s[m.start():end] + '\n'
+panel, menu, led = (read(p) for p in ('Core/Src/buttonHandler.c', 'Core/Src/menu/menu.c', 'Core/Src/ledHandler.c'))
+c = '''#include <stdint.h>
+#include <assert.h>
+#include <string.h>
+#include "Parameters.h"
+#include "frontPanelParser_ui.h"
+#define NUM_TRACKS 7
+#define NUM_BARS 4
+#define NUM_STEPS 64
+#define MASK_PARAMETER 7
+#define MASK_PAGE 248
+#define PAGE_SHIFT 3
+#define NUM_SUB_PAGES 8
+#define NO_STEP_SELECTED -1
+#define TIMER_ACTION_OCCURED -2
+#define BUTTON_TIMEOUT 2000
+#define ARM_AUTOMATION 0x40
+#define DISARM_AUTOMATION 0
+#define PRESET_PAT_TIMER 1
+#define PRESET_KIT_TIMER 0
+#define DISABLE_CONV_WARNING
+#define END_DISABLE_CONV_WARNING
+#define SKIP_NEXT_KIT_AUTOLOAD 2
+#define USE_INTERRUPT_ONLY_DURING_SAVE_PROJ 0
+#define FR_OK 0
+typedef int FRESULT;
+'''
+for p in ('Core/Inc/buttonHandler.h','Core/Inc/menu/menu.h','Core/Inc/ledHandler.h','Core/Inc/menu/copyClearTools.h'):
+    c += '\n'.join(re.findall(r'enum\s*\w*\s*\{[^}]*\}\s*;', clean(read(p)))) + '\n'
+c += re.search(r'typedef struct PageStruct.*?}Page;', clean(read('Core/Inc/menu/menu.h')), re.S).group() + '\n'
+pages = clean(read('Core/Inc/menu/menuPages.h'))
+c += pages[pages.index('const Page menuPages'):pages.rindex('};') + 2] + '\n'
+c += r'''
+#define pgm_read_byte(p) (*(p))
+/* Real Page layout and menuPages metadata above, including PERF A/B/C. */
+static uint8_t menuIndex, editModeActive, menu_activePage, menu_activeVoice, menu_activeBar;
+static uint8_t menu_playedPattern,menu_shownPattern,menu_activePatternBank,menu_muteModeActive;
+static uint8_t menu_selectedPresetNr[6], copyClear_Mode, preset_fileCleanupWarning;
+static uint8_t activeParameters[NUM_PARAMS],seq_activePattern,performanceBreakButtonHeld;
+static uint8_t lastActiveSubPage, buttonHandler_mutedVoices,buttonHandler_selectedStep;
+static int8_t buttonHandler_buttonTimerStepNr=-1;
+static uint16_t heldSeqButtons, consumedSeqReleases;
+static uint32_t systick_ticks=123,sucessTimer;
+static struct {unsigned selectButtonMode:4; unsigned seqRunning:1,seqRecording:1,seqErasing:1;} buttonHandler_stateMemory;
+static struct {uint8_t fxType;} fxBus;
+static struct {uint8_t category;char nameBuffer[20];} menu_saveOptions;
+typedef struct {Step seq_subStepPattern[64][7][64];uint16_t seq_mainSteps[4][64][7];uint8_t shuffle[64];} PatternSet;
+static PatternSet seq_patternSet;
+static int8_t buttonHandler_armedAutomationStep=NO_STEP_SELECTED;
+static uint16_t buttonHandler_originalParameter[2];
+static uint8_t buttonHandler_originalValue[2],buttonHandler_bulkOriginal[2],buttonHandler_resetLock1,buttonHandler_resetLock2;
+static uint32_t buttonHandler_buttonTimer;
+static PatternSet *get_seq_patternSet_p(void){return &seq_patternSet;}
+static uint16_t seq_automationTarget(uint8_t p){return p ? p-1 : PAR_NONE;}
+static unsigned stepWrites,loads,saves,saveRam,errors,warnings,touches,changes,rolls,breakHeld,enteredStep,repaints;
+static uint8_t shift,load,save,copy,pending,leds[64],blinks[64],chase,lastMode;
+static unsigned chaseCalls;
+static uint8_t frontParser_activeTrack;
+static int8_t seq_stepIndex[7];
+static uint8_t seq_recordActive,seq_activeAutomTrack;
+static int seq_armedArmedAutomationStep=-1,seq_armedArmedAutomationTrack=-1;
+static uint8_t seq_intIsMainStepActive(uint8_t v,uint8_t s,uint8_t p){(void)v;(void)s;(void)p;return 1;}
+static int saveResult;
+static uint8_t buttonHandler_getShift(void){return shift;}
+static uint8_t buttonHandler_getLoad(void){return load;}
+static uint8_t buttonHandler_getSave(void){return save;}
+static uint8_t buttonHandler_getCopy(void){return copy;}
+static uint8_t buttonHandler_getMode(void){return buttonHandler_stateMemory.selectButtonMode;}
+static uint8_t menu_getActiveVoice(void){return menu_activeVoice;}
+static void menu_setActiveVoice(uint8_t v){menu_activeVoice=v;}
+static uint8_t menu_getActivePage(void){return menu_activePage;}
+static uint8_t menu_getViewedPattern(void){return menu_shownPattern;}
+static void menu_setShownPattern(uint8_t p){menu_shownPattern=p;}
+static uint8_t led_idx2StepLed(uint8_t p);
+static void led_setValue(uint8_t v,uint8_t l){assert(l<64);leds[l]=v;}
+static void led_setBlinkLed(uint8_t l,uint8_t v){assert(l<64);blinks[l]=v;}
+static void led_clearAllBlinkLeds(void){memset(blinks,0,sizeof blinks);}
+static void led_clearSequencerLeds(void){for(int p=0;p<16;p++)leds[led_idx2StepLed(p)]=0;}
+static void led_clearActive_step(void){chase=0;chaseCalls++;}
+static void led_setActive_step(uint8_t s){(void)s;chase=1;chaseCalls++;}
+static void led_clearSelectLeds(void){}
+static void led_clearVoiceLeds(void){}
+static void led_setActiveSelectButton(uint8_t b){(void)b;}
+static void led_setActiveVoiceLeds(uint8_t b){for(int v=0;v<7;v++)leds[LED_VOICE1+v]=(b>>v)&1;}
+static void led_setActiveVoice(uint8_t v){led_setActiveVoiceLeds(1u<<v);}
+static void led_setMode2(uint8_t m){lastMode=m;}
+static uint8_t seq_isMainStepActive(uint8_t t,uint8_t s,uint8_t p){(void)t;(void)s;(void)p;return 1;}
+static uint8_t seq_getTrackLength(uint8_t t){(void)t;return 64;}
+static uint8_t seq_getStepIndex(uint8_t t){(void)t;return 32;}
+static void seq_setTrackLength(uint8_t t,uint8_t n){(void)t;(void)n;}
+static uint8_t seq_isPerformanceBreak(void){return breakHeld;}
+static void seq_setPerformanceBreak(uint8_t v){breakHeld=v;}
+static void seq_setSongModeEnabled(uint8_t v){(void)v;}
+static void seq_addPatternToSong(uint8_t p){(void)p;}
+static void seq_deleteRow(void){}
+static void seq_insertRow(void){}
+static void preset_touchTimer(uint8_t t){(void)t;touches++;}
+static void preset_savePatternRAM(uint8_t p){(void)p;saveRam++;}
+static FRESULT preset_savePatternSD(uint8_t p){(void)p;saves++;return saveResult;}
+static void preset_loadDrumsetRam(uint8_t a,uint8_t b,uint8_t d){(void)a;(void)b;(void)d;loads++;}
+static void menu_showSdError(FRESULT e){assert(e);errors++;}
+static void menu_showSaveCleanupWarning(void){warnings++;}
+static void menu_repaint(void){repaints++;}
+static void menu_repaintAll(void){repaints++;}
+static void screensaver_touch(void){}
+static void menu_setLoadSaveCategory(uint8_t c){menu_saveOptions.category=c;}
+static void menu_resetSaveParameters(void){}
+static void copyNameToEditBuffer(uint8_t p,char *b){(void)p;(void)b;}
+static void menu_resetPerformanceFilter(void){}
+static uint8_t has2ndPage(uint8_t p){return p<6;}
+static void copyClear_executeClear(void){}
+static void copyClear_armClearMenu(uint8_t b){(void)b;}
+static void copyClear_reset(void){copyClear_Mode=MODE_NONE;}
+static uint8_t copyClear_srcSet(void){return 0;}
+static void copyClear_setSrc(int8_t s,uint8_t m){(void)s;(void)m;}
+static void copyClear_setDst(int8_t s,uint8_t m){(void)s;(void)m;}
+static void copyClear_copyTrack(void){}
+static void menu_parseGlobalParam(uint16_t p,uint8_t v){activeParameters[p]=v;}
+static void menu_restoreHeldParameter(uint16_t p,uint8_t v){activeParameters[p]=v;}
+static void buttonHandler_setRemoveStep(uint8_t l,uint8_t p){(void)l;(void)p;stepWrites++;}
+static void buttonHandler_selectActiveStep(uint8_t l,uint8_t p){(void)l;(void)p;}
+static void buttonHandler_enterSeqModeStepMode(void){enteredStep++;menu_activePage=SEQ_PAGE;}
+static void buttonHandler_setRunStopState(uint8_t r){buttonHandler_stateMemory.seqRunning=r;}
+void frontPanel_sendData(uint8_t s,uint8_t p,uint8_t v){
+ if(s==SEQ_CC && p==SEQ_CHANGE_PAT){changes++;pending=v;}
+ if(s==SEQ_CC && p==SEQ_ROLL_ON_OFF){if(v>>4)rolls|=1u<<(v&15);else rolls&=~(1u<<v);}
+}
+static void menu_switchPage(uint8_t);
+static void buttonHandler_handleSelectButton(uint8_t);
+static void buttonHandler_selectButtonPressed(uint8_t);
+static void buttonHandler_voiceButtonPressed(uint8_t);
+static void buttonHandler_partButtonReleased(uint8_t);
+static void buttonHandler_showMuteLEDs(void);
+static void led_updateBarLeds(void);
+static void led_updateSeqLeds(void);
+static void led_initPatternSelectLeds(void);
+'''
+# All listed functions are actual firmware bodies, not reimplemented event logic.
+for s, names in ((panel, ('buttonHandler_setMode','buttonHandler_showMuteLEDs','buttonHandler_muteVoice')),
+                 (led, ('led_idx2StepLed','led_initPatternSelectLeds','led_updateBarLeds','led_updateSeqLeds')),
+                 (menu, ('menu_getSubPage','menu_resetActiveParameter','menu_endParameterEdit','menu_switchSubPage','menu_switchPage')),
+                 (panel, ('buttonHandler_restoreOriginal','buttonHandler_armTimerActionStep','buttonHandler_disarmTimerActionStep','buttonHandler_TimerActionOccured','buttonHandler_setTimeraction','buttonHandler_tick','buttonHandler_handleModeButtons','buttonHandler_handleSelectButton','buttonHandler_enterLivePatternSelect','buttonHandler_selectLivePattern','buttonHandler_seqButtonPressed','buttonHandler_releasePerformanceBreak','buttonHandler_seqButtonReleased','buttonHandler_selectButtonPressed','buttonHandler_partButtonReleased','buttonHandler_voiceButtonPressed','buttonHandler_buttonPressed','buttonHandler_buttonReleased'))):
+    for name in names: c += fn(s, name)
+# Actual bar-follow and direct chase segment, without unrelated clock/MIDI work.
+seq = read('Core/Src/Soundengine/Sequencer/sequencer.c')
+c += fn(seq, 'seq_recordAutomation')
+# Ordinary knob routing remains page-based; the existing change-all target
+# exercises its actual normal, bulk, held-lock and recording transport paths.
+assert 'SELECT_MODE_PATTERN' not in fn(menu, 'menu_parseKnobValue')
+segment = seq[seq.index('//TODO can maybe be combined with pattern change follow above?!'):seq.index('// check mtc, which might stop')]
+c += 'static void follow_and_chase(void) {\n' + clean(segment) + '\n}\n'
+# Actual FX-type UI branch; DSP endpoints are stubs, as in a kit autoload.
+fx = clean(read('Core/Src/Soundengine/MIDI/MidiParser.c'))
+fx = fx[fx.index('case CC2_FX_TYPE:'):fx.index('case CC2_FX_ROUTING:')]
+c += '''static void FxBus_prepareFxChange(void){}\nstatic void FxBus_updateParameter(void){}\nstatic void change_fx(unsigned type) {\nstruct {unsigned itg;} value={type};\nswitch(0) {\n'''
+c += fx.replace('case CC2_FX_TYPE:', 'case 0:') + '\n}}\n'
+c += r'''
+static void reset(uint8_t page,uint8_t index){
+ memset(leds,0,sizeof leds);memset(blinks,0,sizeof blinks);
+ buttonHandler_stateMemory.selectButtonMode=SELECT_MODE_VOICE;
+ menu_activePage=page;menuIndex=index;editModeActive=1;
+ menu_activeVoice=page<7?page:2;menu_activeBar=0;menu_activePatternBank=0;
+ menu_shownPattern=menu_playedPattern=0;heldSeqButtons=consumedSeqReleases=0;
+ shift=load=save=copy=0;rolls=breakHeld=performanceBreakButtonHeld=0;
+ saves=saveRam=changes=touches=stepWrites=errors=warnings=0;saveResult=0;
+ enteredStep=0;copyClear_Mode=MODE_NONE;activeParameters[PAR_PATTERN_MODE]=1;
+}
+static void enter(int route){
+ if(route)load=1;else shift=1;
+ buttonHandler_seqButtonPressed(SEQ_PATTERN);
+ shift=load=0;buttonHandler_seqButtonReleased(SEQ_PATTERN);
+ assert(buttonHandler_getMode()==SELECT_MODE_PATTERN_LIVE);
+}
+static void pads(unsigned p,int blink){
+ for(unsigned i=0;i<16;i++)assert(blinks[led_idx2StepLed(i)]==(blink && i==p));
+}
+int main(void){
+ assert(SELECT_MODE_PATTERN_LIVE==12 && SELECT_MODE_PATTERN==8);
+ for(int route=0;route<2;route++)for(int page=0;page<NUM_PAGES;page++)for(int index=0;index<64;index++){
+  reset(page,index);chase=1;rolls=127;breakHeld=1;
+  enter(route);assert(!chase&&!rolls&&!breakHeld&&!editModeActive);
+  if(page<7 || page==PERF_PAGE || page==FX_MODE_PAGE)assert(menu_activePage==page && menuIndex==index);
+  else assert(menu_activePage==PERF_PAGE && menuIndex==0);
+  assert(!saves&&!changes&&!stepWrites && buttonHandler_buttonTimerStepNr==NO_STEP_SELECTED);
+  unsigned savedIndex=menuIndex;buttonHandler_enterLivePatternSelect();assert(menuIndex==savedIndex);
+ }
+ /* Bank bounds, pending selection, ordinary LED painters, immediate ACK seam. */
+ reset(2,19);enter(0);
+ for(int bank=0;bank<4;bank++){
+  assert(menu_activePatternBank==bank);
+  buttonHandler_seqButtonPressed(5);buttonHandler_seqButtonReleased(5);
+  assert(pending==bank*16+5 && menu_shownPattern==pending && menuIndex==19 && menu_activePage==2);
+  pads(5,1);led_updateSeqLeds();led_updateBarLeds();pads(5,1);
+  activeParameters[PAR_FOLLOW]=FOLLOW_BAR;
+  for(int step=0;step<64;step++){
+   seq_stepIndex[menu_activeVoice]=step;frontParser_activeTrack=menu_activeVoice;
+   unsigned beforeChase=chaseCalls;follow_and_chase();
+   assert(chaseCalls==beforeChase && menu_activeBar==0 && menu_shownPattern==pending);pads(5,1);
+  }
+  assert(leds[LED_PAGE_DOWN]==(bank>>1) && leds[LED_PAGE_UP]==(bank&1));
+  menu_playedPattern=menu_shownPattern;led_initPatternSelectLeds();pads(0,0);
+  assert(leds[led_idx2StepLed(5)]);
+  buttonHandler_buttonPressed(BUT_PAGE_UP);
+ }
+ assert(menu_activePatternBank==3);
+ for(int i=0;i<5;i++)buttonHandler_buttonPressed(BUT_PAGE_DOWN);
+ assert(!menu_activePatternBank && !saves && changes==4 && touches==4);
+ /* Every physical pad maps to its bank slot, including same-slot reload. */
+ reset(2,19);enter(0);
+ for(int bank=0;bank<4;bank++)for(int pad=0;pad<16;pad++){
+  menu_activePatternBank=bank;buttonHandler_seqButtonPressed(pad);buttonHandler_seqButtonReleased(pad);
+  assert(pending==bank*16+pad && menuIndex==19);pads(pad,1);
+  menu_playedPattern=menu_shownPattern;led_initPatternSelectLeds();pads(0,0);
+  assert(leds[led_idx2StepLed(pad)]);
+ }
+ assert(changes==64 && touches==64 && !saves);
+ /* Explicit exits don't enter STEP or cycle a retained PERF bank/index. */
+ reset(3,21);enter(0);buttonHandler_handleModeButtons(SELECT_MODE_VOICE);
+ assert(buttonHandler_getMode()==SELECT_MODE_VOICE && menu_activePage==3 && menuIndex==21 && !enteredStep);
+ assert(menuPages[PERF_PAGE][0].bot1==PAR_BPM);
+ assert(menuPages[PERF_PAGE][0].bot5==PAR_SHUFFLE);
+ assert(menuPages[PERF_PAGE][1].bot1==MASTER_COMP_THRESHOLD);
+ for(int index=0;index<12;index++){
+  reset(PERF_PAGE,index);enter(1);menu_activePatternBank=3;led_initPatternSelectLeds();
+  buttonHandler_handleModeButtons(SELECT_MODE_PERF);
+  assert(!leds[LED_PAGE_UP] && !leds[LED_PAGE_DOWN]);pads(0,0);
+  for(int p=0;p<16;p++)assert(!leds[led_idx2StepLed(p)]);
+  assert(buttonHandler_getMode()==SELECT_MODE_PERF && menuIndex==index && menu_activePage==PERF_PAGE);
+ }
+ reset(PERF_PAGE,0);enter(0);buttonHandler_selectButtonPressed(0);assert(menuIndex==4 && buttonHandler_getMode()==12);
+ buttonHandler_selectButtonPressed(0);assert(menuIndex==8 && buttonHandler_getMode()==12);
+ buttonHandler_selectButtonPressed(0);assert(menuIndex==0 && buttonHandler_getMode()==12);
+ reset(1,11);enter(0);shift=1;buttonHandler_handleModeButtons(0);shift=0;
+ assert(buttonHandler_getMode()==SELECT_MODE_STEP && enteredStep==1);
+ /* Old held step, old held roll, and new pattern-pad release after exit. */
+ reset(1,11);buttonHandler_seqButtonPressed(2);assert(buttonHandler_buttonTimerStepNr==2);
+ enter(0);assert(buttonHandler_buttonTimerStepNr==NO_STEP_SELECTED);
+ systick_ticks+=10000;buttonHandler_tick();assert(buttonHandler_armedAutomationStep==NO_STEP_SELECTED);
+ buttonHandler_handleModeButtons(0);buttonHandler_seqButtonReleased(2);assert(!stepWrites);
+ buttonHandler_seqButtonPressed(2);buttonHandler_seqButtonReleased(2);assert(stepWrites==1);
+ reset(PERF_PAGE,4);buttonHandler_stateMemory.selectButtonMode=SELECT_MODE_PERF;
+ buttonHandler_seqButtonPressed(3);buttonHandler_seqButtonPressed(7);assert(rolls && breakHeld);
+ enter(1);assert(!rolls&&!breakHeld);buttonHandler_handleModeButtons(0);
+ buttonHandler_seqButtonReleased(3);buttonHandler_seqButtonReleased(7);assert(!stepWrites && !performanceBreakButtonHeld);
+ reset(1,2);enter(0);buttonHandler_seqButtonPressed(4);buttonHandler_handleModeButtons(0);
+ buttonHandler_seqButtonReleased(4);assert(!stepWrites);
+ /* An already armed lock restores before live entry and cannot arm again. */
+ reset(1,11);seq_patternSet.seq_subStepPattern[seq_activePattern][1][2].param1Nr=11;
+ seq_patternSet.seq_subStepPattern[seq_activePattern][1][2].param1Val=99;
+ activeParameters[10]=23;buttonHandler_seqButtonPressed(2);systick_ticks+=10000;buttonHandler_tick();
+ assert(buttonHandler_armedAutomationStep==2 && activeParameters[10]==99);
+ enter(0);assert(buttonHandler_armedAutomationStep==NO_STEP_SELECTED && activeParameters[10]==23 && !buttonHandler_resetLock1);
+ buttonHandler_seqButtonReleased(2);assert(!stepWrites);
+ /* Voice/subpage navigation stays live; FX context isn't arbitrary voice subpages. */
+ reset(1,2);enter(0);buttonHandler_voiceButtonPressed(6);
+ assert(menu_activePage==6 && menu_activeVoice==6 && buttonHandler_getMode()==12);
+ buttonHandler_selectButtonPressed(3);assert(menu_getSubPage()==3 && buttonHandler_getMode()==12);
+ reset(FX_MODE_PAGE,17);enter(0);buttonHandler_voiceButtonPressed(5);buttonHandler_selectButtonPressed(7);
+ assert(menu_activePage==FX_MODE_PAGE && menuIndex==17 && buttonHandler_getMode()==12);
+ for(unsigned type=0;type<6;type++){
+  change_fx(type);assert(menu_getSubPage()==type && fxBus.fxType==type && buttonHandler_getMode()==12);
+ }
+ reset(PERF_PAGE,8);enter(0);buttonHandler_mutedVoices=0;buttonHandler_voiceButtonPressed(2);
+ assert(buttonHandler_mutedVoices==4 && menu_activePage==PERF_PAGE);
+ shift=1;buttonHandler_buttonPressed(BUT_SHIFT);shift=0;buttonHandler_buttonReleased(BUT_SHIFT);
+ assert(leds[LED_VOICE1+2]==0 && leds[LED_VOICE1]==1);
+ /* Recording flag survives selection. Other operations retire live ownership. */
+ reset(2,9);buttonHandler_stateMemory.seqRecording=1;enter(0);buttonHandler_seqButtonPressed(4);
+ assert(buttonHandler_stateMemory.seqRecording);buttonHandler_seqButtonReleased(4);
+ seq_recordActive=1;seq_activeAutomTrack=0;seq_stepIndex[2]=5;
+ memset(&seq_patternSet.seq_subStepPattern[0][2][5],0,sizeof(Step));
+ memset(&seq_patternSet.seq_subStepPattern[4][2][5],0,sizeof(Step));
+ seq_recordAutomation(2,11,73);
+ assert(seq_patternSet.seq_subStepPattern[0][2][5].param1Val==73);
+ assert(!seq_patternSet.seq_subStepPattern[4][2][5].param1Nr);
+ seq_recordActive=0;
+ shift=1;buttonHandler_buttonPressed(BUT_REC);shift=0;
+ assert(menu_activePage==RECORDING_PAGE && buttonHandler_getMode()==SELECT_MODE_PATTERN);
+ unsigned before=changes;buttonHandler_seqButtonPressed(6);buttonHandler_seqButtonReleased(6);
+ assert(changes==before+1 && pending==6 && !stepWrites && menu_activePage==RECORDING_PAGE);
+ for(int context=0;context<3;context++){
+  int page=(int[]){2,FX_MODE_PAGE,PERF_PAGE}[context];
+  reset(page,8);enter(0);menu_activePatternBank=3;led_initPatternSelectLeds();
+  buttonHandler_buttonPressed(BUT_COPY);
+  assert(buttonHandler_getMode()==((int[]){SELECT_MODE_VOICE,SELECT_MODE_FX,SELECT_MODE_PERF})[context]);
+  assert(menu_activePage==page && menuIndex==8 && copyClear_Mode==MODE_COPY_TRACK);
+  assert(!leds[LED_PAGE_UP] && !leds[LED_PAGE_DOWN]);pads(0,0);
+  if(context==2)for(int pad=0;pad<16;pad++)assert(!leds[led_idx2StepLed(pad)]);
+  copyClear_reset();unsigned before=changes;
+  buttonHandler_seqButtonPressed(4);buttonHandler_seqButtonReleased(4);
+  assert(changes==before && stepWrites==(context==0));
+ }
+ /* Held pad -> shifted shortcut -> PERF exit -> Shift up -> pad up. */
+ reset(PERF_PAGE,8);buttonHandler_setMode(SELECT_MODE_PERF);buttonHandler_seqButtonPressed(4);shift=1;
+ buttonHandler_seqButtonPressed(SEQ_PATTERN);buttonHandler_seqButtonReleased(SEQ_PATTERN);
+ assert(buttonHandler_getMode()==SELECT_MODE_PATTERN_LIVE);
+ menu_activePatternBank=3;led_initPatternSelectLeds();
+ buttonHandler_buttonPressed(BUT_COPY);
+ assert(copyClear_Mode==MODE_CLEAR);
+ assert(menu_activePage==PERF_PAGE && menuIndex==8 && buttonHandler_getMode()==SELECT_MODE_PERF);
+ shift=0;buttonHandler_buttonReleased(BUT_SHIFT);buttonHandler_seqButtonReleased(4);
+ assert(!stepWrites && !rolls && !heldSeqButtons && !consumedSeqReleases);
+ assert(!leds[LED_PAGE_UP] && !leds[LED_PAGE_DOWN]);pads(0,0);
+
+ /* Save+Pattern remains the legacy dialog and reports failure/success as before. */
+ for(int fail=0;fail<2;fail++){
+  reset(3,13);enter(0);save=1;buttonHandler_seqButtonPressed(SEQ_PATTERN);save=0;
+  assert(buttonHandler_getMode()==SELECT_MODE_PATTERN && menu_activePage==PATTERN_SAVE_PAGE);
+  buttonHandler_seqButtonReleased(SEQ_PATTERN);saveResult=fail;
+  buttonHandler_seqButtonPressed(6);assert(saves==1 && saveRam==1 && !changes);
+  assert(activeParameters[PAR_PATTERN_MODE]==SKIP_NEXT_KIT_AUTOLOAD);
+  if(fail)assert(errors==1 && menu_activePage==PATTERN_SAVE_PAGE);
+  else assert(!errors && menu_activePage==PATTERN_SAVE_PAGE_OK && menu_selectedPresetNr[SAVE_TYPE_PATTERN]==6);
+ }
+ return 0;
+}
+'''
+with tempfile.TemporaryDirectory(prefix='lxr-pattern-') as d:
+    p=Path(d);(p/'test.c').write_text(c)
+    subprocess.run([os.environ.get('CC','cc'),'-std=c11','-Wall','-Werror=implicit-function-declaration',
+        '-Wno-unused-function','-Wno-unused-variable','-fsanitize=address,undefined','-fno-sanitize-recover=all',
+        '-I'+str(ROOT/'tests/shim'),'-I'+str(ROOT/'Core/Inc'),'-I'+str(ROOT/'Drivers/STM32F7xx_HAL_Driver/Inc'),
+        str(p/'test.c'),'-o',str(p/'test')],check=True)
+    subprocess.run([str(p/'test')],check=True)
+print('Retained pattern controls: real panel/menu/LED bodies passed (stubbed engine/storage/LCD).')
+
+# Real sequencer activation and RAM kit-load bodies, using the established
+# bounded preset/MIDI seams. Covers stopped, quantized-running and same-slot ACK.
+ns = {'__file__': str(ROOT / 'tests/test_perf_reload.py')}
+fixture = read('tests/test_perf_reload.py')
+exec(fixture.split('p=clean(src(')[0], ns)
+stubs = ns['stubs'].replace('static int buttonHandler_getMode(void){return 0;}',
+    'static int buttonHandler_getMode(void){return SELECT_MODE_PATTERN_LIVE;}')
+# The fixture's reload-only MRP=0 assertion is not a selection invariant.
+stubs = stubs.replace('assert(activeParameters[PAR_MORPH]==0);', '')
+stubs = stubs.replace('static void led_initPatternSelectLeds(void){}',
+    'static void led_initPatternSelectLeds(void){selectionPaints++;}')
+h = read('Core/Inc/Parameters.h')
+enum = h[h.index('enum ParamEnums'):]; enum = enum[:enum.index('};') + 2]
+order = clean(read('Core/Src/Parameters.c'))
+order = order[order.index('uint8_t parameterOrder'):]; order = order[:order.index('};') + 2]
+preset = read('Core/Src/Preset/presetManager.c')
+c = ns['pre'] + enum + 'static unsigned selectionPaints;\n' + stubs + order
+c += ''.join(ns['fn'](clean(preset), n) for n in ('interpolate','preset_morph','preset_morph_tick',
+    'preset_sendDrumsetParameters','preset_sendDrumsetParametersImmediate','preset_loadDrumsetRam'))
+c += ''.join(ns['fn'](clean(seq), n) for n in ('seq_copyPatternToBackupBuffer',
+    'seq_copyBackupBufferToPattern','seq_setPendingPatternActive','seq_setNextPattern'))
+c += ns['main'].split('int main(void){')[0]
+c += r'''
+int main(void){
+ for(int running=0;running<2;running++)for(int md=0;md<3;md++)for(int page=0;page<3;page++){
+  setup(running,md,0,1);menu_activePage=(int[]){0,15,PERF_PAGE}[page];
+  seq_patternSet.kitNr[1]=1;selectionPaints=0;
+  int oldPage=menu_activePage;
+  seq_setNextPattern(1);
+  if(running){assert(seq_activePattern==0 && seq_loadPendigFlag && !selectionPaints);seq_setPendingPatternActive();}
+  drain();
+  assert(seq_activePattern==1 && !seq_loadPendigFlag && !midi_process_block);
+  assert(menu_shownPattern==1 && menu_playedPattern==1 && selectionPaints==1);
+  assert(menu_activePage==oldPage && repaints>0);
+  assert(menu_selectedPresetNr[0]==(md==1?1:0));
+  if(md==1)for(int p=0;p<END_OF_SOUND_PARAMETERS;p++)assert(engineValues[p]==activeParameters[p]);
+  seq_setPendingPatternActive();assert(selectionPaints==2 && menu_activePage==oldPage);
+ }
+ return 0;
+}
+'''
+with tempfile.TemporaryDirectory(prefix='lxr-pattern-activation-') as d:
+    p=Path(d);(p/'test.c').write_text(c)
+    subprocess.run([os.environ.get('CC','cc'),'-std=c11','-fsanitize=address,undefined',
+        '-fno-sanitize-recover=all',str(p/'test.c'),'-o',str(p/'test')],check=True)
+    subprocess.run([str(p/'test')],check=True)
+print('Live selection activation: stopped/running/same-slot + actual RAM kit load passed.')

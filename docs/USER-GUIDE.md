@@ -19,6 +19,16 @@ manual rolls available. The sequencer keeps running; release brings the pattern 
 Leaving PERF or Stop also cancels this mute. Existing
 armed roll recording remains available.
 
+## Pattern selection without losing controls
+
+Shift+Pattern or Load+Pattern keeps the current voice, FX or PERF controls visible
+and usable. Entering from any other screen opens PERF bank A. The step buttons select
+patterns and the bar buttons select pattern banks; LEDs show playing/pending selection.
+Voice or PERF exits selection without an extra step-edit toggle or PERF bank change
+when returning to the same control page. Pattern saving remains a separate operation.
+Kit autoload still replaces sound settings, including the displayed FX type. Ordinary
+knob recording still targets the playing pattern, not a pending selection.
+
 ## Master filters
 
 HP and LP are independent, after FX on **St1 only**. Other outputs are unaffected.

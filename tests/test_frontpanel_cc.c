@@ -14,6 +14,7 @@
 #include "frontPanelParser_ui.h"
 #include "menu/menu.h"
 #include "Preset/PresetManager.h"
+#include "buttonHandler.h"
 
 // --- Stubs for what frontPanelParser.c calls ------------------------------
 
@@ -24,6 +25,7 @@ uint8_t menu_selectedPresetNr[NUM_PRESET_LOCATIONS];
 uint8_t paramToModTarget[END_OF_SOUND_PARAMETERS];
 
 static int loadCalls, loadedKit, kitLoadedCalls, kitLoadedNr, kitTimerTouched, repaints;
+static int mode, shownPattern, patternPaints, seqPaints, ledWrites;
 
 void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmediate)
 {
@@ -46,19 +48,19 @@ void preset_touchTimer(PresetTimer type)
 }
 void menu_repaint() { repaints++; }
 
-uint8_t buttonHandler_getMode() { return 0; }
+uint8_t buttonHandler_getMode() { return (uint8_t)mode; }
 void buttonHandler_muteVoice(uint8_t voice, uint8_t isMuted) {}
 void buttonHandler_setRunStopState(uint8_t running) {}
 void frontParser_parseUartData(unsigned char data) {}
 void led_clearAllBlinkLeds() {}
 void led_clearSequencerLeds() {}
-void led_initPatternSelectLeds() {}
+void led_initPatternSelectLeds() { patternPaints++; }
 void led_pulseLed(uint8_t ledNr) {}
-void led_setValue(uint8_t val, uint8_t ledNr) {}
-void led_updateSeqLeds() {}
-void menu_repaintAll() {}
+void led_setValue(uint8_t val, uint8_t ledNr) { ledWrites++; }
+void led_updateSeqLeds() { seqPaints++; }
+void menu_repaintAll() { repaints++; }
 void menu_setNumSamples(uint8_t num) {}
-void menu_setShownPattern(uint8_t patternNr) {}
+void menu_setShownPattern(uint8_t patternNr) { shownPattern = patternNr; }
 
 // --- Helpers -------------------------------------------------------------------
 
@@ -66,6 +68,7 @@ static void reset(void)
 {
 	loadCalls = loadedKit = kitLoadedCalls = kitLoadedNr = kitTimerTouched = repaints = 0;
 	memset(activeParameters, 0, sizeof activeParameters);
+	mode = shownPattern = patternPaints = seqPaints = ledWrites = 0;
 }
 
 // What MidiParser.c does with a received CC: forward its three bytes.
@@ -135,8 +138,36 @@ static void test_other_ccs_set_parameters(void)
 	CHECK_EQ(kitLoadedCalls, 0);
 }
 
+static void test_live_pattern_ack_and_direct_step_led_ownership(void)
+{
+	for (int page = 0; page < NUM_PAGES; page++) {
+		reset();
+		mode = SELECT_MODE_PATTERN_LIVE;
+		menu_activePage = (uint8_t)page;
+		frontPanel_parseData(SEQ_CC);
+		frontPanel_parseData(SEQ_CHANGE_PAT);
+		frontPanel_parseData(37);
+		CHECK_EQ(menu_playedPattern, 37);
+		CHECK_EQ(shownPattern, 37);
+		CHECK_EQ(patternPaints, 1);
+		CHECK(repaints > 0);
+		CHECK_EQ(menu_activePage, page);
+		frontPanel_parseData(LED_CC);
+		frontPanel_parseData(LED_SEQ_BUTTON);
+		frontPanel_parseData(16);
+		CHECK_EQ(ledWrites, 0);
+	}
+	reset();
+	menu_activePage = VOICE1_PAGE;
+	frontPanel_parseData(LED_CC);
+	frontPanel_parseData(LED_SEQ_BUTTON);
+	frontPanel_parseData(16);
+	CHECK_EQ(ledWrites, 1); /* ordinary legacy step display remains enabled */
+}
+
 int main(void)
 {
+	RUN_TEST(test_live_pattern_ack_and_direct_step_led_ownership);
 	RUN_TEST(test_bank_select_loads_the_kit_and_updates_the_menu);
 	RUN_TEST(test_bank_select_accepts_every_kit_slot);
 	RUN_TEST(test_bank_select_ignores_values_past_the_last_kit);

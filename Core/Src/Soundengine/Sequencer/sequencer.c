@@ -818,7 +818,7 @@ IN_ITCM_RAM void seq_setPendingPatternActive()
 
 
 			//if( (buttonHandler_getMode() == SELECT_MODE_PERF) || (buttonHandler_getMode() == SELECT_MODE_PAT_GEN) )
-			if( (buttonHandler_getMode() == SELECT_MODE_PATTERN))
+			if( (buttonHandler_getMode() == SELECT_MODE_PATTERN || buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE))
 			{
 				//only show pattern changes when in select pattern  mode
 
@@ -1474,7 +1474,7 @@ IN_ITCM_RAM void seq_nextStep()
 }
 	//TODO can maybe be combined with pattern change follow above?!
 	//step display follows bars
-	if(activeParameters[PAR_FOLLOW] & FOLLOW_BAR ) {
+	if(buttonHandler_getMode() != SELECT_MODE_PATTERN_LIVE && (activeParameters[PAR_FOLLOW] & FOLLOW_BAR)) {
 
 		//only update if bar changed
 		if(menu_activeBar != seq_stepIndex[menu_getActiveVoice()]/16)
@@ -1515,13 +1515,16 @@ IN_ITCM_RAM void seq_nextStep()
 
 	const uint8_t isOnActivePage = (stepIdx >= menu_activeBar*16) && (stepIdx < (menu_activeBar*16+16));
 
-	if( (shownPattern == playedPattern) && (isOnActivePage)) {
-		//only update chaselight LED when in step edit mode
-		if( (menu_activePage < MENU_MIDI_PAGE) || menu_activePage == PERF_PAGE ||menu_activePage == SEQ_PAGE || menu_activePage == EUKLID_PAGE) {
-			led_setActive_step(stepIdx%16);
+	// Pattern selection owns pads, including the saved temporary chase state.
+	if(buttonHandler_getMode() != SELECT_MODE_PATTERN_LIVE) {
+		if( (shownPattern == playedPattern) && (isOnActivePage)) {
+			//only update chaselight LED when in step edit mode
+			if( (menu_activePage < MENU_MIDI_PAGE) || menu_activePage == PERF_PAGE ||menu_activePage == SEQ_PAGE || menu_activePage == EUKLID_PAGE) {
+				led_setActive_step(stepIdx%16);
+			}
+		} else {
+			led_clearActive_step();
 		}
-	} else {
-		led_clearActive_step();
 	}
 
 	// check mtc, which might stop the sequencer if we haven't seen one in a while

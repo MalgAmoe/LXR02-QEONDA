@@ -76,6 +76,18 @@ void led_clearSelectLeds()
 //--------------------------------------------
 void led_initPatternSelectLeds()
 {
+	if(buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE) {
+		led_clearAllBlinkLeds();
+		led_clearSequencerLeds();
+		if(menu_playedPattern / 16 == menu_activePatternBank)
+			led_setValue(1, led_idx2StepLed(menu_playedPattern % 16));
+		if(menu_getViewedPattern() != menu_playedPattern && menu_getViewedPattern() / 16 == menu_activePatternBank)
+			led_setBlinkLed(led_idx2StepLed(menu_getViewedPattern() % 16), 1);
+		led_setValue((menu_activePatternBank >> 1) & 1, LED_PAGE_DOWN);
+		led_setValue(menu_activePatternBank & 1, LED_PAGE_UP);
+		return;
+	}
+
 	const uint8_t bank = menu_playedPattern/16;
 	const uint8_t ledIdx = led_idx2StepLed(menu_playedPattern); //led_idx2SelectLed(menu_playedPattern);
 
@@ -402,6 +414,7 @@ void led_clearActive_step()
 //-------------------------------------------------
 void led_updateSeqLeds()
 {
+	if(buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE) return;
 	//prevent steps showing up in manual trigger edit mode  (perf)
 	if(buttonHandler_getMode() != SELECT_MODE_PERF)
 	{
@@ -423,6 +436,7 @@ void led_updateSeqLeds()
 //-------------------------------------------------
 void led_updateBarLeds()
 {
+	if(buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE) return;
 	switch(menu_activeBar)
 	{
 		case 0:
