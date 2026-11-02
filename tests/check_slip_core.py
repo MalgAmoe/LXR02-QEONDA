@@ -156,10 +156,10 @@ with tempfile.TemporaryDirectory() as d:
 
 # Independent afde83f oracle: compile its actual scheduling/helper bodies beside
 # current production bodies. Only symbol names change; no baseline model.
-baseline=subprocess.check_output(['git','show','afde83f:Core/Src/Soundengine/Sequencer/sequencer.c'],cwd=Path(__file__).resolve().parents[1],text=True)
+baseline=(Path(__file__).resolve().parent/'fixtures/slip_baseline_afde83f.c').read_text()
 current=s
 s=baseline
-old_helpers=s[s.index('int8_t getShiftValue('):s.index('uint8_t chokeCurrent=0;')]
+old_helpers=s[s.index('int8_t getShiftValue('):s.index('void seq_processFlam(')]
 old_scheduler=function('seq_processFlam')
 s=current
 old=old_helpers+old_scheduler

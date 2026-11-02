@@ -19,8 +19,8 @@ manual rolls available. The sequencer keeps running; release brings the pattern 
 Leaving PERF or Stop also cancels this mute. Existing
 armed roll recording remains available.
 
-**Slip loops:** while running in PERF, hold step buttons **9 / 10 / 11 / 12**
-for a **2 / 4 / 6 / 8-step forward window** across all tracks. The first held
+**Looping:** while running in PERF, hold step buttons **9 / 10 / 11 / 12**
+for a **2 / 4 / 6 / 8-step loop** across all tracks. The first held
 button owns the loop; later held buttons wait in press order. Releasing the
 owner starts the next held window freshly from the real playhead, not from the
 audible loop. Releasing all buttons returns to the continuing real timeline.
