@@ -6,9 +6,6 @@ Custom firmware for the Erica Synths LXR-02 desktop drum machine, based on the
 **LXR QEONDA is unofficial firmware. It is not affiliated with, endorsed by or
 approved by Erica Synths. Installation and use are at your own risk.**
 
-Version stays **0.1** on the instrument. GitHub release tags such as `v0.1-build.12`
-identify individual builds; use the release tag, Git revision and image hash to distinguish them.
-
 ## Features
 
 - Momentary pattern mute: hold button 8 in PERF mode to mute programmed hits while keeping rolls available. Release to bring the pattern back in, still in time.
