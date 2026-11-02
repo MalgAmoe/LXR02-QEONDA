@@ -33,6 +33,21 @@ Pattern saving remains a separate operation.
 Kit autoload still replaces sound settings, including the displayed FX type. Ordinary
 knob recording still targets the playing pattern, not a pending selection.
 
+## Selected-track rotation
+
+In ordinary **Voice mode**, hold **Shift** and turn the data encoder to rotate the
+selected voice track in the shown/edited pattern: positive increments move events
+right, negative increments left, one step per increment, wrapping within the track's
+active length (1–64). Hits, velocity, notes, probability, both automation lanes,
+flam and microshift move together. Steps beyond the active length are untouched.
+
+Other tracks, track length, viewed bar, selected parameter and playback position stay
+unchanged. Playback continues. Rotation is not available in pattern selection/live,
+other modes, dialogs or Copy/Clear; their encoder behavior is unchanged. Encoder
+click is unchanged. Recording continues at the current playhead. Already-issued triggers are not
+retracted; subsequent sequencer reads use the rotated data. Save the pattern normally
+to keep the edit. This does not change the saved pattern format.
+
 ## Master filters
 
 HP and LP are independent, after FX on **St1 only**. Other outputs are unaffected.

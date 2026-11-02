@@ -2834,6 +2834,14 @@ void menu_parseEncoder(int8_t inc, uint8_t button)
 	}
 	else if(inc!=0) {
 		//============================= handle encoder change ==============================
+        if(buttonHandler_getMode() == SELECT_MODE_VOICE &&
+           menu_activePage <= VOICE7_PAGE && copyClear_Mode == MODE_NONE &&
+           buttonHandler_getShift()) {
+            seq_rotateTrack(menu_activeVoice, inc);
+            led_updateSeqLeds();
+            menu_repaintAll();
+            return;
+        }
 		if(copyClear_isClearModeActive()) {
 			//encoder selects clear target
 			uint8_t target = copyClear_getClearTarget();

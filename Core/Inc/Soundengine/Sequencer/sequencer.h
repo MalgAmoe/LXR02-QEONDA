@@ -186,6 +186,7 @@ void seq_setShuffle(float shuffle);
 //------------------------------------------------------------------------------
 void seq_setTrackLength(uint8_t trackNr, uint8_t length);
 //------------------------------------------------------------------------------
+void seq_rotateTrack(uint8_t track, int8_t increment);
 uint8_t seq_getTrackLength(uint8_t trackNr);
 //------------------------------------------------------------------------------
 float seq_getDeltaTShuffleDelay(uint16_t bpm);

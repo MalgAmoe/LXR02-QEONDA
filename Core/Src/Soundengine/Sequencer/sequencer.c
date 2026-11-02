@@ -305,6 +305,45 @@ void seq_setTrackLength(uint8_t trackNr, uint8_t length)
 }
 
 //------------------------------------------------------------------------------
+// Rotate stored events, not the playhead. At most 64 event moves while masked.
+void seq_rotateTrack(uint8_t track, int8_t increment)
+{
+    const uint8_t pattern = frontParser_shownPattern;
+    if(track >= NUM_TRACKS || pattern >= NUM_PATTERN || increment == 0) return;
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    const uint8_t length = seq_patternSet.length[pattern][track];
+    if(length >= 1 && length <= NUM_STEPS)
+    {
+        int16_t right = increment % length;
+        if(right < 0) right += length;
+        if(right != 0)
+        {
+            uint8_t moved = 0;
+            for(uint8_t start = 0; moved < length; ++start)
+            {
+                uint8_t dst = start;
+                Step saved = seq_patternSet.seq_subStepPattern[pattern][track][start];
+                StepTiming timing = seq_patternSet.seq_stepTiming[pattern][track][start];
+                uint8_t hit = (seq_patternSet.seq_mainSteps[start/16][pattern][track] >> (start%16)) & 1;
+                do
+                {
+                    int16_t source = dst - right;
+                    uint8_t src = source < 0 ? source + length : source;
+                    seq_patternSet.seq_subStepPattern[pattern][track][dst] = src == start ? saved : seq_patternSet.seq_subStepPattern[pattern][track][src];
+                    seq_patternSet.seq_stepTiming[pattern][track][dst] = src == start ? timing : seq_patternSet.seq_stepTiming[pattern][track][src];
+                    uint8_t active = src == start ? hit : (seq_patternSet.seq_mainSteps[src/16][pattern][track] >> (src%16)) & 1;
+                    uint16_t *word = &seq_patternSet.seq_mainSteps[dst/16][pattern][track];
+                    *word = (*word & ~(1u << (dst%16))) | (active << (dst%16));
+                    dst = src;
+                    ++moved;
+                } while(dst != start);
+            }
+        }
+    }
+    __set_PRIMASK(mask);
+}
+
 uint8_t seq_getTrackLength(uint8_t trackNr)
 {
 	// **PATROT this was changed from getting seq_activePattern to shown (or edited) pattern

@@ -234,3 +234,7 @@ add_test(NAME test_change_all
 add_test(NAME test_pattern_select
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pattern_select.py)
+
+add_test(NAME test_track_rotation
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_track_rotation.py)
