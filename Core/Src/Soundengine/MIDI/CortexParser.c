@@ -776,6 +776,7 @@ static void frontParser_handleSeqCC()
 	case FRONT_SEQ_PROB:
 
 		seq_patternSet.seq_subStepPattern[frontParser_shownPattern][frontParser_activeTrack][frontParser_activeStep].prob = (cortex_midiMsg.data2);
+        seq_slipStepWritten(frontParser_shownPattern, frontParser_activeTrack, frontParser_activeStep);
 		break;
 
 	case FRONT_SEQ_EUKLID_LENGTH:

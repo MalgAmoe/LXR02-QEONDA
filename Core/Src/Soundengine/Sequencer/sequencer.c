@@ -182,6 +182,7 @@ static void seq_sendProgChg(const uint8_t ptn);
 static uint8_t seq_intIsStepActive(uint8_t voice, uint8_t stepNr, uint8_t patternNr);
 static uint8_t seq_intIsMainStepActive(uint8_t voice, uint8_t mainStepNr, uint8_t pattern);
 static void seq_resetNote(Step *step);
+static void seq_slipSync(void);
 static void seq_setStepIndexToStart();
 
 
@@ -543,13 +544,19 @@ static void seq_parseAutomationNodes(uint8_t track, Step* stepData)
 	autoNode_updateValue(&seq_automationNodes[track][1], stepData->param2Val);
 }
 //------------------------------------------------------------------------------
+static void seq_triggerVoiceSource(uint8_t voiceNr, uint8_t vol, uint8_t note, int8_t step);
 void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
+{
+ if(voiceNr >= NUM_TRACKS) return;
+ seq_triggerVoiceSource(voiceNr, vol, note, seq_stepIndex[voiceNr]);
+}
+static void seq_triggerVoiceSource(uint8_t voiceNr, uint8_t vol, uint8_t note, int8_t step)
 {
 	uint8_t midiChan; // which midi channel to send a note on
 	uint8_t midiNote; // which midi note to send
 
 	if(voiceNr > 6) return;
-	const int8_t step = seq_stepIndex[voiceNr];
+
 
 
 #if USE_PATTERN_EDIT_BUFFER
@@ -656,6 +663,8 @@ IN_ITCM_RAM void seq_setPendingPatternActive()
   midi_process_block = 1;
 	if((seq_activePattern != seq_pendingPattern) || seq_loadPendigFlag)
 	{
+    seq_slipClear();
+    seq_slipSync();
     seq_setStepIndexToStart();
 		// if this setting is active and the user has manually changed patterns,
 		// reset the bar counter. uncommenting the below will cause it to only reset
@@ -894,6 +903,183 @@ uint8_t seq_getLongestTrack()
 	return trackId;
 }
 
+/* Slip core: public requests publish only bounded small state under saved PRIMASK.
+ * Capture/history belongs exclusively to sequencer evaluation context. */
+typedef struct {
+ uint8_t seen, active, probability, pass;
+} SeqSlipRole;
+typedef struct { SeqSlipRole role[3]; } SeqSlipOccurrence;
+static SeqSlipOccurrence seq_slipReal[NUM_TRACKS][3];
+static SeqSlipOccurrence seq_slipLoop[NUM_TRACKS][8];
+static uint8_t seq_slipOrigin[NUM_TRACKS], seq_slipQueue[4];
+static uint8_t seq_slipCount, seq_slipPhase, seq_slipLength;
+static volatile uint8_t seq_slipRequested[4], seq_slipRequestedCount;
+static volatile uint32_t seq_slipEpoch, seq_slipOwnerEpoch;
+static uint32_t seq_slipAppliedEpoch, seq_slipAppliedOwner;
+static volatile uint64_t seq_slipDirty[NUM_TRACKS];
+
+static uint8_t seq_slipTrackLength(uint8_t track)
+{
+ uint8_t n = seq_patternSet.length[seq_activePattern][track];
+ return n ? n : 16;
+}
+static uint8_t seq_slipSlot(StepPosition role)
+{
+ return (seq_slipPhase + seq_slipLength +
+         (role == STEP_PREV ? -1 : role == STEP_NEXT ? 1 : 0)) % seq_slipLength;
+}
+static uint8_t seq_slipSource(uint8_t track, StepPosition role)
+{
+ uint8_t n = seq_slipTrackLength(track);
+ if(seq_slipCount) return (seq_slipOrigin[track] + seq_slipSlot(role)) % n;
+ return (seq_stepIndex[track] + n +
+         (role == STEP_PREV ? -1 : role == STEP_NEXT ? 1 : 0)) % n;
+}
+void seq_slipClear(void)
+{
+ uint32_t mask = __get_PRIMASK();
+ __disable_irq();
+ seq_slipRequestedCount = 0;
+ ++seq_slipEpoch;
+ ++seq_slipOwnerEpoch;
+ __set_PRIMASK(mask);
+}
+uint8_t seq_slipOwner(void)
+{
+ uint32_t mask = __get_PRIMASK();
+ __disable_irq();
+ uint8_t owner = seq_slipRequestedCount ? seq_slipRequested[0] + 8 : 0xff;
+ __set_PRIMASK(mask);
+ return owner;
+}
+static void seq_slipCapture(void)
+{
+ seq_slipLength = 2 * (seq_slipQueue[0] + 1);
+ seq_slipPhase = 0;
+ memset(seq_slipLoop, 0, sizeof(seq_slipLoop));
+ for(uint8_t t=0; t<NUM_TRACKS; ++t) {
+  seq_slipOrigin[t] = seq_stepIndex[t] < 0 ? 0 : seq_stepIndex[t];
+  seq_slipLoop[t][0] = seq_slipReal[t][STEP_CURRENT];
+  seq_slipLoop[t][1] = seq_slipReal[t][STEP_NEXT];
+ }
+}
+void seq_slipPress(uint8_t pad)
+{
+ if(pad > 3) return;
+ uint32_t mask = __get_PRIMASK();
+ __disable_irq();
+ if(seq_running) {
+  uint8_t i;
+  for(i=0; i<seq_slipRequestedCount; ++i) if(seq_slipRequested[i] == pad) break;
+  if(i == seq_slipRequestedCount && i < 4) {
+   seq_slipRequested[seq_slipRequestedCount++] = pad;
+   if(i == 0) ++seq_slipOwnerEpoch;
+  }
+ }
+ __set_PRIMASK(mask);
+}
+void seq_slipRelease(uint8_t pad)
+{
+ uint32_t mask = __get_PRIMASK();
+ __disable_irq();
+ for(uint8_t i=0; i<seq_slipRequestedCount; ++i) if(seq_slipRequested[i] == pad) {
+  for(uint8_t j=i+1; j<seq_slipRequestedCount; ++j) seq_slipRequested[j-1] = seq_slipRequested[j];
+  --seq_slipRequestedCount;
+  if(i == 0) ++seq_slipOwnerEpoch;
+  break;
+ }
+ __set_PRIMASK(mask);
+}
+static void seq_slipSync(void)
+{
+ uint32_t mask = __get_PRIMASK();
+ __disable_irq();
+ uint32_t epoch = seq_slipEpoch, owner = seq_slipOwnerEpoch;
+ seq_slipCount = seq_slipRequestedCount;
+ for(uint8_t i=0; i<seq_slipCount; ++i) seq_slipQueue[i] = seq_slipRequested[i];
+ __set_PRIMASK(mask);
+ if(epoch != seq_slipAppliedEpoch) {
+  memset(seq_slipReal, 0, sizeof(seq_slipReal));
+  seq_slipAppliedEpoch = epoch;
+ }
+ if(owner != seq_slipAppliedOwner) {
+  if(seq_slipCount) seq_slipCapture();
+  seq_slipAppliedOwner = owner;
+ }
+}
+static void seq_slipBoundary(void)
+{
+ if(seq_slipCount && seq_stepIndex[0] >= 0) seq_slipPhase = (seq_slipPhase + 1) % seq_slipLength;
+ for(uint8_t t=0; t<NUM_TRACKS; ++t) {
+  seq_slipReal[t][STEP_PREV] = seq_slipReal[t][STEP_CURRENT];
+  seq_slipReal[t][STEP_CURRENT] = seq_slipReal[t][STEP_NEXT];
+  memset(&seq_slipReal[t][STEP_NEXT], 0, sizeof(SeqSlipOccurrence));
+ }
+}
+static uint8_t seq_slipGate(uint8_t track, uint8_t step, StepPosition role,
+                           SeqSlipOccurrence *occurrence)
+{
+ SeqSlipRole *h = &occurrence->role[role];
+ uint8_t active = !!seq_intIsMainStepActive(track, step, seq_activePattern);
+ uint8_t probability = seq_patternSet.seq_subStepPattern[seq_activePattern][track][step].prob;
+ /* Live recording/erase/protocol writes invalidate this role at next evaluation.
+  * Check the actual source for every alias, including short-track repeats. */
+ if(!h->seen || h->active != active || h->probability != probability) {
+  uint8_t random = role == STEP_PREV ? seq_rndValue[track].prev :
+                   role == STEP_NEXT ? seq_rndValue[track].next : seq_rndValue[track].current;
+  *h = (SeqSlipRole){1, active, probability, active && random <= probability};
+ }
+ return h->pass;
+}
+void seq_slipStepWritten(uint8_t pattern, uint8_t track, uint8_t step)
+{
+ if(pattern != seq_activePattern || track >= NUM_TRACKS || step >= 64) return;
+ uint32_t mask = __get_PRIMASK();
+ __disable_irq();
+ seq_slipDirty[track] |= (uint64_t)1 << step;
+ __set_PRIMASK(mask);
+}
+static void seq_slipInvalidate(uint8_t track, uint8_t step)
+{
+ uint8_t n = seq_slipTrackLength(track);
+ for(uint8_t r=0; r<3; ++r) {
+  uint8_t source = (seq_stepIndex[track] + n + (r == STEP_PREV ? -1 : r == STEP_NEXT ? 1 : 0)) % n;
+  if(source == step) memset(&seq_slipReal[track][r], 0, sizeof(SeqSlipOccurrence));
+ }
+ if(seq_slipCount) for(uint8_t slot=0; slot<seq_slipLength; ++slot)
+  if((seq_slipOrigin[track] + slot) % n == step)
+   memset(&seq_slipLoop[track][slot], 0, sizeof(SeqSlipOccurrence));
+}
+static void seq_slipApplyWrites(void)
+{
+ for(uint8_t t=0; t<NUM_TRACKS; ++t) {
+  uint32_t mask = __get_PRIMASK();
+  __disable_irq();
+  uint64_t dirty = seq_slipDirty[t];
+  seq_slipDirty[t] = 0;
+  __set_PRIMASK(mask);
+  while(dirty) {
+   uint8_t step = __builtin_ctzll(dirty);
+   dirty &= dirty - 1;
+   seq_slipInvalidate(t, step);
+  }
+ }
+}
+static uint8_t seq_slipObserve(uint8_t track, uint8_t step, StepPosition role)
+{
+ uint8_t real = (seq_stepIndex[track] + seq_slipTrackLength(track) +
+                (role == STEP_PREV ? -1 : role == STEP_NEXT ? 1 : 0)) % seq_slipTrackLength(track);
+ uint8_t pass = seq_slipGate(track, real, role, &seq_slipReal[track][role]);
+ if(!seq_slipCount) return pass;
+ return seq_slipGate(track, step, role, &seq_slipLoop[track][seq_slipSlot(role)]);
+}
+static void seq_triggerSequenced(uint8_t track, uint8_t vol, uint8_t note, uint8_t source)
+{
+ if(seq_slipCount) seq_triggerVoiceSource(track, vol, note, source);
+ else seq_triggerVoice(track, vol, note);
+}
+/* End slip core. */
+
 int8_t getShiftValue(uint8_t in)
 {
 	switch(in)
@@ -1039,32 +1225,10 @@ uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition
 
 	return pattern;
 #else
-		uint8_t currentStepActive = seq_intIsMainStepActive(track,step,seq_activePattern);
-		if(!currentStepActive) return 0;
-
-
-		const  uint8_t flamCurrentStep = seq_patternSet.seq_stepTiming[seq_activePattern][track][step].flam;
-		int8_t shiftCurrentStep = getShiftValue(seq_patternSet.seq_stepTiming[seq_activePattern][track][step].shift);
-
-		uint32_t stepPattern;
-
-		//check probability
-		switch(stepPos)
-		{
-		case STEP_PREV:
-			if( (seq_rndValue[track].prev) > seq_patternSet.seq_subStepPattern[seq_activePattern][track][step].prob ) currentStepActive = 0;
-			break;
-
-		default:
-		case STEP_CURRENT:
-			if( (seq_rndValue[track].current) > seq_patternSet.seq_subStepPattern[seq_activePattern][track][step].prob ) currentStepActive = 0;
-			break;
-
-		case STEP_NEXT:
-			if( (seq_rndValue[track].next) > seq_patternSet.seq_subStepPattern[seq_activePattern][track][step].prob ) currentStepActive = 0;
-			break;
-		}
-		if(!currentStepActive) return 0;
+        if(!seq_slipObserve(track, step, stepPos)) return 0;
+        const uint8_t flamCurrentStep = seq_patternSet.seq_stepTiming[seq_activePattern][track][step].flam;
+        int8_t shiftCurrentStep = getShiftValue(seq_patternSet.seq_stepTiming[seq_activePattern][track][step].shift);
+        uint32_t stepPattern;
 
 		//add step pattern for active steps
 		stepPattern = flamIdxToPattern(flamCurrentStep);
@@ -1142,6 +1306,8 @@ uint8_t chokeCurrent=0;
 uint8_t chokeNext=0;
 void seq_processFlam(uint8_t idx)
 {
+ seq_slipSync();
+ seq_slipApplyWrites();
 	if(!seq_running)
 		return;
 
@@ -1159,10 +1325,9 @@ void seq_processFlam(uint8_t idx)
 		{
 			//pattern takes main step active and probability into account
 #if 1
-			const uint8_t length = seq_patternSet.length[seq_activePattern][track];
-			const uint8_t currentStep = seq_stepIndex[track];
-			const uint8_t nextStep = (seq_stepIndex[track]+1)%length;
-			const uint8_t prevStep = seq_stepIndex[track] != 0 ? seq_stepIndex[track] - 1 : length-1;
+			const uint8_t currentStep = seq_slipSource(track, STEP_CURRENT);
+            const uint8_t nextStep = seq_slipSource(track, STEP_NEXT);
+            const uint8_t prevStep = seq_slipSource(track, STEP_PREV);
 
 			/* we have 3 possible step sources:
 			 * - flammed AND positive shifted notes from the previous step
@@ -1184,7 +1349,7 @@ void seq_processFlam(uint8_t idx)
 				chokeNext = 1;
 				const uint8_t vol = seq_patternSet.seq_subStepPattern[seq_activePattern][track][nextStep].volume&STEP_VOLUME_MASK;
 				const uint8_t note = seq_patternSet.seq_subStepPattern[seq_activePattern][track][nextStep].note;
-				seq_triggerVoice(track,vol,note);
+				seq_triggerSequenced(track,vol,note,nextStep);
 			}
 			else if((currentActive) && (chokeNext == 0) && !seq_performanceBreak)
 			{
@@ -1192,14 +1357,14 @@ void seq_processFlam(uint8_t idx)
 				chokeCurrent = 1;
 				const uint8_t vol = seq_patternSet.seq_subStepPattern[seq_activePattern][track][currentStep].volume&STEP_VOLUME_MASK;
 				const uint8_t note = seq_patternSet.seq_subStepPattern[seq_activePattern][track][currentStep].note;
-				seq_triggerVoice(track,vol,note);
+				seq_triggerSequenced(track,vol,note,currentStep);
 			}
 			else if((prevActive) && (chokeNext == 0) && (chokeCurrent == 0) && !seq_performanceBreak)
 			{
 				lastWasNoteOn[track] = 1;
 				const uint8_t vol = seq_patternSet.seq_subStepPattern[seq_activePattern][track][prevStep].volume&STEP_VOLUME_MASK;
 				const uint8_t note = seq_patternSet.seq_subStepPattern[seq_activePattern][track][prevStep].note;
-				seq_triggerVoice(track,vol,note);
+				seq_triggerSequenced(track,vol,note,prevStep);
 			}
 			else if (lastWasNoteOn[track])
 			{
@@ -1306,6 +1471,8 @@ void seq_MidiSyncQueue(uint8_t cnt)
 
 IN_ITCM_RAM void seq_nextStep()
 {
+ seq_slipSync();
+ seq_slipApplyWrites();
   midi_process_block = 1;
 	led_blinkHandler(); //blink leds in sync to tempo/seq
 
@@ -1399,6 +1566,7 @@ IN_ITCM_RAM void seq_nextStep()
 	//trigger_clockTick(seq_stepIndex[0]+1);
 //	trigger_clockTick(1, 0);
 
+	seq_slipBoundary();
 	int i;
 	for(i=0;i<NUM_TRACKS;i++)
 	{
@@ -1861,6 +2029,7 @@ void seq_toggleMainStep(uint8_t voice, uint8_t stepNr, uint8_t patternNr)
 	const uint8_t bar 	= stepNr / 16;
 	const uint8_t shift = stepNr - bar*16;
 	seq_patternSet.seq_mainSteps[bar][patternNr][voice] ^= (1<<shift);
+    seq_slipStepWritten(patternNr, voice, stepNr);
 }
 //------------------------------------------------------------------------------
 void seq_setMainStep(uint8_t patternNr, uint8_t voice, uint8_t stepNr, uint8_t onOff)
@@ -1876,6 +2045,7 @@ void seq_setMainStep(uint8_t patternNr, uint8_t voice, uint8_t stepNr, uint8_t o
 	{
 		seq_patternSet.seq_mainSteps[bar][patternNr][voice] &= ~(1<<shift);
 	}
+    seq_slipStepWritten(patternNr, voice, stepNr);
 }
 //------------------------------------------------------------------------------
 // this appears unused
@@ -1897,6 +2067,7 @@ uint8_t seq_isRunning() {
 //------------------------------------------------------------------------------
 void seq_resetPosition()
 {
+ seq_slipClear();
     sync_cancelPending();
 	led_resetBlinkTimer();
 
@@ -1952,6 +2123,7 @@ void seq_setMidiRunning(uint8_t run)
     uint32_t mask = __get_PRIMASK();
     __disable_irq();
     seq_running = run;
+    if(!run) seq_slipClear();
     __set_PRIMASK(mask);
 }
 
@@ -1976,6 +2148,7 @@ void seq_midiClockAnchor(void)
 void seq_setRunning(uint8_t isRunning)
 {
 	if(!isRunning) seq_setPerformanceBreak(0);
+    seq_slipClear();
     uint32_t mask = __get_PRIMASK();
     __disable_irq();
 	seq_running = isRunning;

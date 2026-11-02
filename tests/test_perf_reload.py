@@ -43,6 +43,9 @@ pre=r'''
 #define pgm_read_word(p) (*(p))
 '''
 stubs=r'''
+static unsigned slipCancels;
+static void seq_slipClear(void) {slipCancels++;}
+static void seq_slipSync(void) {}
 typedef struct {uint8_t status,data1,data2;} MidiMsg;
 typedef struct {uint8_t bytes[8];} Step; /* opaque copy fixture; not real Step layout */
 static struct {Step seq_subStepPattern[2][7][64]; uint8_t seq_stepTiming[2][7][64]; uint16_t seq_mainSteps[4][2][7]; uint8_t length[2][7],shuffle[2],kitNr[2];} seq_patternSet;
@@ -110,6 +113,13 @@ static void setup(int run,int md,int busy,int linked){
 }
 static void show(const char*s){printf("%s MRP=%d source=%d engine=%d probe=%d display=%d/%d selected=%d linked=%d mode=%d pending=%d sweep=%d/%d notes=%d calls=%d nonzeroTicks=%d oldSourceTicks=%d loads=%d lastKit=%d\n",s,activeParameters[PAR_MORPH],activeParameters[PAR_VOICE_DECIMATION_ALL],engineSrt,engineProbe,displayMrp,displaySrt,menu_selectedPresetNr[0],seq_patternSet.kitNr[0],activeParameters[PAR_PATTERN_MODE],seq_loadPendigFlag,morph_state,morph_index,notes,calls,nonzeroTicks,oldSourceTicks,loads,lastKit);}
 int main(void){
+ setup(1,0,0,0);unsigned cancels=slipCancels;
+ seq_setNextPattern(1);assert(slipCancels==cancels); /* queue is not activation */
+ seq_setPendingPatternActive();assert(slipCancels==cancels+1);
+ seq_setPendingPatternActive();assert(slipCancels==cancels+1); /* unchanged epoch */
+ seq_setNextPattern(1);assert(slipCancels==cancels+1);
+ seq_setPendingPatternActive();assert(slipCancels==cancels+2); /* same-slot reload */
+ setup(1,0,0,0);cancels=slipCancels;press_reload();assert(slipCancels==cancels+1);
  /* Actual ordinary RAM-load body must retain all session controls. */
  for(int immediate=0;immediate<2;immediate++){
   setup(0,0,0,0);activeParameters[PAR_MORPH]=0;

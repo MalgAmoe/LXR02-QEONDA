@@ -29,6 +29,7 @@
 #define LED_BLINK_TIME ((uint16_t)(LED_BLINK_TIME_MS*4))
 
 volatile uint8_t led_currentStepLed = 0;
+static uint8_t led_stepChaseActive;
 
 /** we have to distinguish between 2 led modes.
 there are the normal set value functions, and there are temporary operations.
@@ -315,8 +316,14 @@ void led_toggle(uint8_t ledNr)
 	return;	
 };
 //--------------------------------------------------------------------------
+static uint8_t led_isSlipOwner(uint8_t ledNr)
+{
+ uint8_t owner = seq_slipOwner();
+ return buttonHandler_getMode() == SELECT_MODE_PERF && owner != 0xff && ledNr == led_idx2StepLed(owner);
+}
 void led_toggleTemp(uint8_t ledNr)
 {
+ if(led_isSlipOwner(ledNr)) { led_setValueTemp(1, ledNr); return; }
 	uint8_t arrayPos = ledNr/8;
 	uint8_t bitPos = ledNr&0x7;
 	uint8_t oldValue = (uint8_t)(dout_outputData[arrayPos]&(1<<bitPos));
@@ -399,10 +406,11 @@ void led_setActive_step(uint8_t stepNr)
 	ledNr = led_idx2StepLed(stepNr);
 	//ledNr = (uint8_t)(stepNr+LED_STEP1);
 		
-	if(led_currentStepLed != ledNr)
+	if(!led_stepChaseActive || led_currentStepLed != ledNr)
 	{
 		led_reset(led_currentStepLed);
 		led_currentStepLed = ledNr;
+        led_stepChaseActive = 1;
 		led_toggleTemp(ledNr);
 	}		
 };
@@ -410,6 +418,7 @@ void led_setActive_step(uint8_t stepNr)
 void led_clearActive_step()
 {
 	led_reset(led_currentStepLed);
+    led_stepChaseActive = 0;
 };
 //-------------------------------------------------
 void led_updateSeqLeds()
@@ -659,6 +668,18 @@ void led_blinkHandler()
 //-------------------------------------------------------
 void led_tickHandler()
 {
+ /* Overlay only: never replace the stored pattern/roll LED or real chase. */
+ static uint8_t previous = 0xff;
+ uint8_t owner = buttonHandler_getMode() == SELECT_MODE_PERF ? seq_slipOwner() : 0xff;
+ if(previous != owner) {
+  if(previous != 0xff) {
+   uint8_t old = led_idx2StepLed(previous);
+   led_reset(old);
+   if(led_stepChaseActive && buttonHandler_getMode() == SELECT_MODE_PERF && old == led_currentStepLed) led_toggleTemp(old);
+  }
+  previous = owner;
+ }
+ if(owner != 0xff) led_setValueTemp(1, led_idx2StepLed(owner));
 	for(int i=0;i<NUM_OF_PULSABLE_LEDS;i++)
 	{
 		//if the led is active at the moment
@@ -680,6 +701,7 @@ void led_tickHandler()
 //--------------------------------------------------------------------------
 void led_reset(uint8_t ledNr)
 {
+ if(led_isSlipOwner(ledNr)) { led_setValueTemp(1, ledNr); return; }
 	uint8_t arrayPos = ledNr/8;
 	uint8_t bitPos = ledNr&0x7;
 		

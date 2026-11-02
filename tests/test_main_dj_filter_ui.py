@@ -10,7 +10,7 @@ ROOT=Path(__file__).resolve().parents[1]
 ns={'__file__':str(ROOT/'tests/test_output_order.py')}
 fixture=(ROOT/'tests/test_output_order.py').read_text().split("c += ''.join(fn(menu, n)")[0]
 exec(fixture,ns)
-c=ns['c']; menu=ns['menu']; clean=ns['clean']
+c=ns['c']+'\nstatic void seq_slipClear(void) {}\n'; menu=ns['menu']; clean=ns['clean']
 def fn(name, source=menu):
  s=clean(source); m=re.search(r'^(?:static )?(?:void|uint8_t) '+name+r'\([^;\n]*\)\s*\{',s,re.M); assert m,name
  p=s.index('{',m.start())+1;d=1

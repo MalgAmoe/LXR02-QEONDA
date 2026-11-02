@@ -53,6 +53,8 @@ c += r'''
 /* Real Page layout and menuPages metadata above, including PERF A/B/C. */
 static uint8_t menuIndex, editModeActive, menu_activePage, menu_activeVoice, menu_activeBar;
 static uint8_t menu_playedPattern,menu_shownPattern,menu_activePatternBank,menu_muteModeActive;
+static uint8_t performanceSlipButtons;
+
 static uint8_t menu_selectedPresetNr[6], copyClear_Mode, preset_fileCleanupWarning;
 static uint8_t activeParameters[NUM_PARAMS],seq_activePattern,performanceBreakButtonHeld;
 static uint8_t lastActiveSubPage, buttonHandler_mutedVoices,buttonHandler_selectedStep;
@@ -62,7 +64,7 @@ static uint32_t systick_ticks=123,sucessTimer;
 static struct {unsigned selectButtonMode:4; unsigned seqRunning:1,seqRecording:1,seqErasing:1;} buttonHandler_stateMemory;
 static struct {uint8_t fxType;} fxBus;
 static struct {uint8_t category;char nameBuffer[20];} menu_saveOptions;
-typedef struct {Step seq_subStepPattern[64][7][64];uint16_t seq_mainSteps[4][64][7];uint8_t shuffle[64];} PatternSet;
+typedef struct {Step seq_subStepPattern[64][7][64];uint16_t seq_mainSteps[4][64][7];uint8_t shuffle[64],length[64][7];} PatternSet;
 static PatternSet seq_patternSet;
 static int8_t buttonHandler_armedAutomationStep=NO_STEP_SELECTED;
 static uint16_t buttonHandler_originalParameter[2];
@@ -153,11 +155,24 @@ static void led_updateBarLeds(void);
 static void led_updateSeqLeds(void);
 static void led_initPatternSelectLeds(void);
 '''
+# Actual slip publication/capture paired with the real panel dispatcher.
+c += r'''
+
+static uint8_t seq_running=1;
+static struct {uint8_t prev,current,next;} seq_rndValue[7];
+static uint32_t primask;
+static uint32_t __get_PRIMASK(void){return primask;}
+#undef __disable_irq
+static void __disable_irq(void){primask=1;}
+static void __set_PRIMASK(uint32_t m){primask=m;}
+'''
+slip = read('Core/Src/Soundengine/Sequencer/sequencer.c')
+c += slip[slip.index('/* Slip core:'):slip.index('static void seq_triggerSequenced')]
 # All listed functions are actual firmware bodies, not reimplemented event logic.
 for s, names in ((panel, ('buttonHandler_setMode','buttonHandler_showMuteLEDs','buttonHandler_muteVoice')),
                  (led, ('led_idx2StepLed','led_initPatternSelectLeds','led_updateBarLeds','led_updateSeqLeds')),
                  (menu, ('menu_getSubPage','menu_resetActiveParameter','menu_endParameterEdit','menu_switchSubPage','menu_switchPage')),
-                 (panel, ('buttonHandler_restoreOriginal','buttonHandler_armTimerActionStep','buttonHandler_disarmTimerActionStep','buttonHandler_TimerActionOccured','buttonHandler_setTimeraction','buttonHandler_tick','buttonHandler_handleModeButtons','buttonHandler_handleSelectButton','buttonHandler_enterLivePatternSelect','buttonHandler_selectLivePattern','buttonHandler_seqButtonPressed','buttonHandler_releasePerformanceBreak','buttonHandler_seqButtonReleased','buttonHandler_selectButtonPressed','buttonHandler_partButtonReleased','buttonHandler_voiceButtonPressed','buttonHandler_buttonPressed','buttonHandler_buttonReleased'))):
+                 (panel, ('buttonHandler_restoreOriginal','buttonHandler_armTimerActionStep','buttonHandler_disarmTimerActionStep','buttonHandler_TimerActionOccured','buttonHandler_setTimeraction','buttonHandler_tick','buttonHandler_handleModeButtons','buttonHandler_handleSelectButton','buttonHandler_enterLivePatternSelect','buttonHandler_selectLivePattern','buttonHandler_seqButtonPressed','buttonHandler_releasePerformanceBreak','buttonHandler_releaseSlip','buttonHandler_seqButtonReleased','buttonHandler_selectButtonPressed','buttonHandler_partButtonReleased','buttonHandler_voiceButtonPressed','buttonHandler_buttonPressed','buttonHandler_buttonReleased'))):
     for name in names: c += fn(s, name)
 # Actual bar-follow and direct chase segment, without unrelated clock/MIDI work.
 seq = read('Core/Src/Soundengine/Sequencer/sequencer.c')
@@ -193,6 +208,35 @@ static void pads(unsigned p,int blink){
  for(unsigned i=0;i<16;i++)assert(blinks[led_idx2StepLed(i)]==(blink && i==p));
 }
 int main(void){
+ reset(PERF_PAGE,0); buttonHandler_setMode(SELECT_MODE_PERF);
+ for(unsigned t=0;t<7;t++) {seq_patternSet.length[0][t]=t+1;seq_stepIndex[t]=0;}
+ seq_slipSync();
+ /* Plain physical press, FIFO waiters and fresh real-origin handover. */
+ buttonHandler_seqButtonPressed(8);seq_slipSync();assert(seq_slipOwner()==8 && seq_slipLength==2);
+ buttonHandler_seqButtonPressed(11);buttonHandler_seqButtonPressed(9);seq_slipSync();
+ assert(seq_slipCount==3 && seq_slipQueue[1]==3);
+ seq_stepIndex[6]=4; shift=1;buttonHandler_seqButtonReleased(8);seq_slipSync();
+ assert(seq_slipOwner()==11 && seq_slipOrigin[6]==4 && seq_slipLength==8);
+ /* Cancellation consumes releases across modifiers and mode changes. */
+ buttonHandler_setMode(SELECT_MODE_VOICE);seq_slipSync();assert(!seq_slipCount);
+ shift=load=save=copy=1;buttonHandler_seqButtonReleased(11);buttonHandler_seqButtonReleased(9);
+ assert(!performanceSlipButtons && !stepWrites);
+ shift=load=save=copy=0;buttonHandler_setMode(SELECT_MODE_PERF);
+ seq_running=0;buttonHandler_seqButtonPressed(8);seq_slipSync();assert(!seq_slipCount);
+ buttonHandler_seqButtonReleased(8);seq_running=1;
+ /* Modifier and copy/clear routes may not acquire slip ownership. */
+ for(unsigned modifier=0;modifier<5;modifier++) {
+  buttonHandler_setMode(SELECT_MODE_PERF);
+  shift=modifier==0;load=modifier==1;save=modifier==2;copy=modifier==3;
+  copyClear_Mode=modifier==4?MODE_CLEAR:MODE_NONE;
+  buttonHandler_seqButtonPressed(9);seq_slipSync();assert(!seq_slipCount);
+  buttonHandler_seqButtonReleased(9);
+ }
+ shift=load=save=copy=0;copyClear_Mode=MODE_NONE;buttonHandler_setMode(SELECT_MODE_PERF);
+ buttonHandler_seqButtonPressed(10);seq_slipSync();assert(seq_slipLength==6);
+ seq_slipClear();seq_slipSync();assert(!seq_slipCount);
+ /* A waiter held across cancellation never restarts without another press. */
+ buttonHandler_seqButtonReleased(10);seq_slipSync();assert(!seq_slipCount);
  assert(SELECT_MODE_PATTERN_LIVE==12 && SELECT_MODE_PATTERN==8);
  for(int route=0;route<2;route++)for(int page=0;page<NUM_PAGES;page++)for(int index=0;index<64;index++){
   reset(page,index);chase=1;rolls=127;breakHeld=1;

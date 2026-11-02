@@ -23,6 +23,9 @@ api=header[header.index('typedef struct'):header.index('#endif')]
 clock=source('Core/Src/Soundengine/Sequencer/clockSync.c')
 clock=re.sub(r'^#include[^\n]*','',clock,flags=re.M)
 c=r'''
+void seq_slipClear(void);
+static void seq_slipSync(void);
+static void seq_slipBoundary(void);
 #include <stdint.h>
 #include <assert.h>
 #include <stdio.h>
@@ -82,7 +85,7 @@ static float seq_getDeltaTShuffleDelay(uint16_t bpm){(void)bpm;return delayTicks
  * only publish a request, not reenter transport or mask the heavy work. */
 void seq_setExtSync(uint8_t);
 static void seq_nextStep(void){
- assert(!primask);if(!seq_running)return;steps++;seq_masterStepCnt++;
+ assert(!primask);if(!seq_running)return;seq_slipSync();seq_slipBoundary();steps++;seq_masterStepCnt++;
  if(sourceIrq){unsigned mode=sourceIrq-1;sourceIrq=0;seq_setExtSync(mode);}
  if(heavyIrq){heavyIrq=0;kitWork=1;resetPort.IDR=0;EXTI9_5_IRQHandler();kitWork=0;assert(seq_running);}
 }
@@ -109,6 +112,14 @@ static void seq_processFlam(uint8_t c){(void)c;}
 '''+api
 # Clock source has public declarations; these extracted definitions use the same linkage.
 c=c.replace('static void trigger_ResetPosition(void);','void trigger_ResetPosition(void);').replace('static void seq_setRunning(uint8_t);','void seq_setRunning(uint8_t);').replace('static void seq_resetPosition(void);','void seq_resetPosition(void);').replace('static void EXTI9_5_IRQHandler(void);','void EXTI9_5_IRQHandler(void);')
+c += r'''
+typedef enum {STEP_PREV, STEP_CURRENT, STEP_NEXT} StepPosition;
+static uint8_t seq_activePattern;
+static struct {uint8_t prev,current,next;} seq_rndValue[7];
+static struct {uint8_t length[1][7];struct {uint8_t prob;} seq_subStepPattern[1][7][64];} seq_patternSet;
+static uint8_t seq_intIsMainStepActive(uint8_t t,uint8_t s,uint8_t p){(void)t;(void)s;(void)p;return 1;}
+'''
+c += seq[seq.index('/* Slip core:'):seq.index('static void seq_triggerSequenced')]
 c+=extract(source('Core/Src/Soundengine/MIDI/MidiParser.c'),'midiParser_checkMtc')
 c+=clock
 c+='static SyncPulseHistory trigger_history;\n'
@@ -154,6 +165,17 @@ static void init(uint32_t now,uint8_t mode){
 static void pulse(uint32_t now){systick_ticks=now;if(seq_getExtSync()==2)seq_sync();else EXTI4_IRQHandler();}
 static void poll(uint32_t now){systick_ticks=now;seq_tick();}
 int main(void){
+ /* Real clock/transport bodies publish cancellation to the real slip core.
+  * Step/DSP endpoints remain bounded adapters, not whole-sequencer simulation. */
+ init(0,2);seq_stepIndex[0]=0;
+ seq_slipPress(0);seq_slipPress(3);seq_slipSync();assert(seq_slipCount==2);
+ pulse(0);assert(seq_slipPhase==1); /* real MIDI clock boundary adapter */
+ received(MIDI_STOP);seq_slipSync();assert(!seq_slipCount && seq_slipOwner()==0xff);
+ received(MIDI_CONTINUE);pulse(100);seq_slipSync();assert(!seq_slipCount);
+ seq_slipRelease(0);seq_slipRelease(3);seq_slipPress(1);seq_slipSync();assert(seq_slipLength==4);
+ received(MIDI_START);seq_slipSync();assert(!seq_slipCount);
+ seq_slipPress(2);seq_slipSync();seq_resetPosition();seq_slipSync();assert(!seq_slipCount);
+ seq_slipPress(0);seq_slipSync();seq_setRunning(0);seq_slipSync();assert(!seq_slipCount);
  const uint32_t bases[]={0,16777217,67108865,268435457,0xffffff00u};
  for(unsigned b=0;b<sizeof(bases)/sizeof(*bases);b++)for(unsigned mode=1;mode<=2;mode++){
   init(bases[b],mode);trigger_prescalerClockInput=PRE_24_PPQ_IN;

@@ -45,7 +45,9 @@ static void voiceControl_noteOn(uint8_t v,uint8_t n,uint8_t vol){(void)v;(void)n
 static void seq_sendMidiNoteOn(uint8_t c,uint8_t n,uint8_t v){(void)c;notes++;velocity=v;lastNote=n;}
 static uint8_t seq_intIsMainStepActive(uint8_t v,uint8_t s,uint8_t p){assert(v<7&&s<64&&p==0);return 1;}
 '''
-c+=extract(header,'seq_automationTarget')+extract(seq,'seq_triggerVoice')+extract(seq,'seq_recordAutomation')
+c+=extract(header,'seq_automationTarget')
+if 'static void seq_triggerVoiceSource(' in seq: c+=extract(seq,'seq_triggerVoiceSource')
+c+=extract(seq,'seq_triggerVoice')+extract(seq,'seq_recordAutomation')
 c+=r'''
 int main(void){
  for(unsigned v=0;v<7;v++)seq_stepIndex[v]=-1;

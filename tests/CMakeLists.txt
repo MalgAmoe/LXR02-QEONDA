@@ -238,3 +238,7 @@ add_test(NAME test_pattern_select
 add_test(NAME test_track_rotation
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_track_rotation.py)
+
+add_test(NAME test_slip_core COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}" ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_slip_core.py)
+
+add_test(NAME test_slip_led COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}" ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_slip_led.py)

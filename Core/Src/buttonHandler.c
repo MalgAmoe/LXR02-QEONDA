@@ -34,6 +34,7 @@
 static uint8_t lastActiveSubPage = 0;
 // Own the eventual release even if modifiers/mode change while held.
 static uint8_t performanceBreakButtonHeld = 0;
+static uint8_t performanceSlipButtons;
 // Physical pad ownership survives modifier and mode changes.
 static uint16_t heldSeqButtons, consumedSeqReleases;
 /** selected step for sequencer mode*/
@@ -953,6 +954,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 
 		case SEQ_RELOAD:
 		{
+            seq_slipClear();
 			//if in LAST STEP mode, reload pattern to reset pattern and track lengths
 		//	uint8_t mode = buttonHandler_getMode();
 
@@ -1297,7 +1299,12 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			break;
 
 
-		case SELECT_MODE_PERF: //--- buttons 1-7 roll; button 8 holds a pattern break
+		case SELECT_MODE_PERF: // 1-7 roll, 8 break, 9-12 slip
+            if(seqButtonPressed >= 8 && seqButtonPressed < 12 && !buttonHandler_getCopy() && copyClear_Mode == MODE_NONE) {
+                performanceSlipButtons |= 1u << (seqButtonPressed - 8);
+                seq_slipPress(seqButtonPressed - 8);
+                break;
+            }
 			if(seqButtonPressed == 7) {
 				performanceBreakButtonHeld = 1;
 				seq_setPerformanceBreak(1);
@@ -1385,9 +1392,21 @@ static uint8_t buttonHandler_releasePerformanceBreak(uint8_t button)
 	return 1;
 }
 
+static uint8_t buttonHandler_releaseSlip(uint8_t button)
+{
+ if(button < 8 || button >= 12 || !(performanceSlipButtons & (1u << (button-8)))) return 0;
+ performanceSlipButtons &= ~(1u << (button-8));
+ seq_slipRelease(button-8);
+ return 1;
+}
+
 static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 {
 	heldSeqButtons &= (uint16_t)~(1u << seqButtonPressed);
+    if(buttonHandler_releaseSlip(seqButtonPressed)) {
+        consumedSeqReleases &= (uint16_t)~(1u << seqButtonPressed);
+        return;
+    }
 	if(buttonHandler_releasePerformanceBreak(seqButtonPressed)) {
 		consumedSeqReleases &= (uint16_t)~(1u << seqButtonPressed);
 		return;
@@ -2320,6 +2339,7 @@ uint8_t buttonHandler_getMode() {
 //--------------------------------------------------------------
 void buttonHandler_setMode(uint8_t mode)
 {
+    if(mode != SELECT_MODE_PERF) seq_slipClear();
 	if(mode != SELECT_MODE_PERF && performanceBreakButtonHeld)
 		seq_setPerformanceBreak(0);
 	buttonHandler_stateMemory.selectButtonMode = mode;

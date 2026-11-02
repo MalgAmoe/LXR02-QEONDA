@@ -316,4 +316,15 @@ uint8_t seq_getStepIndex(uint8_t trackNr);
 PatternSet* get_seq_patternSet_p(void);
 uint8_t seq_getActiveAutomationTrack(void);
 
+
+/* Slip-loop pad requests, 0..3 = 2/4/6/8 steps. IRQ-safe publication. */
+void seq_slipPress(uint8_t pad);
+void seq_slipRelease(uint8_t pad);
+void seq_slipClear(void);
+
+/* Notify activity/probability writes, including writes restored before evaluation. */
+void seq_slipStepWritten(uint8_t pattern, uint8_t track, uint8_t step);
+
+uint8_t seq_slipOwner(void); /* physical pad index, or 0xff */
+
 #endif /* SEQUENCER_H_ */

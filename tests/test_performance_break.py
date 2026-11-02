@@ -54,7 +54,19 @@ static uint8_t seq_isRunning(void) {return seq_running;}
 static void seq_addNote(uint8_t t,uint8_t v,uint8_t n)
 {(void)t;(void)v;(void)n;recordings++;}
 '''
-for name in ('seq_setPerformanceBreak','seq_processFlam','seq_setRoll'):
+c += r'''
+/* Slip inactive adapter: this fixture isolates break gating, not slip mapping. */
+static void seq_slipSync(void) {}
+static void seq_slipApplyWrites(void) {}
+static void seq_slipClear(void) {}
+static uint8_t seq_slipSource(uint8_t t,uint8_t r) {
+ unsigned n=seq_patternSet.length[0][t];
+ return (seq_stepIndex[t]+n+(r==STEP_PREV?-1:r==STEP_NEXT?1:0))%n;
+}
+static void seq_triggerSequenced(uint8_t t,uint8_t v,uint8_t n,uint8_t s)
+{(void)s;seq_triggerVoice(t,v,n);}
+'''
+for name in ('seq_setPerformanceBreak' ,'seq_processFlam','seq_setRoll'):
     c += function(seq,name)
 for name in ('buttonHandler_releasePerformanceBreak','buttonHandler_setMode'):
     c += function(panel,name)
@@ -116,7 +128,7 @@ assert release.index('buttonHandler_releasePerformanceBreak') < release.index('b
 assert release.index('buttonHandler_releasePerformanceBreak') < release.index('buttonHandler_getLoad')
 assert 'if(!isRunning) seq_setPerformanceBreak(0);' in function(seq,'seq_setRunning')
 preset=(root/'Core/Src/Preset/presetManager.c').read_text()
-assert 'FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)\n{\n\tseq_setPerformanceBreak(0);' in preset
+assert 'seq_setPerformanceBreak(0);' in preset[preset.index('FRESULT preset_loadProject('):][:200]
 # The shared trigger and repeating roll code must not suppress manual or incoming notes.
 assert 'seq_performanceBreak' not in seq[seq.index('void seq_triggerVoice('):seq.index('void seq_triggerVoice(')+3500]
 assert 'seq_performanceBreak' not in function(seq,'seq_setRoll')

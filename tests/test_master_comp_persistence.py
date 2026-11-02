@@ -19,6 +19,7 @@ helpers=s[s.index('static FRESULT preset_writeResult'):s.index('unsigned char pr
 const=s[s.index('#define PRESET_LEGACY_GLOBAL_BYTES'):s.index('static void preset_applyMasterComp')]
 pre=r'''
 #include <stdint.h>
+static void seq_slipClear(void) {}
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>

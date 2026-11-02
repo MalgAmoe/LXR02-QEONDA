@@ -9,6 +9,7 @@ approved by Erica Synths. Installation and use are at your own risk.**
 ## Features
 
 - Momentary pattern mute: hold button 8 in PERF mode to mute programmed hits while keeping rolls available. Release to bring the pattern back in, still in time.
+- Momentary slip loops: hold PERF buttons 9–12 for 2/4/6/8-step forward windows while the real playhead keeps advancing. First-held FIFO ownership; see the [control guide](docs/USER-GUIDE.md).
 - Shift+Reload morph/filter reset and PERF refresh.
 - Local MIX OUT order St1 → FX → St2 → L1 → R1 → L2 → R2; stored/MIDI values unchanged.
 - Independent St1 master HP/LP and project master compressor with automatic makeup and ratio1 bypass.

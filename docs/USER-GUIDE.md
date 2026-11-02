@@ -19,6 +19,23 @@ manual rolls available. The sequencer keeps running; release brings the pattern 
 Leaving PERF or Stop also cancels this mute. Existing
 armed roll recording remains available.
 
+**Slip loops:** while running in PERF, hold step buttons **9 / 10 / 11 / 12**
+for a **2 / 4 / 6 / 8-step forward window** across all tracks. The first held
+button owns the loop; later held buttons wait in press order. Releasing the
+owner starts the next held window freshly from the real playhead, not from the
+audible loop. Releasing all buttons returns to the continuing real timeline.
+The owner LED stays lit; the chase still shows the real playhead.
+
+Only plain presses acquire a loop: Shift, Load, Save and Copy/clear retain their
+existing functions. Releases remain owned even if modifiers or mode change.
+Stopped presses do nothing. Stop, transport reset, leaving PERF, project load,
+and actual pattern activation/reload cancel the owner and all waiters; press
+again to start another loop. Merely queuing a pattern change does not cancel.
+Switches preserve the current sub-step phase and do not inject a hit or reset
+sounds/FX. Sound controls, armed recording and erase remain live; recording
+still writes the real timeline, and changed/erased steps are reflected by future
+loop evaluations. This is a momentary playback effect, not saved pattern data.
+
 ## Pattern selection without losing controls
 
 Shift+Pattern or Load+Pattern keeps the current voice, FX or PERF controls visible

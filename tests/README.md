@@ -75,3 +75,21 @@ intentional failure: `LXR_BASE_REV=50b74f2 python3 tests/test_cleanup_fatfs.py`.
 Disk-operation counts are not SD latency measurements. Existing fake-filesystem
 failure tests include nested cleanup; their failed-close model releases the
 handle, unlike some possible actual FatFs failures.
+
+## Slip-loop regression coverage
+
+`test_slip_core` compiles the actual slip core, shift/flam helpers, scheduling
+body, main-step writer and armed note writer at O0/O3 with ASan/UBSan. It covers
+an extracted `afde83f` disabled-slip differential (38,880 pulses per optimization),
+production automation-source fetch with stubbed endpoints, exact FIFO handover/
+release event traces, FIFO, short-track aliases, prepress gates, live mutation/erase, phase-preserving
+switches and all four windows × seven unequal tracks × 15 shifts × six flams.
+`test_pattern_select` now pairs the real panel dispatcher with the real slip core
+for plain/modifier presses, owned releases, stopped no-op and mode cancellation.
+`test_external_clock` pairs real clock/transport bodies with the slip core (step
+and audio endpoints remain adapters). `test_perf_reload` checks cancellation
+callbacks on actual activation/reload, not queued selection. `test_slip_led`
+executes real owner-overlay/chase bodies with fake output bytes.
+
+These are extracted-source tests, not a whole-device scheduler. No physical scan,
+DIN/USB interoperability, worst-case cycles, runtime stack or listening claim.
