@@ -93,3 +93,8 @@ executes real owner-overlay/chase bodies with fake output bytes.
 
 These are extracted-source tests, not a whole-device scheduler. No physical scan,
 DIN/USB interoperability, worst-case cycles, runtime stack or listening claim.
+
+The slip differential test uses `fixtures/slip_baseline_afde83f.c`, an extracted,
+frozen pre-slip implementation with full source revision attribution. It does not
+require Git history, so shallow CI checkouts and source archives run the same
+comparison. Do not refresh this oracle merely to match changed production code.
