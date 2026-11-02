@@ -36,6 +36,16 @@ sounds/FX. Sound controls, armed recording and erase remain live; recording
 still writes the real timeline, and changed/erased steps are reflected by future
 loop evaluations. This is a momentary playback effect, not saved pattern data.
 
+### Combining loops and momentary pattern mute
+
+Keep a loop button held and hold **8** to silence its programmed hits without
+cancelling the loop. Release **8** to hear the loop again; release the loop button
+to return to the advancing real timeline. Manual rolls remain available.
+
+The loop reads existing pattern steps rather than recording audio. Probability
+outcomes are remembered as encountered and reused on repeats; recording or erase
+can still change referenced steps. Sound controls remain live.
+
 ## Pattern selection without losing controls
 
 Shift+Pattern or Load+Pattern keeps the current voice, FX or PERF controls visible

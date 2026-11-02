@@ -6,10 +6,15 @@ Custom firmware for the Erica Synths LXR-02 desktop drum machine, based on the
 **LXR QEONDA is unofficial firmware. It is not affiliated with, endorsed by or
 approved by Erica Synths. Installation and use are at your own risk.**
 
+**Version 0.1 is feature-frozen.** Further work focuses on documentation and fixes
+for confirmed bugs rather than new features.
+
 ## Features
 
 - Momentary pattern mute: hold button 8 in PERF mode to mute programmed hits while keeping rolls available. Release to bring the pattern back in, still in time.
 - Momentary slip loops: hold PERF buttons 9–12 for 2/4/6/8-step forward windows while the real playhead keeps advancing. First-held FIFO ownership; see the [control guide](docs/USER-GUIDE.md).
+- Selected-track rotation: Shift + data encoder in Voice mode rotates steps with their locks and timing.
+- Pattern selection retains voice, FX or PERF sound controls while pads select patterns.
 - Shift+Reload morph/filter reset and PERF refresh.
 - Local MIX OUT order St1 → FX → St2 → L1 → R1 → L2 → R2; stored/MIDI values unchanged.
 - Independent St1 master HP/LP and project master compressor with automatic makeup and ratio1 bypass.
