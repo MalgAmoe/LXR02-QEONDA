@@ -1,7 +1,11 @@
 # LXR QEONDA 0.1
 
-Custom firmware for the LXR V2 desktop drum machine (STM32F765 Cortex-M7): six voices,
-step sequencing, FX, DIN/USB MIDI and SD-card storage, based on Erica Synths’ upstream firmware.
+Custom firmware for the Erica Synths LXR-02 desktop drum machine, based on the
+[open-source LXR V2 firmware by Erica Synths](https://github.com/erica-synths/lxr-desktop-app).
+
+**LXR QEONDA is unofficial firmware. It is not affiliated with, endorsed by or
+approved by Erica Synths. Installation and use are at your own risk.**
+
 Version stays **0.1** on the instrument. GitHub release tags such as `v0.1-build.12`
 identify individual builds; use the release tag, Git revision and image hash to distinguish them.
 
