@@ -1,7 +1,9 @@
 # Engineering notes for contributors and coding agents
 
 Read [AGENTS.md](../AGENTS.md) first. This document is a map of the application and
-its design constraints, not a replacement for inspecting current source. Controls
+its current implementation, not a specification that future designs must preserve.
+Use it to locate dependencies and make intentional changes, then update it as the
+architecture evolves. Controls
 belong in [USER-GUIDE](USER-GUIDE.md), tooling in [BUILD](BUILD.md), test mechanics
 and coverage in [tests/README](../tests/README.md). Do not infer hardware acceptance
 from an example, old test result or successful build.
@@ -39,7 +41,8 @@ scheduling interval, **not spare CPU time**. Inspect configuration and generated
 commands rather than assuming these values for another build.
 
 Audio DMA callbacks and rendering share buffer/request state. The renderer uses
-request-generation ownership checks; preserve them when changing scheduling.
+request-generation ownership checks so completion of an older render does not
+erase a newer DMA request.
 Audio/sequence work can run in interrupt context, and foreground operations also
 service audio. A call that looks like an ordinary function can therefore touch
 state shared with MIDI, timers and DMA. Trace the actual configuration and caller
@@ -52,34 +55,36 @@ A free-space total across all regions cannot justify overflowing one region.
 Avoid large automatic arrays on interrupt stacks. Static fit is not stack-margin
 measurement; report exact build identity for any memory/timing evidence.
 
-## 3. Sound changes are behavior changes
+## 3. Signal flow and DSP details
 
-Preserve synthesis order, types, endpoints and smoothing unless the change explicitly
-calls for a different sound. In particular:
+The mixer renders the drum, snare, cymbal and shared hi-hat engines, routes their
+samples to the outputs/FX bus, then calls `FxBus_process`. Start with
+`mixer_calcNextSampleBlock` to follow the actual processing order and active compile
+options. Gain and saturation exist at multiple stages; moving a nonlinear stage
+across an envelope or gain changes the sound, even if maximum levels are unchanged.
 
-- MOD decay127 is intentional infinite hold. Slope127 endpoint, wavetable wrapping
-  and integer PWM phase corrections are intentional too.
-- FM relies on the accepted ARM `vcvt.u32.f32` negative-to-zero behavior. Do not add
-  per-sample negative clamps simply because native host casts behave differently.
-  Run `tests/check_fm_arm_codegen.py` after relevant compiler/flag/context changes;
-  label host conversion substitutes as models.
-- Transient signed-shift code has target-specific history; a sanitizer finding alone
-  does not justify a sound change. Establish actual target behavior first.
-- Snare musical clipping occurs after combined tone/noise/transient, before envelope,
-  velocity, voice volume and fader. MIX drive is downstream. Preserve exceptional-range
-  final conversion bounds and intentional mono-compressor saturation.
-- Fader targets are cached per rendered voice block; smoothing remains per sample.
-  Caching a target is not permission to update the smoother only once per block.
-- FX dry/wet accepts0–100 and clamps at ingress, without rescaling to127 or adding
-  checks in the audio loop.
+Useful implementation details when extending this path:
 
-The master filters and compressor act on **St1 only**, after FX; hardware/code output
-names are not intuitive (`output2` / `dma_buffer2` / SPI2 correspond to St1). Verify
-routing through the mixer and DMA path, not variable names alone. Independent HP/LP
-are session state. Compressor settings are project state. Accepted makeup is
-`R - 4R/(R + 12)` dB, with R the predicted reduction at0dBFS—not the ratio. It is
-neither half compensation nor a +12dB cap. Ratio1 settles to true bypass. Neither
-filters nor compressor constitute a guaranteed limiter.
+- Fader targets are cached per rendered voice block; smoothing still runs per sample.
+  Changing smoothing rate changes the time response unless its coefficients change too.
+- Snare clipping follows combined tone/noise/transient and precedes envelope,
+  velocity, voice volume and fader. MIX drive is a later stage.
+- MOD decay 127 represents infinite hold rather than simply a longer finite decay.
+  Endpoint values can have special semantics; check the receiving DSP function.
+- FX dry/wet uses 0–100, clamped at ingress. MIDI's 7-bit container does not mean
+  every parameter uses a 0–127 scale.
+- FM float-to-unsigned conversion currently relies on ARM `vcvt.u32.f32`
+  negative-to-zero behavior. `tests/check_fm_arm_codegen.py` checks that dependency.
+  Host conversion models are not proof of identical target behavior, and compiler
+  changes require rechecking the generated instructions.
+
+Master filters and compressor process **St1 only**, after FX. The code/hardware
+names are not intuitive: `output2` / `dma_buffer2` / SPI2 correspond to St1.
+Independent HP/LP settings are session state; compressor settings are project state.
+The current makeup calculation is `R - 4R/(R + 12)` dB, where R is predicted gain
+reduction at 0 dBFS, not the ratio. Ratio 1 settles to bypass. These stages are not
+a guaranteed output limiter. Treat equations, placement and persistence as separate
+integration concerns when developing a different processor.
 
 ## 4. Controls, sequencing and Looping
 
@@ -89,15 +94,15 @@ shortcuts on intended mode **and** page/context, not just what appears on screen
 
 Modifiers have existing priority and side effects. Inspect both press and release:
 a pad pressed under one mode/modifier may be released under another. Copy can enter
-track-copy mode; Shift+Copy can arm Clear or live erase. Do not hijack those paths
-by adding a late switch case. Encoder clicks and turns are separate actions.
+track-copy mode; Shift+Copy can arm Clear or live erase. A new shortcut may need handling before those side effects occur, rather than
+only a new case in the final dispatcher. Encoder clicks and turns are separate actions.
 
-Play and bar buttons use immediate press/stable20ms-release rearming. Page Down
+Play and bar buttons use immediate press/stable 20ms-release rearming. Page Down
 is a separate GPIO, not another index into the shift-register array. The encoder
 has its own decoding; simulated menu increments do not test physical detents.
 
-Step data comprises the complete `Step`, `StepTiming` and main hit bits. Rotation
-must move all three together and preserve inactive tail data. Seven track lengths
+Step data comprises the complete `Step`, `StepTiming` and main hit bits. A whole-step editing operation needs to account for all three, as well as data
+outside the current active length. Seven track lengths
 may differ. Never assume the displayed bar defines the playback length.
 
 **Looping is an audible read mapping, not an audio recording or transport rewind.**
@@ -105,19 +110,19 @@ Real step indices continue for synchronization, pattern/song progression, record
 and LED chase. Source indices used for programmed hits can differ during a loop.
 Manual rolls and momentary pattern mute remain separate controls.
 
-Microshift/flams read previous/current/next source events across24 pulses per step.
+Microshift/flams read previous/current/next source events across 24 pulses per step.
 Negative shift can sound an event before its nominal boundary. Probability histories
 are gated by existing active/mute/erase logic, so one play/skip bit for an entire
 step occurrence is not generally sufficient. Current Looping caches role outcomes
 and observes the real timeline separately. Source indices alone do not identify
 occurrences on short tracks. Writes/erase must invalidate cached aliases correctly.
 
-Use explicit audible source selection for looped automation; do not globally remap
-manual/MIDI triggers. Preserve ordinary no-loop behavior, including existing quirks,
-unless a separate fix is agreed. Entry/release/handover preserve substep phase, do
-not synthesize hits and do not forcibly reset voices or effects. Ordinary note-offs
-continue. Recording and erase remain on the real timeline: do not silently lock
-them out or redirect them to the loop. See the user guide for ownership/cancellation.
+Looped automation uses explicit audible source selection; manual/MIDI triggers
+follow their own paths. Entry, release and handover retain substep phase without
+synthetic hits or forced voice/FX resets. Recording and erase use the real timeline.
+These distinctions matter when adding alternative playback transformations: decide
+which timeline owns each operation and test automation, note-offs and edits together.
+See the user guide for current Looping controls and cancellation behavior.
 
 ## 5. Parameter layers and persistence
 
@@ -137,18 +142,22 @@ not directly from disk; compressor settings remain. Pattern activation and linke
 behavior still follow their own timing. Do not describe this as an atomic all-state
 reset or assume it discards every project change.
 
-Continuous playback during project load/save is required. Preserve staged-save
-safeguards and the **Finalizing** UI phase. Do not add automatic transport stops,
-blanket reload-required lockouts or a transactional loader redesign as incidental
-hardening. Partial loads and temporary-file ownership require explicit policies;
-the current implementation must not be advertised as full rollback.
+Project loads/saves currently coexist with playback. Storage work therefore interacts
+with audio servicing and interrupt latency, not only file correctness. The save path
+uses staged writes; the load path does not provide full rollback on partial failure.
+Read `Core/Src/Preset/SafeStorage.c`, `SlotFiles.c` and `presetManager.c` together
+before changing ownership, commit order or error recovery.
 
-Do not introduce arbitrary readiness/transfer deadlines. Persistent BUSY can wait
-indefinitely under current policy. Preserve explicit terminal card errors,
-initialization retry, explicit-unmount stale-handle invalidation and same-mount
-failed-close ownership. Never replay a stale handle onto a replacement card.
-File layouts and optional extensions affect older firmware: validate defaults,
-truncation and round trips, and explain compatibility changes before editing formats.
+The card layer distinguishes terminal errors from BUSY; persistent BUSY can wait
+indefinitely. Explicit unmount invalidates stale handles, and failed-close ownership
+is retained on the same mount. Recovery changes need to distinguish a retry on the
+same card from access to a replacement card. Define failure and recovery behavior
+alongside the successful path rather than assuming file operations are atomic.
+
+File layouts and optional extensions affect older firmware: investigate field widths,
+ordering, defaults and readers as well as writers. Test existing files, missing or
+truncated optional data and save/load round trips. Document any format migration or
+loss of backward compatibility.
 
 ## 6. MIDI boundaries
 
@@ -156,32 +165,75 @@ DIN and USB parsing/queues are separate; output serialization protects message
 boundaries. Keep static buffers and explicit ownership. SysEx owns an output until
 end/interruption or route removal; realtime may interleave. There is no inactivity
 expiry; an abandoned stream can block competing traffic until routing is reset.
-Do not add a timeout without an agreed behavioral change.
+Changing stream expiry would change how incomplete transfers and competing
+messages are handled; test those cases together.
 
 Received Start resets, Stop preserves position, Continue resumes on incoming clock.
 Front-panel transport is distinct. Song Position Pointer is not implemented; do not
 claim general DAW-seek compliance. USB MIDI consumption can be starved during project
-storage operations even while DIN/audio service continues. Preserve that documented
-limitation rather than claiming storage tests establish universal USB timing.
+storage operations even while DIN/audio service continues. This is an existing limitation, not a required behavior. Improvements need tests
+that exercise USB input during storage work, not only ordinary idle reception.
 
-## 7. Evidence that is useful to a maintainer
+## 7. Extending the instrument
 
-For a change, report:
+These are investigation checklists, not mandatory changes to every layer. Find a
+similar existing feature and trace its actual call sites first.
 
-1. User-visible goal and behavior intentionally preserved/changed.
-2. Touched input, DSP, shared-state and persistence paths.
-3. Exact test commands/results, including extracted code versus modeled endpoints.
-4. Source revision, compiler/flags, image hash and relevant static memory deltas.
-5. Hardware checks actually performed, and remaining timing/listening/storage gaps.
+### Add a sound parameter
 
-Use independent expected results, representative musical cases and regression tests
-that fail for the reported defect. Do not weaken an assertion simply because gain
-or output changed; derive the new expectation from the approved behavior. Test
-modifier release order, mute/roll interactions and save/load when relevant—not only
-isolated helper math. Fresh CMake configuration matters when registering tests.
+1. Define its meaning, units, range, default and any special endpoint values.
+2. Locate parameter IDs and menu entries in `Core/Inc/Parameters.h` and
+   `Core/Inc/menu/menuPages.h`. Trace panel dispatch through `frontPanelParser.c`
+   and the MIDI/Cortex parser code to the destination engine.
+3. Decide where the value lives: editable kit state, temporary performance state,
+   per-step automation or project settings. Check array bounds, initialization,
+   morph interpolation and shared-engine handling where applicable.
+4. Implement conversion/smoothing at the appropriate rate. Check extreme inputs and
+   rapid movement as well as static values.
+5. If MIDI exposure is wanted, allocate and document an address explicitly; internal
+   IDs are not a ready-made external mapping. Check channel and value-range handling.
+6. If persistent, update serialization/defaults and round-trip tests. Test the menu,
+   dispatch and DSP together so a visible value actually controls the intended sound.
 
-Regression fixtures may retain old implementation fragments to detect unintended
-changes. Their role is an oracle, never the firmware source selected for release.
-Keep attribution and a full revision identity; no runtime `git show` dependency.
-The manual release workflow builds its selected source SHA. A test pass, image copy,
-installation and musical acceptance are different evidence levels.
+### Add a gesture or sequencer feature
+
+- Follow input acquisition -> button/encoder decoding -> mode handling -> state
+  update -> LED/display feedback. Input sources are not all electrically identical.
+- Decide press/release ownership, modifier priority, mode exit and transport behavior.
+- Distinguish display position, real transport position and audible event source.
+  Account for different track lengths, early/late events and pattern transitions.
+- Test stopped and running operation, overlapping gestures, automation, manual hits
+  and any recording/editing interaction introduced by the feature.
+
+### Add an effect or change rendering
+
+- Locate routing and buffer format first. Establish channel layout, numerical range,
+  gain staging, sample rate and where state resets.
+- Budget per-sample/block work, persistent state and stack temporaries. Inspect the
+  linked memory regions and generated ARM code, then measure on hardware when timing
+  is material. A short source expression can compile into expensive operations.
+- Test bypass/activation transitions, silence, sustained signals, rapid changes and
+  high-level input. Listen as well as measure: clicks, aliasing and altered dynamics
+  may not appear in simple bounds tests.
+
+### Extend saved state
+
+- Trace defaults -> in-memory owner -> serializer -> loader -> runtime application.
+  Writing a value is insufficient if loading never reapplies it to the engine.
+- Decide kit/pattern/project/session lifetime explicitly. Check reload and project
+  switching, compatibility with existing files and interruption/error handling.
+- Test with representative stored material as well as freshly created defaults.
+
+## 8. Verification reference
+
+Use [BUILD](BUILD.md) for reproducible commands and [tests/README](../tests/README.md)
+for harness details. Tests include native code, extracted production functions and
+hardware substitutes; understand which boundaries each test actually covers.
+Regression fixtures are test oracles, not firmware sources selected for release.
+Keep their provenance and avoid runtime dependencies on historical Git objects.
+
+For a useful handoff, describe the intended result, affected paths and tests run.
+Include source/compiler/image identity for hardware results and relevant memory
+changes for firmware work. Explicitly separate host checks, static fit, measured
+timing and listening tests. Test modifier order, clock/storage traffic and save/load
+when relevant rather than treating isolated DSP math as full-system coverage.
