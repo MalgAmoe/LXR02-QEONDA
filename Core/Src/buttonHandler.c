@@ -1756,7 +1756,9 @@ void buttonHandler_buttonPressed(uint8_t buttonNr) {
 					 */
 					//for(int i=0;i<NUM_TRACKS;i++)
 					//{
+						seq_patternIsUsed(seq_activePattern);
 						seq_patternSet.seq_mainSteps[menu_activeBar][seq_activePattern][menu_getActiveVoice()] = seq_patternSet.seq_mainSteps[menu_activeBar - 1][seq_activePattern][menu_getActiveVoice()];
+						seq_patternIsUsed(seq_activePattern);
 					//}
 				}
 

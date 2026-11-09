@@ -36,7 +36,7 @@ static uint8_t buttonHandler_originalValue[2],buttonHandler_resetLock1,buttonHan
 c += stubs + fn(clean(src('Core/Src/menu/menu.c')), 'menu_resetPerformanceFilter') + order
 c += ''.join(fn(p, n) for n in ('interpolate', 'preset_morph', 'preset_morph_tick',
     'preset_sendDrumsetParameters', 'preset_sendDrumsetParametersImmediate', 'preset_loadDrumsetRam'))
-c += ''.join(fn(s, n) for n in ('seq_copyPatternToBackupBuffer', 'seq_copyBackupBufferToPattern',
+c += ''.join(fn(s, n) for n in ('seq_patternIsUsed','seq_copyPatternToBackupBuffer', 'seq_copyBackupBufferToPattern',
     'seq_setPendingPatternActive', 'seq_setNextPattern'))
 c += 'static void press_reload(void) ' + b
 # Whole production DSP TUs: private render/cache/target state is observable here.

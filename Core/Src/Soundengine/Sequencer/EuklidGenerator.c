@@ -220,6 +220,7 @@ void euklid_rotatePattern(uint8_t length, uint8_t amount)
 //-----------------------------------------------------
 void euklid_transferPattern(uint8_t trackNr, uint8_t patternNr)
 {
+	seq_patternIsUsed(patternNr);
 	uint8_t len=euklid_length[trackNr];
 	for(int i=0; i<NUM_BARS; i++)
 	{
@@ -230,6 +231,7 @@ void euklid_transferPattern(uint8_t trackNr, uint8_t patternNr)
 #endif
 
 	}
+	seq_patternIsUsed(patternNr);
 // **PATROT - pattern end is now stored differently
 
 	if(len == 16)

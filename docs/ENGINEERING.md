@@ -142,8 +142,28 @@ not directly from disk; compressor settings remain. It cancels Looping but does 
 request pattern activation, reset position or replace a queued pattern. Normal pattern
 activation retains outgoing edits in RAM and snapshots the incoming slot; save-as
 copies edits without reverting the source. Project save provides disk persistence.
-Do not describe this as an atomic all-state
-reset or assume it discards every project change.
+Do not describe this as an atomic all-state reset or assume it discards every project change.
+
+Each pattern owns a sticky `used` byte (also copied by the backup buffer). New
+slots and explicit `seq_clearPattern` reset it; individual/track erasure does not.
+`seq_patternIsUsed` returns immediately for used slots, otherwise scans at most
+28 `uint16_t` main-hit words with early exit and latches used on any enabled hit.
+Edit paths observe before destructive hit replacement and after insertion (including
+recording, bar/track copy and Euclidean generation). Whole-pattern copy transfers
+source occupancy, including silent-used history. No per-tick or audio-sample scan
+is added. The scan stays out of line to avoid replicating its unrolled ARM code.
+Empty activation associates the currently loaded kit and skips RAM kit loading,
+retaining unsaved sounds; used activation retains the existing kit-mode rules.
+
+`PatV04` appends one tagged byte after the associated kit number: `0xe0` empty,
+`0xe1` used. The unversioned `/tmp/tmp.pat` appends the same byte. V4 requires it;
+legacy files/tmp without it infer occupancy from main-hit words (silent means
+empty). Invalid present tags/read errors fail that pattern read; this is not a
+new loader rollback or recovery policy. Hits override an empty tag. Old firmware
+reads the compatible prefix but does not preserve silent-used history on resave.
+Full staged project saves still write every pattern/kit; there is no global bitmap,
+dirty tracking, automation-lane change or selective-file-save policy.
+
 
 Project loads/saves currently coexist with playback. Storage work therefore interacts
 with audio servicing and interrupt latency, not only file correctness. The save path

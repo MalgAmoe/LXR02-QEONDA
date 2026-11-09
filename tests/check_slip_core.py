@@ -15,7 +15,7 @@ def function(name):
 core=s[s.index('/* Slip core:'):s.index('static void seq_triggerSequenced')]
 core+=s[s.index('int8_t getShiftValue('):s.index('uint8_t chokeCurrent=0;')]
 core+='static uint8_t chokeCurrent,chokeNext;\n'+function('seq_processFlam')
-core+=function('seq_setMainStep')+function('seq_addNote')
+core+=function('seq_patternIsUsed')+function('seq_setMainStep')+function('seq_addNote')
 preamble=r'''
 #include <stdint.h>
 #include <string.h>
@@ -25,12 +25,13 @@ static uint32_t __get_PRIMASK(void){return irq;}
 static void __disable_irq(void){irq=1;}
 static void __set_PRIMASK(uint32_t m){irq=m;}
 #define NUM_TRACKS 7
+#define NUM_BARS 4
 typedef enum {STEP_PREV, STEP_CURRENT, STEP_NEXT} StepPosition;
 static uint8_t seq_running=1, seq_activePattern;
 static int8_t seq_stepIndex[7];
 static struct {uint8_t prev,current,next;} seq_rndValue[7];
 typedef struct {uint8_t prob,volume,note;} Step;
-static struct {uint16_t seq_mainSteps[4][1][7];uint8_t length[1][7]; Step seq_subStepPattern[1][7][64];struct {uint8_t flam,shift;} seq_stepTiming[1][7][64];} seq_patternSet;
+static struct {uint16_t seq_mainSteps[4][1][7];uint8_t length[1][7],used[1]; Step seq_subStepPattern[1][7][64];struct {uint8_t flam,shift;} seq_stepTiming[1][7][64];} seq_patternSet;
 #define STEP_VOLUME_MASK 127
 #define STEP_ACTIVE_MASK 128
 #define NUM_STEPS 64
@@ -133,7 +134,8 @@ int main(void) {
  assert(seq_patternSet.seq_subStepPattern[0][6][5].note==62);
  seq_patternSet.seq_subStepPattern[0][0][0].prob=100;
  assert(seq_slipObserve(0,0,STEP_CURRENT));
- seq_setMainStep(0,0,0,0);seq_slipApplyWrites();assert(!seq_slipObserve(0,0,STEP_CURRENT));
+ assert(seq_patternSet.used[0]); /* recording hit latched occupancy */
+ seq_setMainStep(0,0,0,0);assert(seq_patternSet.used[0]);seq_slipApplyWrites();assert(!seq_slipObserve(0,0,STEP_CURRENT));
  seq_addNote(0,80,50);seq_slipApplyWrites();assert(seq_slipObserve(0,0,STEP_CURRENT));
  seq_slipRelease(3);seq_slipSync();
  /* Running before the first clock still captures forward source0, not slot1. */

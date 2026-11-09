@@ -124,11 +124,31 @@ previous or target compressor settings may remain. Reload the intended project
 successfully, or select ratio1 to bypass compression. Do not assume temporary files
 provide automatic recovery of unsaved settings.
 
+## Empty and used patterns
+
+New pattern slots are empty. Selecting an empty slot keeps the current kit and
+unsaved sound edits, without reloading sounds, and associates that slot with the
+currently loaded kit. Enabling its first step makes it **used**. Removing the last
+hit individually, clearing tracks, or replacing generated hits does not
+make a used pattern empty: silent used patterns keep ordinary kit-change behavior.
+Only an explicit whole-pattern erase resets a slot to empty.
+
+Whole-pattern copy carries the source's empty/used status, including a silent used
+source. Track/bar copies and recording/generation that add hits make an empty
+pattern used. Automation alone does not mark a pattern used.
+
+Project saving and temporary recovery retain this status. Older files have no
+occupancy history: on first load, any enabled hit means used; a silent legacy
+pattern is treated as empty. New saves retain silent-used history. Older firmware
+can read the pattern data but loses this distinction if it saves the pattern again.
+Unsaved sound edits still need normal kit/project saving for disk persistence.
+
 ## Shift+Reload
 
 Clears morph, resets filters, cancels Looping, and reloads the selected kit from
 **RAM, not disk**. Pattern data, sequencer position and any queued pattern are unchanged.
-PERF is refreshed. A queued pattern still activates normally, including its kit link.
+PERF is refreshed. A queued pattern still activates normally: used patterns follow
+their kit link; empty patterns retain the sounds present at activation.
 
 Pattern edits remain in RAM across pattern switches. Save-as copies edits to the new
 slot and retains them in the source slot. Save the project to retain edits on disk.

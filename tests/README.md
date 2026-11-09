@@ -98,3 +98,16 @@ The slip differential test uses `fixtures/slip_baseline_afde83f.c`, an extracted
 frozen pre-slip implementation with full source revision attribution. It does not
 require Git history, so shallow CI checkouts and source archives run the same
 comparison. Do not refresh this oracle merely to match changed production code.
+
+## Empty-pattern occupancy regression
+
+`test_pattern_occupancy` compiles extracted production mutation/backup and file/tmp
+codec bodies with the real pattern/step layout and the whole Euclidean generator
+translation unit. Memory-backed file seams cover empty/used/silent-used round trips,
+legacy missing-tail fallback, required/invalid tags, read errors, and RAM-reset tmp
+recovery. Actual activation and RAM-kit bodies exercise stopped/queued switching,
+all kit modes, unchanged unsaved sounds and ordinary silent-used kit loading.
+`test_slip_core` also checks occupancy through the production recording writer;
+existing retention/save-as and kit-only Reload regressions remain enabled with
+explicit used-slot fixtures. These tests do not certify SD interruption recovery,
+physical restart, concurrent storage/edit timing, worst-case cycles or listening.

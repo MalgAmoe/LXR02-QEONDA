@@ -50,8 +50,8 @@ static void seq_slipClear(void) {slipCancels++;}
 static void seq_slipSync(void) {}
 typedef struct {uint8_t status,data1,data2;} MidiMsg;
 typedef struct {uint8_t note,param1Nr,param1Val,param2Nr,param2Val,prob,volume;} Step; /* named copy fields; not real Step layout */
-static struct {Step seq_subStepPattern[2][7][64]; uint8_t seq_stepTiming[2][7][64]; uint16_t seq_mainSteps[4][2][7]; uint8_t length[2][7],shuffle[2],kitNr[2];} seq_patternSet;
-static struct {Step seq_subStepPattern[7][64]; uint8_t seq_stepTiming[7][64]; uint16_t seq_mainSteps[4][7]; uint8_t length[7],shuffle,kitNr;} patternBackupBuffer;
+static struct {Step seq_subStepPattern[2][7][64]; uint8_t seq_stepTiming[2][7][64]; uint16_t seq_mainSteps[4][2][7]; uint8_t length[2][7],shuffle[2],kitNr[2],used[2];} seq_patternSet;
+static struct {Step seq_subStepPattern[7][64]; uint8_t seq_stepTiming[7][64]; uint16_t seq_mainSteps[4][7]; uint8_t length[7],shuffle,kitNr,used;} patternBackupBuffer;
 static uint8_t activeParameters[NUM_PARAMS],mainParameters[3][END_OF_SOUND_PARAMETERS],*morphParameters;
 static uint8_t morph_state,morph_index,seq_activePattern,seq_pendingPattern,seq_loadPendigFlag,seq_running;
 static uint8_t menu_selectedPresetNr[1],menu_loadedPresetNr[1],menu_activePage,menu_playedPattern,menu_shownPattern,menu_songMenuPosition,seq_songPositionPointer,midi_process_block;
@@ -109,6 +109,7 @@ static void setup(int run,int md,int busy,int linked){
  morphParameters=mainParameters[2];memcpy(activeParameters,mainParameters[0],END_OF_SOUND_PARAMETERS);
  activeParameters[PAR_VOICE_DECIMATION_ALL]=10;activeParameters[PAR_MORPH]=128;activeParameters[PAR_PATTERN_MODE]=md;
  seq_running=run;seq_activePattern=seq_pendingPattern=seq_loadPendigFlag=0;
+ seq_patternSet.used[0]=seq_patternSet.used[1]=1; /* existing used-slot regressions */
  seq_patternSet.kitNr[0]=0;patternBackupBuffer.kitNr=linked; /* stale snapshot must not restore association */
  menu_selectedPresetNr[0]=0;menu_loadedPresetNr[0]=0;menu_activePage=0;
  calls=depth=notes=repaints=loads=nonzeroTicks=oldSourceTicks=0;engineSrt=engineProbe=-1;
@@ -214,7 +215,7 @@ p=clean(src('Core/Src/Preset/presetManager.c'));s=clean(src('Core/Src/Soundengin
 h=src('Core/Inc/Parameters.h');enum=h[h.index('enum ParamEnums'):];enum=enum[:enum.index('};')+2]
 order=clean(src('Core/Src/Parameters.c'));order=order[order.index('uint8_t parameterOrder'):];order=order[:order.index('};')+2]
 fs=''.join(fn(p,n) for n in ['interpolate','preset_morph','preset_morph_tick','preset_sendDrumsetParameters','preset_sendDrumsetParametersImmediate','preset_loadDrumsetRam'])
-sf=''.join(fn(s,n) for n in ['seq_copyPatternToBackupBuffer','seq_copyBackupBufferToPattern','seq_setPendingPatternActive','seq_setNextPattern','seq_copyPattern'])
+sf=''.join(fn(s,n) for n in ['seq_patternIsUsed','seq_copyPatternToBackupBuffer','seq_copyBackupBufferToPattern','seq_setPendingPatternActive','seq_setNextPattern','seq_copyPattern'])
 sf+=fn(p,'preset_savePatternRAM')
 b=clean(src('Core/Src/buttonHandler.c'));b=b[b.index('case SEQ_RELOAD:'):];b=b[b.index('{'):b.index('case SEQ_CONFIG:')];b=b[:b.rfind('break;')]
 c=pre+enum+stubs+order+fs+sf+'static void press_reload(void) '+b+main

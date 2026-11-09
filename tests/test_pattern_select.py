@@ -79,6 +79,7 @@ static uint8_t frontParser_activeTrack;
 static int8_t seq_stepIndex[7];
 static uint8_t seq_recordActive,seq_activeAutomTrack;
 static int seq_armedArmedAutomationStep=-1,seq_armedArmedAutomationTrack=-1;
+static uint8_t seq_patternIsUsed(uint8_t p){(void)p;return 1;} /* panel seam; occupancy exercised separately */
 static uint8_t seq_intIsMainStepActive(uint8_t v,uint8_t s,uint8_t p){(void)v;(void)s;(void)p;return 1;}
 static int saveResult;
 static uint8_t buttonHandler_getShift(void){return shift;}
@@ -411,7 +412,7 @@ preset = read('Core/Src/Preset/presetManager.c')
 c = ns['pre'] + enum + 'static unsigned selectionPaints;\n' + stubs + order
 c += ''.join(ns['fn'](clean(preset), n) for n in ('interpolate','preset_morph','preset_morph_tick',
     'preset_sendDrumsetParameters','preset_sendDrumsetParametersImmediate','preset_loadDrumsetRam'))
-c += ''.join(ns['fn'](clean(seq), n) for n in ('seq_copyPatternToBackupBuffer',
+c += ''.join(ns['fn'](clean(seq), n) for n in ('seq_patternIsUsed','seq_copyPatternToBackupBuffer',
     'seq_copyBackupBufferToPattern','seq_setPendingPatternActive','seq_setNextPattern'))
 c += ns['main'].split('int main(void){')[0]
 c += r'''

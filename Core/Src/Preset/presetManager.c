@@ -364,6 +364,32 @@ FRESULT preset_LoadTmpKit()
 		return res;
 }
 
+// Tagged trailing byte also works for the unversioned active-pattern tmp file.
+static void preset_writePatternOccupancy(uint8_t pattern)
+{
+    UINT written;
+    const uint8_t occupancy = 0xe0 | seq_patternIsUsed(pattern);
+    preset_writeFile((FIL*)&SDFile, &occupancy, 1, &written);
+}
+
+static uint8_t preset_readPatternOccupancy(uint8_t pattern, uint8_t required)
+{
+    UINT count;
+    uint8_t occupancy = 0;
+    const FRESULT result = f_read((FIL*)&SDFile, &occupancy, 1, &count);
+    if(result != FR_OK) return 0;
+    if(count == 1 && (occupancy == 0xe0 || occupancy == 0xe1))
+        seq_patternSet.used[pattern] = occupancy & 1;
+    else
+    {
+        if(required || count != 0) return 0;
+        // Legacy silent slots have no history: infer empty from their hit words.
+        seq_patternSet.used[pattern] = 0;
+    }
+    seq_patternIsUsed(pattern);
+    return 1;
+}
+
 FRESULT preset_LoadTmpPat()
 {
 
@@ -518,6 +544,8 @@ FRESULT preset_LoadTmpPat()
 
 		}
 
+        if(success) success = preset_readPatternOccupancy(patternNr, 0);
+
 		if( success == 0)
 		{
 
@@ -648,6 +676,7 @@ FRESULT preset_saveTmpPat()
 
 		//write associated kit nr
 		preset_writeFile((FIL*)&SDFile,&seq_patternSet.kitNr[presetNr],sizeof(uint8_t),&bytesWritten);
+        preset_writePatternOccupancy(presetNr);
 
 
 	//close the file
@@ -1457,6 +1486,7 @@ static void preset_writePatternData(uint8_t patternNr)
 
 		//write associated kit nr
 		preset_writeFile((FIL*)&SDFile,&seq_patternSet.kitNr[patternNr],sizeof(uint8_t),&bytesWritten);
+        preset_writePatternOccupancy(patternNr);
 
 }
 
@@ -1492,7 +1522,7 @@ FRESULT preset_savePatternSD(uint8_t presetNr)
 	res = preset_writeFile((FIL*)&SDFile,(void*)savefileNames[presetNr][PATTERN_NAMES],8,&bytesWritten);
 	if(res != FR_OK) return res;
 	//write version tag
-	res = preset_writeFile((FIL*)&SDFile,"PatV03",6,&bytesWritten);
+	res = preset_writeFile((FIL*)&SDFile,"PatV04",6,&bytesWritten);
 	if(res != FR_OK) return res;
 
 	//write pattern data
@@ -1616,6 +1646,8 @@ static uint8_t preset_readPatternData(uint8_t patternNr, uint8_t dataVersion)
 		if(bytesRead == 0) success = 0;
 
 	}
+
+    if(success) success = preset_readPatternOccupancy(patternNr, dataVersion >= 4);
 
 	return success;
 
