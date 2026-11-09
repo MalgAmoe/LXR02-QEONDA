@@ -111,3 +111,9 @@ all kit modes, unchanged unsaved sounds and ordinary silent-used kit loading.
 existing retention/save-as and kit-only Reload regressions remain enabled with
 explicit used-slot fixtures. These tests do not certify SD interruption recovery,
 physical restart, concurrent storage/edit timing, worst-case cycles or listening.
+
+`test_pattern_select` also executes production occupancy-query, selection-painter
+and blink-handler bodies for all four banks, silent-used and first-hit slots,
+empty current/queued markers, their 2:1 blink cadence, bank redraw, activation
+handover and exit to normal step/chase. LED output and blink registration are
+host seams; physical readability and clock cadence still need instrument review.

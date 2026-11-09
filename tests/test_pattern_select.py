@@ -64,7 +64,7 @@ static uint32_t systick_ticks=123,sucessTimer;
 static struct {unsigned selectButtonMode:4; unsigned seqRunning:1,seqRecording:1,seqErasing:1;} buttonHandler_stateMemory;
 static struct {uint8_t fxType;} fxBus;
 static struct {uint8_t category;char nameBuffer[20];} menu_saveOptions;
-typedef struct {Step seq_subStepPattern[64][7][64];uint16_t seq_mainSteps[4][64][7];uint8_t shuffle[64],length[64][7];} PatternSet;
+typedef struct {Step seq_subStepPattern[64][7][64];uint16_t seq_mainSteps[4][64][7];uint8_t shuffle[64],length[64][7],used[64];} PatternSet;
 static PatternSet seq_patternSet;
 static int8_t buttonHandler_armedAutomationStep=NO_STEP_SELECTED;
 static uint16_t buttonHandler_originalParameter[2];
@@ -75,11 +75,13 @@ static uint16_t seq_automationTarget(uint8_t p){return p ? p-1 : PAR_NONE;}
 static unsigned stepWrites,loads,saves,saveRam,errors,warnings,touches,changes,rolls,breakHeld,enteredStep,repaints;
 static uint8_t shift,load,save,copy,pending,leds[64],blinks[64],chase,lastMode;
 static unsigned chaseCalls;
+#define NUM_OF_BLINKABLE_LEDS 4
+static uint8_t led_blinkPrescaler,led_blinkToggleState,led_blinkingLeds,led_blinkLedNumber[4];
 static uint8_t frontParser_activeTrack;
 static int8_t seq_stepIndex[7];
 static uint8_t seq_recordActive,seq_activeAutomTrack;
 static int seq_armedArmedAutomationStep=-1,seq_armedArmedAutomationTrack=-1;
-static uint8_t seq_patternIsUsed(uint8_t p){(void)p;return 1;} /* panel seam; occupancy exercised separately */
+static uint8_t seq_patternIsUsed(uint8_t p);
 static uint8_t seq_intIsMainStepActive(uint8_t v,uint8_t s,uint8_t p){(void)v;(void)s;(void)p;return 1;}
 static int saveResult;
 static uint8_t buttonHandler_getShift(void){return shift;}
@@ -94,8 +96,16 @@ static uint8_t menu_getViewedPattern(void){return menu_shownPattern;}
 static void menu_setShownPattern(uint8_t p){menu_shownPattern=p;}
 static uint8_t led_idx2StepLed(uint8_t p);
 static void led_setValue(uint8_t v,uint8_t l){assert(l<64);leds[l]=v;}
-static void led_setBlinkLed(uint8_t l,uint8_t v){assert(l<64);blinks[l]=v;}
-static void led_clearAllBlinkLeds(void){memset(blinks,0,sizeof blinks);}
+static void led_setBlinkLed(uint8_t l,uint8_t v){
+ assert(l<64);blinks[l]=v;
+ for(int i=0;i<4;i++)if((v && !(led_blinkingLeds&(1<<i))) || (!v && led_blinkLedNumber[i]==l)){
+  led_blinkLedNumber[i]=l;
+  if(v)led_blinkingLeds|=1<<i;else led_blinkingLeds&=~(1<<i);
+  break;
+ }
+}
+static void led_setValueTemp(uint8_t v,uint8_t l){assert(l<64);leds[l]=v;}
+static void led_clearAllBlinkLeds(void){memset(blinks,0,sizeof blinks);led_blinkingLeds=0;}
 static void led_clearSequencerLeds(void){for(int p=0;p<16;p++)leds[led_idx2StepLed(p)]=0;}
 static void led_clearActive_step(void){chase=0;chaseCalls++;}
 static void led_setActive_step(uint8_t s){(void)s;chase=1;chaseCalls++;}
@@ -174,12 +184,13 @@ slip = read('Core/Src/Soundengine/Sequencer/sequencer.c')
 c += slip[slip.index('/* Slip core:'):slip.index('static void seq_triggerSequenced')]
 # All listed functions are actual firmware bodies, not reimplemented event logic.
 for s, names in ((panel, ('buttonHandler_setMode','buttonHandler_showMuteLEDs','buttonHandler_muteVoice')),
-                 (led, ('led_idx2StepLed','led_initPatternSelectLeds','led_updateBarLeds','led_updateSeqLeds')),
+                 (led, ('led_blinkHandler','led_idx2StepLed','led_initPatternSelectLeds','led_updateBarLeds','led_updateSeqLeds')),
                  (menu, ('menu_getSubPage','menu_resetActiveParameter','menu_endParameterEdit','menu_switchSubPage','menu_switchPage')),
                  (panel, ('buttonHandler_restoreOriginal','buttonHandler_armTimerActionStep','buttonHandler_disarmTimerActionStep','buttonHandler_TimerActionOccured','buttonHandler_setTimeraction','buttonHandler_tick','buttonHandler_handleModeButtons','buttonHandler_handleSelectButton','buttonHandler_enterLivePatternSelect','buttonHandler_selectLivePattern','buttonHandler_seqButtonPressed','buttonHandler_releasePerformanceBreak','buttonHandler_releaseSlip','buttonHandler_seqButtonReleased','buttonHandler_selectButtonPressed','buttonHandler_partButtonReleased','buttonHandler_voiceButtonPressed','buttonHandler_buttonPressed','buttonHandler_buttonReleased'))):
     for name in names: c += fn(s, name)
 # Actual bar-follow and direct chase segment, without unrelated clock/MIDI work.
 seq = read('Core/Src/Soundengine/Sequencer/sequencer.c')
+c += fn(seq, 'seq_patternIsUsed')
 c += fn(seq, 'seq_recordAutomation')
 # Ordinary knob routing remains page-based; the existing change-all target
 # exercises its actual normal, bulk, held-lock and recording transport paths.
@@ -194,6 +205,9 @@ c += fx.replace('case CC2_FX_TYPE:', 'case 0:') + '\n}}\n'
 c += r'''
 static void reset(uint8_t page,uint8_t index){
  memset(leds,0,sizeof leds);memset(blinks,0,sizeof blinks);
+ memset(seq_patternSet.used,1,sizeof seq_patternSet.used);
+ memset(seq_patternSet.seq_mainSteps,0,sizeof seq_patternSet.seq_mainSteps);
+ led_blinkingLeds=led_blinkPrescaler=led_blinkToggleState=0;
  buttonHandler_stateMemory.selectButtonMode=SELECT_MODE_VOICE;
  menu_activePage=page;menuIndex=index;editModeActive=1;
  menu_activeVoice=page<7?page:2;menu_activeBar=0;menu_activePatternBank=0;
@@ -212,6 +226,39 @@ static void pads(unsigned p,int blink){
  for(unsigned i=0;i<16;i++)assert(blinks[led_idx2StepLed(i)]==(blink && i==p));
 }
 int main(void){
+ /* Production occupancy painter/query/blinker: all banks, silent used, and
+    empty current/queued. Only engine, LED registers and blink registration
+    are seams; normal step/bar chase suppression is exercised below. */
+ for(unsigned bank=0;bank<4;bank++){
+  reset(2,19);memset(seq_patternSet.used,0,sizeof seq_patternSet.used);
+  seq_patternSet.used[bank*16+2]=1; /* used but silent */
+  seq_patternSet.seq_mainSteps[3][bank*16+3][6]=1; /* first hit latches */
+  enter(0);menu_activePatternBank=bank;
+  menu_playedPattern=bank*16;menu_shownPattern=bank*16+1;
+  led_initPatternSelectLeds();
+  assert(seq_patternSet.used[bank*16+3]);
+  for(unsigned pad=0;pad<16;pad++)
+   assert(leds[led_idx2StepLed(pad)]==(pad==0 || pad==2 || pad==3));
+  pads(1,1);
+  for(unsigned tick=0;tick<8;tick++){
+   led_blinkHandler();
+   assert(leds[led_idx2StepLed(0)]==!(tick%2));
+   assert(leds[led_idx2StepLed(1)]==!((tick/2)%2));
+   assert(leds[led_idx2StepLed(2)] && leds[led_idx2StepLed(3)]);
+   assert(!leds[led_idx2StepLed(4)]);
+  }
+  /* Hide both markers in a different bank, then return without stale LEDs. */
+  menu_activePatternBank=(bank+1)%4;led_initPatternSelectLeds();pads(0,0);
+  for(unsigned pad=0;pad<16;pad++)assert(!leds[led_idx2StepLed(pad)]);
+  menu_activePatternBank=bank;led_initPatternSelectLeds();pads(1,1);
+  /* Empty queued becomes current after ACK; no slow marker remains. */
+  menu_playedPattern=menu_shownPattern;led_initPatternSelectLeds();pads(0,0);
+  led_blinkHandler();led_blinkHandler();assert(!leds[led_idx2StepLed(1)]);
+  buttonHandler_handleModeButtons(SELECT_MODE_VOICE);pads(0,0);
+  /* Normal voice step LEDs and chase resume, unaffected by occupancy. */
+  led_updateSeqLeds();for(unsigned pad=0;pad<16;pad++)assert(leds[led_idx2StepLed(pad)]);
+  unsigned before=chaseCalls;follow_and_chase();assert(chaseCalls>before);
+ }
  reset(PERF_PAGE,0); buttonHandler_setMode(SELECT_MODE_PERF);
  for(unsigned t=0;t<7;t++) {seq_patternSet.length[0][t]=t+1;seq_stepIndex[t]=0;}
  seq_slipSync();

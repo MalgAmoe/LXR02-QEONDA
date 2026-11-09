@@ -126,6 +126,13 @@ provide automatic recovery of unsaved settings.
 
 ## Empty and used patterns
 
+In live pattern selection (Shift+Pattern or Load+Pattern), used slots are
+steadily lit and empty slots are dark. The current pattern flashes fast; a
+queued, different pattern flashes at half that rate. These markers override
+occupancy even for empty slots, and only appear in the displayed bank. Flashing
+follows the existing sequencer LED clock. Bank changes redraw the slots; leaving
+selection restores the normal step LEDs/chase. Save+Pattern LEDs are unchanged.
+
 New pattern slots are empty. Selecting an empty slot keeps the current kit and
 unsaved sound edits, without reloading sounds, and associates that slot with the
 currently loaded kit. Enabling its first step makes it **used**. Removing the last

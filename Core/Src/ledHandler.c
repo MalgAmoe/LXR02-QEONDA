@@ -80,6 +80,8 @@ void led_initPatternSelectLeds()
 	if(buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE) {
 		led_clearAllBlinkLeds();
 		led_clearSequencerLeds();
+		for(uint8_t pad = 0; pad < 16; pad++)
+			led_setValue(seq_patternIsUsed(menu_activePatternBank * 16 + pad), led_idx2StepLed(pad));
 		if(menu_playedPattern / 16 == menu_activePatternBank)
 			led_setValue(1, led_idx2StepLed(menu_playedPattern % 16));
 		if(menu_getViewedPattern() != menu_playedPattern && menu_getViewedPattern() / 16 == menu_activePatternBank)
@@ -641,6 +643,11 @@ void led_resetBlinkTimer()
 }
 void led_blinkHandler()
 {
+	/* Live selector only: current flashes every call, queued every second call.
+	 * Both remain visible even when their slots are empty. */
+	if(buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE &&
+	   menu_playedPattern / 16 == menu_activePatternBank)
+		led_setValueTemp(led_blinkPrescaler == 0, led_idx2StepLed(menu_playedPattern % 16));
 
 	if(led_blinkPrescaler==0)
 	//second condition is to prevent hanging LEDs if a systick overflow occurs
