@@ -138,8 +138,11 @@ are examples. Bulk Shift+knob follows **same menu slot**, not semantic remapping
 with per-engine bounds/shared-hat deduplication and no step-lock writing.
 
 Shift+Reload resets morph and master filters and restores the selected kit from RAM,
-not directly from disk; compressor settings remain. Pattern activation and linked-kit
-behavior still follow their own timing. Do not describe this as an atomic all-state
+not directly from disk; compressor settings remain. It cancels Looping but does not
+request pattern activation, reset position or replace a queued pattern. Normal pattern
+activation retains outgoing edits in RAM and snapshots the incoming slot; save-as
+copies edits without reverting the source. Project save provides disk persistence.
+Do not describe this as an atomic all-state
 reset or assume it discards every project change.
 
 Project loads/saves currently coexist with playback. Storage work therefore interacts

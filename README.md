@@ -71,8 +71,8 @@ three banks; the four knobs control the following, left to right:
   older projects without compressor settings default to bypass. Kit/pattern loads and
   Shift+Reload do not reset compression. Save the project explicitly to retain edits.
 - **Shift+Reload:** clears morph, resets the master filters and reloads the selected kit
-  from **RAM—not from disk**. Existing pattern/kit-link behavior still applies; this is
-  not a reset of every setting.
+  from **RAM—not from disk** and cancels Looping. Pattern edits, position and queued
+  selection are unchanged. Pattern edits survive switching; save the project for disk persistence.
 - **Shift+knob change-all:** on ordinary voice pages, changes the same knob slot across
   the seven tracks, relative to each parameter's own original kit value and limits.
   Different engines can have different functions in that slot—this is intentional.

@@ -61,7 +61,9 @@ static uint16_t seq_automationTarget(uint16_t p){return p;}
 static uint8_t menu_getActiveVoice(void){return 0;}
 static uint8_t menu_getActivePage(void){return menu_activePage;}
 static unsigned reloads;
-static void preset_loadDrumsetRam(unsigned p,unsigned a,unsigned b){reloads++;}
+static uint8_t mainParameters[1][END_OF_SOUND_PARAMETERS];
+static void soundengine_process(void){}
+static void preset_sendDrumsetParameters(void){reloads++;}
 static void menu_repaint(void){}
 static int led_idx2StepLed(int p){return p;}
 static void led_setBlinkLed(int p,int on){}

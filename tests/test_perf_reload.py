@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Actual reload case and seq/preset bodies; adapted from perf-reload interactions.
-MIDI/DSP/LCD/engine and opaque Step endpoints are stubs, not hardware/audio tests.
+MIDI/DSP/LCD/engine endpoints and Step layout are stubs, not hardware/audio tests.
 """
 from pathlib import Path
 import re, subprocess, os, tempfile
@@ -8,7 +8,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def src(p): return (ROOT/p).read_text()
 def clean(s): return re.sub(r'/\*.*?\*/|//[^\n]*','',s,flags=re.S)
 def fn(s,n):
- m=re.search(r'^(?:IN_ITCM_RAM )?(?:static )?(?:void|uint8_t) '+n+r'\([^;\n]*\)\s*\{',s,re.M); assert m,n
+ m=re.search(r'^(?:IN_ITCM_RAM )?(?:static )?(?:void|uint8_t|FRESULT) '+n+r'\([^;\n]*\)\s*\{',s,re.M); assert m,n
  p=s.index('{',m.start());d=1;p+=1
  while d: d+=(s[p]=='{')-(s[p]=='}');p+=1
  return s[m.start():p]+'\n'
@@ -19,6 +19,8 @@ pre=r'''
 #include <assert.h>
 #include <stdlib.h>
 #define PERF_PAGE 42
+#define FRESULT int
+#define FR_OK 0
 #define IN_ITCM_RAM
 #define MAX_PATTERN 2
 #define NUM_TRACKS 7
@@ -47,7 +49,7 @@ static unsigned slipCancels;
 static void seq_slipClear(void) {slipCancels++;}
 static void seq_slipSync(void) {}
 typedef struct {uint8_t status,data1,data2;} MidiMsg;
-typedef struct {uint8_t bytes[8];} Step; /* opaque copy fixture; not real Step layout */
+typedef struct {uint8_t note,param1Nr,param1Val,param2Nr,param2Val,prob,volume;} Step; /* named copy fields; not real Step layout */
 static struct {Step seq_subStepPattern[2][7][64]; uint8_t seq_stepTiming[2][7][64]; uint16_t seq_mainSteps[4][2][7]; uint8_t length[2][7],shuffle[2],kitNr[2];} seq_patternSet;
 static struct {Step seq_subStepPattern[7][64]; uint8_t seq_stepTiming[7][64]; uint16_t seq_mainSteps[4][7]; uint8_t length[7],shuffle,kitNr;} patternBackupBuffer;
 static uint8_t activeParameters[NUM_PARAMS],mainParameters[3][END_OF_SOUND_PARAMETERS],*morphParameters;
@@ -66,7 +68,8 @@ static void menu_repaint(void){displayMrp=activeParameters[PAR_MORPH];displaySrt
 static void menu_repaintAll(void){menu_repaint();}
 static void preset_touchTimer(int t){(void)t;}
 static void menu_resetPerformanceFilter(void){activeParameters[PAR_PERF_HP]=0;activeParameters[PAR_PERF_LP]=127;activeParameters[PAR_PERF_RESONANCE]=0;}
-static void seq_setStepIndexToStart(void){}
+static unsigned position,positionResets;
+static void seq_setStepIndexToStart(void){position=0;positionResets++;}
 static void seq_setShuffle(float x){(void)x;}
 static int led_idx2StepLed(int x){return x;}
 static void led_setBlinkLed(int a,int b){(void)a;(void)b;}
@@ -106,7 +109,7 @@ static void setup(int run,int md,int busy,int linked){
  morphParameters=mainParameters[2];memcpy(activeParameters,mainParameters[0],END_OF_SOUND_PARAMETERS);
  activeParameters[PAR_VOICE_DECIMATION_ALL]=10;activeParameters[PAR_MORPH]=128;activeParameters[PAR_PATTERN_MODE]=md;
  seq_running=run;seq_activePattern=seq_pendingPattern=seq_loadPendigFlag=0;
- seq_patternSet.kitNr[0]=0;patternBackupBuffer.kitNr=linked; /* restored saved association differs */
+ seq_patternSet.kitNr[0]=0;patternBackupBuffer.kitNr=linked; /* stale snapshot must not restore association */
  menu_selectedPresetNr[0]=0;menu_loadedPresetNr[0]=0;menu_activePage=0;
  calls=depth=notes=repaints=loads=nonzeroTicks=oldSourceTicks=0;engineSrt=engineProbe=-1;
  preset_morph(128);drain();menu_repaint();if(busy){preset_morph(128);morph_index=busy==1?PAR_VOICE_DECIMATION_ALL:busy==2?0:END_OF_SOUND_PARAMETERS-1;}
@@ -120,6 +123,13 @@ int main(void){
  seq_setNextPattern(1);assert(slipCancels==cancels+1);
  seq_setPendingPatternActive();assert(slipCancels==cancels+2); /* same-slot reload */
  setup(1,0,0,0);cancels=slipCancels;press_reload();assert(slipCancels==cancels+1);
+ for(int run=0;run<2;run++){
+  setup(run,2,0,0);position=29;unsigned resets=positionResets;
+  press_reload();
+  assert(position==29 && positionResets==resets);
+  assert(seq_activePattern==0 && seq_pendingPattern==0 && !seq_loadPendigFlag);
+  assert(activeParameters[PAR_PATTERN_MODE]==2); /* no activation consumes skip */
+ }
  /* Actual ordinary RAM-load body must retain all session controls. */
  for(int immediate=0;immediate<2;immediate++){
   setup(0,0,0,0);activeParameters[PAR_MORPH]=0;
@@ -130,18 +140,73 @@ int main(void){
  for(int run=0;run<2;run++)for(int md=0;md<3;md++)for(int busy=0;busy<4;busy++)for(int linked=0;linked<2;linked++)for(int perf=0;perf<2;perf++){
  inject=0;setup(run,md,busy,linked);menu_activePage=perf?PERF_PAGE:0;
  int before=repaints;
+ /* Queue B during playback; stopped fixtures retain the same pending state. */
+ seq_pendingPattern=1;seq_loadPendigFlag=1;position=37;
+ unsigned resets=positionResets;
+ activeParameters[PAR_PERF_HP]=100;activeParameters[PAR_PERF_LP]=20;activeParameters[PAR_PERF_RESONANCE]=99;
+ seq_patternSet.seq_subStepPattern[0][2][19].note=81;
  press_reload();
+ assert(position==37 && positionResets==resets);
+ assert(seq_activePattern==0 && seq_pendingPattern==1 && seq_loadPendigFlag==1);
+ assert(seq_patternSet.seq_subStepPattern[0][2][19].note==81);
+ assert(seq_patternSet.kitNr[0]==0);
+
  assert(activeParameters[PAR_MORPH]==0);assert(nonzeroTicks==0);
  assert(activeParameters[PAR_PERF_HP]==0 && activeParameters[PAR_PERF_LP]==127 && activeParameters[PAR_PERF_RESONANCE]==0);
- assert(activeParameters[PAR_VOICE_DECIMATION_ALL]==((!run&&md==1&&linked)?63:127));
- /* Stopped activation itself repaints both eligible fixture pages. */
- assert(repaints-before==(!run)+perf);
+ assert(activeParameters[PAR_VOICE_DECIMATION_ALL]==127);
+ /* Kit-only Reload repaints PERF, not a pattern activation. */
+ assert(repaints-before==perf);
  if(perf){assert(displayMrp==0);assert(displaySrt==activeParameters[PAR_VOICE_DECIMATION_ALL]);}
- if(run&&seq_loadPendigFlag)seq_setPendingPatternActive();drain();
+ seq_setPendingPatternActive();assert(positionResets==resets+1);drain();
  assert(!seq_loadPendigFlag);assert(activeParameters[PAR_PATTERN_MODE]==(md==2?1:md));
  for(int p=0;p<END_OF_SOUND_PARAMETERS;p++)assert(engineValues[p]==activeParameters[p]);
  }
- puts("PASS 192 actual-source reload cases (endpoint stubs, not hardware/audio)");return 0;
+ /* Queue activation at each Reload service boundary, with distinct A/B kits. */
+ for(int boundary=1;boundary<=2;boundary++)for(int md=0;md<3;md++)
+ for(int busy=0;busy<4;busy++)for(int perf=0;perf<2;perf++){
+  inject=0;setup(1,md,busy,0);calls=0;inject=boundary;
+  menu_activePage=perf?PERF_PAGE:0;
+  unsigned resets=positionResets;
+  seq_patternSet.kitNr[1]=1;seq_pendingPattern=1;seq_loadPendigFlag=1;
+  press_reload();drain();
+  assert(seq_activePattern==1 && seq_pendingPattern==1 && !seq_loadPendigFlag);
+  assert(positionResets==resets+1);
+  assert(activeParameters[PAR_PATTERN_MODE]==(md==2?1:md));
+  assert(activeParameters[PAR_MORPH]==0 && nonzeroTicks==0);
+  assert(menu_loadedPresetNr[0]==(md==1?1:0));
+  assert(menu_selectedPresetNr[0]==(md==1?1:0));
+  assert(activeParameters[0]==(md==1?60:100));
+  assert(activeParameters[PAR_VOICE_DECIMATION_ALL]==(md==1?63:127));
+  for(int p=0;p<END_OF_SOUND_PARAMETERS;p++)assert(engineValues[p]==activeParameters[p]);
+ }
+ inject=0;
+ /* Real activation/copy/save-as bodies, with endpoint adapters only. */
+ for(int run=0;run<2;run++){
+  setup(run,0,0,0);
+  seq_copyPatternToBackupBuffer(0);
+  /* Populate all copied pattern fields AFTER snapshot: outgoing restore loses them. */
+  memset(&seq_patternSet.seq_subStepPattern[0],23,sizeof seq_patternSet.seq_subStepPattern[0]);
+  memset(&seq_patternSet.seq_stepTiming[0],17,sizeof seq_patternSet.seq_stepTiming[0]);
+  memset(&seq_patternSet.length[0],32,sizeof seq_patternSet.length[0]);
+  for(int bar=0;bar<NUM_BARS;bar++)for(int t=0;t<NUM_TRACKS;t++)seq_patternSet.seq_mainSteps[bar][0][t]=0xa55a;
+  seq_patternSet.shuffle[0]=49;seq_patternSet.kitNr[0]=1;
+  seq_copyPattern(0,1); /* expected edited content */
+  __typeof__(seq_patternSet) expected=seq_patternSet;
+  seq_setNextPattern(1);if(run)seq_setPendingPatternActive();
+  assert(seq_activePattern==1);assert(memcmp(&seq_patternSet,&expected,sizeof expected)==0);
+  assert(patternBackupBuffer.shuffle==49 && patternBackupBuffer.kitNr==1);
+  seq_setNextPattern(0);if(run)seq_setPendingPatternActive();
+  assert(seq_activePattern==0);assert(memcmp(&seq_patternSet,&expected,sizeof expected)==0);
+  /* Save-as must actually overwrite a different destination and keep source edits. */
+  memset(&seq_patternSet.seq_subStepPattern[1],0,sizeof seq_patternSet.seq_subStepPattern[1]);
+  seq_patternSet.shuffle[1]=0;
+  assert(preset_savePatternRAM(1)==FR_OK);if(run)seq_setPendingPatternActive();
+  assert(seq_activePattern==1);assert(memcmp(&seq_patternSet,&expected,sizeof expected)==0);
+  assert(preset_savePatternRAM(1)==FR_OK);
+  seq_setNextPattern(0);if(run)seq_setPendingPatternActive();
+  assert(memcmp(&seq_patternSet,&expected,sizeof expected)==0);
+ }
+ puts("PASS retention/save-as, 192 Reload cases and 48 service-boundary cases (actual source; endpoint stubs, not hardware/audio)");return 0;
 }
 '''
 
@@ -149,7 +214,8 @@ p=clean(src('Core/Src/Preset/presetManager.c'));s=clean(src('Core/Src/Soundengin
 h=src('Core/Inc/Parameters.h');enum=h[h.index('enum ParamEnums'):];enum=enum[:enum.index('};')+2]
 order=clean(src('Core/Src/Parameters.c'));order=order[order.index('uint8_t parameterOrder'):];order=order[:order.index('};')+2]
 fs=''.join(fn(p,n) for n in ['interpolate','preset_morph','preset_morph_tick','preset_sendDrumsetParameters','preset_sendDrumsetParametersImmediate','preset_loadDrumsetRam'])
-sf=''.join(fn(s,n) for n in ['seq_copyPatternToBackupBuffer','seq_copyBackupBufferToPattern','seq_setPendingPatternActive','seq_setNextPattern'])
+sf=''.join(fn(s,n) for n in ['seq_copyPatternToBackupBuffer','seq_copyBackupBufferToPattern','seq_setPendingPatternActive','seq_setNextPattern','seq_copyPattern'])
+sf+=fn(p,'preset_savePatternRAM')
 b=clean(src('Core/Src/buttonHandler.c'));b=b[b.index('case SEQ_RELOAD:'):];b=b[b.index('{'):b.index('case SEQ_CONFIG:')];b=b[:b.rfind('break;')]
 c=pre+enum+stubs+order+fs+sf+'static void press_reload(void) '+b+main
 with tempfile.TemporaryDirectory(prefix='lxr-reload-') as d:

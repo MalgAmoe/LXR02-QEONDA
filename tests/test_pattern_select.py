@@ -118,6 +118,9 @@ static void preset_touchTimer(uint8_t t){(void)t;touches++;}
 static void preset_savePatternRAM(uint8_t p){(void)p;saveRam++;}
 static FRESULT preset_savePatternSD(uint8_t p){(void)p;saves++;return saveResult;}
 static void preset_loadDrumsetRam(uint8_t a,uint8_t b,uint8_t d){(void)a;(void)b;(void)d;loads++;}
+static uint8_t mainParameters[1][END_OF_SOUND_PARAMETERS];
+static void soundengine_process(void){}
+static void preset_sendDrumsetParameters(void){loads++;}
 static void menu_showSdError(FRESULT e){assert(e);errors++;}
 static void menu_showSaveCleanupWarning(void){warnings++;}
 static void menu_repaint(void){repaints++;}

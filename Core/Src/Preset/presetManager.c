@@ -1708,7 +1708,7 @@ FRESULT preset_savePatternRAM(uint8_t presetNr)
 	if(presetNr == seq_activePattern)
 	{
 		//### Current Slot ###
-		//write current (changed) pattern to backup buffer, to make changes permanent
+		//Refresh the snapshot; pattern edits already remain in RAM.
 		seq_copyPatternToBackupBuffer(presetNr);
 	}
 	else
@@ -1716,7 +1716,7 @@ FRESULT preset_savePatternRAM(uint8_t presetNr)
 		//### NEW SLOT ###
 		//- write current (changed) pattern to new slot
 		seq_copyPattern(seq_activePattern, presetNr);
-		//- change active pattern to new slot (writes backup buffer back to current slot, reverting changes being made in current slot)
+		//- activate the new slot, retaining the edited source in RAM
 		seq_setNextPattern(presetNr);
 	}
 

@@ -126,9 +126,12 @@ provide automatic recovery of unsaved settings.
 
 ## Shift+Reload
 
-Clears morph, requests current-pattern reload, resets filters, and reloads the selected
-kit from **RAM, not disk**. Pattern activation follows existing running/stopped timing;
-a linked pattern kit may subsequently replace the selected kit. PERF is refreshed.
+Clears morph, resets filters, cancels Looping, and reloads the selected kit from
+**RAM, not disk**. Pattern data, sequencer position and any queued pattern are unchanged.
+PERF is refreshed. A queued pattern still activates normally, including its kit link.
+
+Pattern edits remain in RAM across pattern switches. Save-as copies edits to the new
+slot and retains them in the source slot. Save the project to retain edits on disk.
 This is not an atomic reset of every setting; compressor controls are retained.
 
 ## Shift+knob change-all

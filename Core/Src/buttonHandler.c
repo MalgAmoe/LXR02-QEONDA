@@ -27,6 +27,7 @@
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Preset/PresetManager.h"
 #include "Soundengine/FxBus.h"
+#include "Soundengine/Soundengine.h"
 
 //used to remember the last active page when entering the sequencer mode
 //needed to return to the previously shown page when seq mode button is released
@@ -955,28 +956,20 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 		case SEQ_RELOAD:
 		{
             seq_slipClear();
-			//if in LAST STEP mode, reload pattern to reset pattern and track lengths
-		//	uint8_t mode = buttonHandler_getMode();
+			activeParameters[PAR_MORPH] = 0;
+			menu_resetPerformanceFilter();
 
-			//if((mode == SELECT_MODE_LAST_STEP_TRACK) || (mode == SELECT_MODE_LAST_STEP_ALL))
-			//{
-
-				activeParameters[PAR_MORPH] = 0;
-				menu_resetPerformanceFilter();
-
-				//tell sequencer to change/reload current pattern
-				frontPanel_sendData(SEQ_CC, SEQ_CHANGE_PAT, seq_activePattern);
-
-			//}
-			//else
-			//{
-				//reload kit to edit buffer
-				preset_loadDrumsetRam(menu_selectedPresetNr[SAVE_TYPE_KIT],0, 0);
-				preset_touchTimer(PRESET_KIT_TIMER);
-				if (menu_getActivePage() == PERF_PAGE) {
-					menu_repaint();
-				}
-			//}
+			//Service before selecting the kit: a queued pattern may load its linked kit.
+			//Copy before servicing again so that a later activation wins as well.
+			soundengine_process();
+			memcpy(activeParameters, mainParameters[menu_selectedPresetNr[SAVE_TYPE_KIT]],
+					sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
+			soundengine_process();
+			preset_sendDrumsetParameters();
+			preset_touchTimer(PRESET_KIT_TIMER);
+			if (menu_getActivePage() == PERF_PAGE) {
+				menu_repaint();
+			}
 		}
 			break;
 
