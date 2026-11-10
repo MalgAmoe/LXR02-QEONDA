@@ -2210,7 +2210,6 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 				switch(menu_saveOptions.category) {
 
 				case SAVE_TYPE_KIT:
-#if 1
 
 					preset_loadDrumsetRam(menu_selectedPresetNr[menu_saveOptions.category],0, 0);
 					menu_kitLoaded(menu_selectedPresetNr[menu_saveOptions.category]);
@@ -2223,22 +2222,12 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 					seq_patternSet.kitNr[seq_activePattern] = menu_loadedPresetNr[CURRENT_KIT];
 #endif
 
-#else
-					preset_loadDrumset(menu_selectedPresetNr[menu_saveOptions.category],0);
-					// **LFOTARGFIX - save the gap index
-					menu_TargetVoiceGapIndex = getModTargetGapIndex(activeParameters[PAR_TARGET_LFO1 + menu_activeVoice]);
-#endif
 					break;
 
 				case SAVE_TYPE_MORPH:
-#if 1
 					preset_loadDrumsetRam(menu_selectedPresetNr[menu_saveOptions.category],1, 0);
 					activeParameters[PAR_MORPH_KIT_DEST] = menu_selectedPresetNr[menu_saveOptions.category];
 					menu_loadedPresetNr[CURRENT_MORPH] = menu_selectedPresetNr[menu_saveOptions.category];
-#else
-					//load to morph buffer
-					preset_loadDrumset(menu_selectedPresetNr[menu_saveOptions.category],1);
-#endif
 					break;
 
 				case SAVE_TYPE_SONG:
@@ -3939,80 +3928,6 @@ static uint8_t limitPotValue(int8_t diff, uint16_t paramNr)
 	return limitPotValueFromOriginal(diff, paramNr, activeParameters[paramNr]);
 }
 //-----------------------------------------------------------------
-#if 0
-//used in normal pot model, can probably be removed
-static uint8_t getDtypeValue(uint8_t value, uint16_t paramNr)
-{
-	const float frac = (value/255.f); // yield a fraction from 0 to 1
-
-	switch(pgm_read_word(&parameter_dtypes[paramNr]) & 0xFF)
-	{
-	case DTYPE_TARGET_SELECTION_VELO:
-	case DTYPE_TARGET_SELECTION_LFO: {
-		//**VELO **LFO limit range to start and end for the applicable voice, but allow a setting of 0 (for off)
-		uint8_t voiceNr=0;
-		uint8_t s, e, rng;
-		if(paramNr >= PAR_VEL_DEST_1 && paramNr <= PAR_VEL_DEST_6 )
-			voiceNr=(uint8_t)(paramNr-PAR_VEL_DEST_1);
-		else if(paramNr >= PAR_TARGET_LFO1 && paramNr <= PAR_TARGET_LFO6) {
-			// this is the voice being targeted, not the lfo number
-			voiceNr=(uint8_t)(mainParameters[PAR_VOICE_LFO1+(paramNr - PAR_TARGET_LFO1)]-1);
-		}
-		s=pgm_read_byte(&modTargetVoiceOffsets[voiceNr].start);
-		e=pgm_read_byte(&modTargetVoiceOffsets[voiceNr].end);
-		// start will be a non-zero value. We need to allow setting a value of 0 (off) or
-		// something within the start to end range.
-		rng=(uint8_t)(frac * ((e-s)+1)); // where in the range we are
-		if(!rng)
-			return 0; // set to off
-		else
-			return (uint8_t)((s-1)+rng); // set to an offset beginning at start of range
-		}
-		break;
-
-	case DTYPE_AUTOM_TARGET:
-		//**AUTOM - scale to our range for pot value
-		return (uint8_t)((getNumModTargets()-1) * frac);
-	case DTYPE_0B255:
-		return value;
-		break;
-	case DTYPE_VOICE_LFO:
-		// the LFO target voice number is stored and displayed as 1 based
-		return (uint8_t)(1 + 5*frac);
-		break;
-	case DTYPE_1B16:
-		return (uint8_t)(1 + 15*frac);
-		break;
-	case DTYPE_0B15:
-		return (uint8_t)(15*frac);
-		break;
-		// These are 0 or 1
-	case DTYPE_MIX_FM:
-	case DTYPE_ON_OFF:
-	case DTYPE_0b1:
-		return frac>0.5f;
-		break;
-	case DTYPE_MENU:
-	{
-		//get the used menu (upper 4 bit)
-		const uint8_t menuId = pgm_read_word(&parameter_dtypes[paramNr]) >> 8;
-		//get the number of entries
-		uint8_t numEntries=getMaxEntriesForMenu(menuId);
-		return (uint8_t)(frac * (numEntries-1));
-	}
-
-		break;
-	// These ones are all in the 0-127 range
-	case DTYPE_PM63:
-	case DTYPE_NOTE_NAME:
-	case DTYPE_0B127:
-	default:
-		return (uint8_t)(127*frac);
-		break;
-	}	
-	return 0;
-}
-#endif
 //-----------------------------------------------------------------
 uint8_t menu_getDisplayParameterType(uint8_t pos)
 {
@@ -4298,7 +4213,7 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 
 	//parameter fetch. given the value of the pot, and the parameter number
 	// fetch the actual numeric value that the parameter should be set to
-	uint8_t dtypeValue = limitPotValue(diff, paramNr);//getDtypeValue(potValue,paramNr);
+	uint8_t dtypeValue = limitPotValue(diff, paramNr);
 
 	menu_processSpecialCaseValues(paramNr/*,&dtypeValue*/);
 
@@ -4624,28 +4539,6 @@ void numtostru(char *buf, uint8_t num)
     buf[b]=(char)('0'+num);
 }
 
-// non space padded signed
-#if 0
-void numtostrs(char *buf, int8_t num)
-{
-    uint8_t b=0;
-    if(num > 99) {
-        buf[b++]=(char)('0'+(num / 100));
-        num %= 100;
-        if(num < 10)
-            buf[b++]='0';
-    } else if(num < 0) {
-        buf[b++]='-';
-        num=(int8_t)(-num);
-    }
-
-    if(num > 9) {
-        buf[b++]=(char)('0'+(num / 10));
-        num %=10;
-    }
-    buf[b]=(char)('0'+num);
-}
-#endif
 
 // make 1st 3 letters of buffer uppercase
 void upr_three(char *buf)

@@ -1055,18 +1055,8 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 
 			case SEQ_PATTERN: //Pattern
 
-#if 1
 				//--> pattern select mode
 				buttonHandler_enterLivePatternSelect();
-#else
-				//update the status LED
-				led_setMode2(2);
-				led_clearAllBlinkLeds();
-				led_setBlinkLed(LED_STEP16,1);
-				buttonHandler_setMode(SELECT_MODE_LOAD);
-				menu_switchPage(LOAD_PAGE);
-				menu_setLoadSaveCategory(SAVE_TYPE_PATTERN);
-#endif
 				break;
 
 			case SEQ_SONG:

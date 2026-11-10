@@ -637,40 +637,9 @@ void preset_morph_tick()
 // to the back
 void preset_morph(uint8_t morph)
 {
-#if 1
 	//initialize new morph
 	morph_state = 1; //start morph
 	morph_index = 0; //reset index
-#else
-	int i;
-	//TODO so far only sound parameters are interpolated, no LFOs etc
-
-	for(i=0;i<END_OF_SOUND_PARAMETERS;i++)
-	{
-
-
-		uint8_t val;
-
-		val = interpolate(mainParameters[i],morphParameters[i],morph);
-
-		if(i<128) {
-			frontPanel_sendData(MIDI_CC,(uint8_t)i,val);
-
-		} else {
-			frontPanel_sendData(CC_2,(uint8_t)(i-128),val);
-
-		}
-
-
-		//to omit front panel button/LED lag we have to process din dout and uart here
-		//read next button
-
-		//update LEDs
-		dio_process();
-		//read uart messages from sequencer
-		uart_checkAndParse();
-	}
-#endif
 }
 
 //----------------------------------------------------

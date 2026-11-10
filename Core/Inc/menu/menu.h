@@ -725,8 +725,6 @@ void numtostrpu(char *buf, uint8_t num, char pad);
 void numtostrps(char *buf, int8_t num);
 // non space padded unsigned
 void numtostru(char *buf, uint8_t num);
-// non space padded signed
-//void numtostrs(char *buf, int8_t num);
 
 void menu_showSaveCleanupWarning(void);
 /* Nonrecording held-source restore, including morph and selector dispatch. */
