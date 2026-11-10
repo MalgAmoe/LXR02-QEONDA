@@ -72,6 +72,8 @@ int main(void)
     CHECK_EQ(END_OF_SOUND_PARAMETERS, 247);
     CHECK_EQ(PROJECT_CODEC_FILE_BYTES, 255118);
     fill(37);
+    /* A Save Kit-style non-identity link must survive project persistence. */
+    patterns.kitNr[3] = 61;
     ProjectStream_InitWrite(&stream, &file);
     CHECK_EQ(ProjectCodec_Write(&stream, &data), FR_OK);
     CHECK_EQ(length, PROJECT_CODEC_FILE_BYTES);
@@ -86,6 +88,9 @@ int main(void)
     memcpy(encoded, media, sizeof encoded);
     fill(99);
     CHECK_EQ(load((uint32_t)length), FR_OK);
+    CHECK_EQ(patterns.kitNr[3], 61);
+    CHECK_EQ(patterns.kitNr[2], 2);
+    CHECK_EQ(patterns.kitNr[4], 4);
     CHECK_EQ(reads, (length + 4095) / 4096);
     /* Re-encode compares every meaningful field, not padding or ignored names. */
     cursor = 0; ProjectStream_InitWrite(&stream, &file);

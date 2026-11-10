@@ -1479,6 +1479,17 @@ static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 // one of the 8 part buttons is pressed
 static void buttonHandler_selectButtonPressed(uint8_t partNr)
 {
+	if (buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE &&
+		!buttonHandler_getShift() && !buttonHandler_getCopy() &&
+		copyClear_Mode == MODE_NONE && !buttonHandler_stateMemory.seqErasing &&
+		(menu_activePage < NUM_TRACKS || menu_activePage == FX_MODE_PAGE || menu_activePage == PERF_PAGE)) {
+		buttonHandler_handleModeButtons(SELECT_MODE_VOICE);
+		menu_switchSubPageFirstScreen(partNr);
+		led_setActiveSelectButton(partNr);
+		menu_repaintAll();
+		return;
+	}
+
 	//if in step mode, return to voice/edit mode
 	if(buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_STEP)
 	{
@@ -1547,6 +1558,16 @@ static void buttonHandler_partButtonReleased(uint8_t partNr)
 // one of the 7 voice buttons pressed
 static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 {
+	if (buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE &&
+		!buttonHandler_getShift() && !buttonHandler_getCopy() &&
+		copyClear_Mode == MODE_NONE && !buttonHandler_stateMemory.seqErasing &&
+		(menu_activePage < NUM_TRACKS || menu_activePage == FX_MODE_PAGE)) {
+		const uint8_t section = menu_getSubPage();
+		buttonHandler_handleModeButtons(SELECT_MODE_VOICE);
+		menu_switchSubPageFirstScreen(section);
+		// Continue through ordinary voice selection (track requests and LEDs).
+	}
+
 
 	//if in step mode, return to voice/edit mode
 	if(buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_STEP)

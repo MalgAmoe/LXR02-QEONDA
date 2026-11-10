@@ -686,6 +686,8 @@ void menu_parseEncoder(int8_t inc, uint8_t button);
 void menu_switchPage(uint8_t pageNr);
 //-----------------------------------------------------------------
 void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle);
+// Explicit navigation to a section, independent of the previously selected screen.
+void menu_switchSubPageFirstScreen(uint8_t subPageNr);
 //-----------------------------------------------------------------
 void menu_resetActiveParameter();
 //-----------------------------------------------------------------

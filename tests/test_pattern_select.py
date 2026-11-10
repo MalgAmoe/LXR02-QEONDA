@@ -185,7 +185,7 @@ c += slip[slip.index('/* Slip core:'):slip.index('static void seq_triggerSequenc
 # All listed functions are actual firmware bodies, not reimplemented event logic.
 for s, names in ((panel, ('buttonHandler_setMode','buttonHandler_showMuteLEDs','buttonHandler_muteVoice')),
                  (led, ('led_blinkHandler','led_idx2StepLed','led_initPatternSelectLeds','led_updateBarLeds','led_updateSeqLeds')),
-                 (menu, ('menu_getSubPage','menu_resetActiveParameter','menu_endParameterEdit','menu_switchSubPage','menu_switchPage')),
+                 (menu, ('menu_getSubPage','menu_resetActiveParameter','menu_endParameterEdit','menu_switchSubPage','menu_switchSubPageFirstScreen','menu_switchPage')),
                  (panel, ('buttonHandler_restoreOriginal','buttonHandler_armTimerActionStep','buttonHandler_disarmTimerActionStep','buttonHandler_TimerActionOccured','buttonHandler_setTimeraction','buttonHandler_tick','buttonHandler_handleModeButtons','buttonHandler_handleSelectButton','buttonHandler_enterLivePatternSelect','buttonHandler_selectLivePattern','buttonHandler_seqButtonPressed','buttonHandler_releasePerformanceBreak','buttonHandler_releaseSlip','buttonHandler_seqButtonReleased','buttonHandler_selectButtonPressed','buttonHandler_partButtonReleased','buttonHandler_voiceButtonPressed','buttonHandler_buttonPressed','buttonHandler_buttonReleased'))):
     for name in names: c += fn(s, name)
 # Actual bar-follow and direct chase segment, without unrelated clock/MIDI work.
@@ -209,6 +209,7 @@ static void reset(uint8_t page,uint8_t index){
  memset(seq_patternSet.seq_mainSteps,0,sizeof seq_patternSet.seq_mainSteps);
  led_blinkingLeds=led_blinkPrescaler=led_blinkToggleState=0;
  buttonHandler_stateMemory.selectButtonMode=SELECT_MODE_VOICE;
+ buttonHandler_stateMemory.seqErasing=0;
  menu_activePage=page;menuIndex=index;editModeActive=1;
  menu_activeVoice=page<7?page:2;menu_activeBar=0;menu_activePatternBank=0;
  menu_shownPattern=menu_playedPattern=0;heldSeqButtons=consumedSeqReleases=0;
@@ -340,11 +341,51 @@ int main(void){
   for(int p=0;p<16;p++)assert(!leds[led_idx2StepLed(p)]);
   assert(buttonHandler_getMode()==SELECT_MODE_PERF && menuIndex==index && menu_activePage==PERF_PAGE);
  }
- /* Subpage buttons remain inert in ordinary pattern selection. */
- for(int page=0;page<3;page++)for(int button=0;button<8;button++){
-  reset((int[]){2,FX_MODE_PAGE,PERF_PAGE}[page],8);enter(0);
-  buttonHandler_selectButtonPressed(button);
-  assert(menuIndex==8 && buttonHandler_getMode()==SELECT_MODE_PATTERN_LIVE);
+ /* All voices/sections/backgrounds/screens use the real physical dispatch. */
+ for(int bg=0;bg<3;bg++)for(int section=0;section<8;section++)for(int screen=0;screen<2;screen++)for(int v=0;v<7;v++){
+  int page=(int[]){2,FX_MODE_PAGE,PERF_PAGE}[bg];
+  reset(page,section*8+screen*4+2);enter(0);
+  buttonHandler_seqButtonPressed(5);unsigned changesBefore=changes;
+  uint16_t consumed=consumedSeqReleases;unsigned played=menu_playedPattern,shown=menu_shownPattern;
+  buttonHandler_mutedVoices=0;menu_muteModeActive=1;
+  buttonHandler_voiceButtonPressed(v);
+  if(bg==2){assert(buttonHandler_getMode()==SELECT_MODE_PATTERN_LIVE && menu_activePage==PERF_PAGE);assert(buttonHandler_mutedVoices==(1u<<v));}
+  else {
+   assert(buttonHandler_getMode()==SELECT_MODE_VOICE && menu_activePage==v && menu_activeVoice==v);
+   assert(menuIndex==section*8 && !menu_muteModeActive && leds[LED_VOICE1+v]);
+   assert(lastMode==SELECT_MODE_VOICE);pads(0,0);
+  }
+  assert(menu_playedPattern==played && menu_shownPattern==shown && changes==changesBefore);
+  assert(consumedSeqReleases==consumed);buttonHandler_seqButtonReleased(5);assert(!stepWrites);
+  for(int target=0;target<8;target++){
+   reset(page,section*8+screen*4+2);enter(0);buttonHandler_seqButtonPressed(6);
+   consumed=consumedSeqReleases;shown=menu_shownPattern;played=menu_playedPattern;
+   buttonHandler_selectButtonPressed(target);
+   assert(buttonHandler_getMode()==SELECT_MODE_VOICE && menu_activePage==2 && menu_activeVoice==2);
+   assert(menuIndex==target*8 && !editModeActive && !menu_muteModeActive);
+   assert(lastMode==SELECT_MODE_VOICE && leds[LED_VOICE1+2]);pads(0,0);
+   assert(consumedSeqReleases==consumed && menu_shownPattern==shown && menu_playedPattern==played);
+   buttonHandler_seqButtonReleased(6);assert(!stepWrites);
+   buttonHandler_selectButtonPressed(target);assert(menuIndex==target*8+(has2ndPage(target)?4:0));
+  }
+ }
+ /* Modifiers and active erase must not trigger either new exit route. */
+ for(int bg=0;bg<3;bg++)for(int modifier=0;modifier<4;modifier++)for(int kind=0;kind<2;kind++){
+  reset((int[]){2,FX_MODE_PAGE,PERF_PAGE}[bg],12);enter(0);
+  shift=modifier==0;copy=modifier==1;copyClear_Mode=modifier==2?MODE_CLEAR:MODE_NONE;
+  buttonHandler_stateMemory.seqErasing=modifier==3;
+  if(kind)buttonHandler_voiceButtonPressed(3);else buttonHandler_selectButtonPressed(3);
+  assert(buttonHandler_getMode()==SELECT_MODE_PATTERN_LIVE);
+  buttonHandler_stateMemory.seqErasing=0;
+ }
+ /* Standalone FX and save dialogs are excluded. */
+ for(int mode=0;mode<2;mode++)for(int kind=0;kind<2;kind++){
+  reset(mode?PATTERN_SAVE_PAGE:FX_MODE_PAGE,12);
+  buttonHandler_setMode(mode?SELECT_MODE_PATTERN:SELECT_MODE_FX);
+  unsigned oldMode=buttonHandler_getMode();
+  if(kind)buttonHandler_voiceButtonPressed(3);else buttonHandler_selectButtonPressed(3);
+  if(!mode && !kind)assert(buttonHandler_getMode()==SELECT_MODE_VOICE && menu_activePage==2 && menuIndex==28);
+  else assert(buttonHandler_getMode()==oldMode && menu_activePage==(mode?PATTERN_SAVE_PAGE:FX_MODE_PAGE));
  }
  reset(1,11);enter(0);shift=1;buttonHandler_handleModeButtons(0);shift=0;
  assert(buttonHandler_getMode()==SELECT_MODE_STEP && enteredStep==1);
@@ -367,12 +408,8 @@ int main(void){
  assert(buttonHandler_armedAutomationStep==2 && activeParameters[10]==99);
  enter(0);assert(buttonHandler_armedAutomationStep==NO_STEP_SELECTED && activeParameters[10]==23 && !buttonHandler_resetLock1);
  buttonHandler_seqButtonReleased(2);assert(!stepWrites);
- /* Voice/subpage navigation stays live; FX context isn't arbitrary voice subpages. */
- reset(1,2);enter(0);buttonHandler_voiceButtonPressed(6);
- assert(menu_activePage==6 && menu_activeVoice==6 && buttonHandler_getMode()==12);
- uint8_t retainedIndex=menuIndex;buttonHandler_selectButtonPressed(3);assert(menuIndex==retainedIndex && buttonHandler_getMode()==12);
- reset(FX_MODE_PAGE,17);enter(0);buttonHandler_voiceButtonPressed(5);buttonHandler_selectButtonPressed(7);
- assert(menu_activePage==FX_MODE_PAGE && menuIndex==17 && buttonHandler_getMode()==12);
+ /* FX autoload still updates its retained live background. */
+ reset(FX_MODE_PAGE,17);enter(0);
  for(unsigned type=0;type<6;type++){
   change_fx(type);assert(menu_getSubPage()==type && fxBus.fxType==type && buttonHandler_getMode()==12);
  }

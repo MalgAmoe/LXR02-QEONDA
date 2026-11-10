@@ -6,7 +6,9 @@ is provided: old multi-file directories are not imported or overlaid.
 
 ## Runtime behavior
 
-- Kit Save commits the edited sound buffer to the selected RAM kit. Pattern Save
+- Kit Save commits the edited sound buffer to the selected RAM kit, selects it as
+  the loaded kit and assigns it to the active pattern (other patterns unchanged).
+  Save Morph does not change these assignments. Project Save persists them. Pattern Save
   keeps/copies the edited RAM pattern and refreshes its internal backup buffer. Song
   Save As copies the current song to the selected RAM slot and selects it.
 - Global UI edits and Globals Save remain RAM-only. There is no `glo.cfg` read or

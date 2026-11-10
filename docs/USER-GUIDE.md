@@ -54,7 +54,12 @@ patterns and the bar buttons select pattern banks; LEDs show playing/pending sel
 Voice or PERF exits selection without an extra step-edit toggle or PERF bank change
 when returning to the same control page. The current page and selected parameter are
 retained; knobs and encoder continue editing those controls. Copy does not exit this
-view, and subpage buttons are inactive while selecting patterns. Step buttons select
+view. An ordinary voice-button press from voice or FX controls exits to Voice,
+selects that voice and opens the current edit section's first screen. From PERF,
+voice buttons still mute and remain in selection. An ordinary edit-section button
+(OSC, AEG, etc.) from voice, FX or PERF exits to Voice on the current voice and
+opens that section's first screen; subsequent presses cycle normally. These shortcuts
+exclude Shift, held Copy, active copy/clear and erase. Step buttons select
 patterns rather than playing PERF rolls or momentarily muting programmed hits.
 Pattern saving remains a separate operation.
 Kit autoload still replaces sound settings, including the displayed FX type. Ordinary
@@ -117,6 +122,9 @@ record step locks or automatically save the kit. Save the project explicitly.
 Kit, Pattern and Song Save store/copy slots **in RAM only**. Global changes also
 remain in RAM. **Save Project** is the disk-save action: it includes the current
 edited kit, every RAM kit/pattern/song slot, names and project/global controls.
+Kit Save selects the saved slot as the loaded kit and assigns it to the currently
+active pattern; other patterns are unchanged. Save Morph does not change these
+assignments. Save Project is required to retain the assignment across restart.
 Song Save As copies the current song into the chosen RAM slot and selects it.
 
 Boot restores the last explicitly saved project, not the last project you merely

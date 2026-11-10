@@ -2078,7 +2078,17 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 							preset_saveDrumsetRam(menu_selectedPresetNr[SAVE_TYPE_KIT],0);
 
 
+							// Publish loaded kit and current-pattern link together against clock IRQs.
+							const uint32_t primask = __get_PRIMASK();
+							__disable_irq();
 							menu_loadedPresetNr[CURRENT_KIT] = menu_selectedPresetNr[SAVE_TYPE_KIT];
+							// Like Load Kit, link the current pattern to the saved slot.
+#if USE_PATTERN_EDIT_BUFFER
+							patternBackupBuffer.kitNr = menu_loadedPresetNr[CURRENT_KIT];
+#else
+							seq_patternSet.kitNr[seq_activePattern] = menu_loadedPresetNr[CURRENT_KIT];
+#endif
+							__set_PRIMASK(primask);
 							menu_activePage = KIT_SAVE_PAGE_OK;
 							sucessTimer = systick_ticks;
 							menu_repaint();
@@ -3280,6 +3290,12 @@ void menu_switchSubPage(uint8_t subPageNr, uint8_t toggle)
 }
 
 //-----------------------------------------------------------------
+void menu_switchSubPageFirstScreen(uint8_t subPageNr)
+{
+	menu_switchSubPage(subPageNr, 0);
+	menuIndex &= (uint8_t)~MASK_PARAMETER;
+}
+
 void menu_resetActiveParameter()
 {
 	uint8_t activePage		= (menuIndex&MASK_PAGE)>>PAGE_SHIFT;

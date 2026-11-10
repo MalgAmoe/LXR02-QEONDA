@@ -193,3 +193,13 @@ FM remains the explicitly labeled model in `test_wavetable_wrap.py` plus actual
 ARM instruction checks. The integration test also checks both renderer DMA halves
 and signed transient reads. See [AUDIO-NORMALIZED](../docs/AUDIO-NORMALIZED.md) for
 measured differences, source/build identities and hardware gaps.
+
+## Save Kit assignment
+
+`test_save_kit.py` executes the production menu Save Kit/Save Morph branches and
+RAM kit saver with modeled UI/IRQ endpoints. It covers every active pattern,
+new/same kit slots, unrelated pattern links, unchanged morph assignment and
+shared-saver semantics, both edit-buffer configurations, and saved PRIMASK
+restoration. It does not model interrupt scheduling or device playback.
+`test_project_codec` round-trips a non-identity pattern/kit link through the actual
+project codec using memory-backed I/O; real SD/restart behavior remains a hardware check.
