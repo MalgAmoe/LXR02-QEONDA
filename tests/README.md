@@ -101,12 +101,12 @@ comparison. Do not refresh this oracle merely to match changed production code.
 
 ## Empty-pattern occupancy regression
 
-`test_pattern_occupancy` compiles extracted production mutation/backup and file/tmp
-codec bodies with the real pattern/step layout and the whole Euclidean generator
-translation unit. Memory-backed file seams cover empty/used/silent-used round trips,
-legacy missing-tail fallback, required/invalid tags, read errors, and RAM-reset tmp
-recovery. Actual activation and RAM-kit bodies exercise stopped/queued switching,
-all kit modes, unchanged unsaved sounds and ordinary silent-used kit loading.
+`test_pattern_occupancy` compiles extracted production mutation/backup bodies
+with the real pattern/step layout and the whole Euclidean generator translation
+unit. Activation and RAM-kit bodies exercise stopped/queued switching, all kit
+modes, unchanged unsaved sounds and ordinary silent-used kit loading. Project
+codec/runtime tests below now own persistence coverage; obsolete file/tmp format
+and legacy fallback tests were removed with those runtime paths.
 `test_slip_core` also checks occupancy through the production recording writer;
 existing retention/save-as and kit-only Reload regressions remain enabled with
 explicit used-slot fixtures. These tests do not certify SD interruption recovery,
@@ -117,3 +117,31 @@ and blink-handler bodies for all four banks, silent-used and first-hit slots,
 empty current/queued markers, their 2:1 blink cadence, bank redraw, activation
 handover and exit to normal step/chase. LED output and blink registration are
 host seams; physical readability and clock cadence still need instrument review.
+
+## Single-file project integration
+
+`test_project_codec` links production codec/stream with memory-backed FatFs and
+covers full-project round-trip, explicit wire bytes, malformed headers, length
+rejection, truncation and I/O errors. The existing `test_master_comp_persistence`
+and `test_master_comp_save` names now invoke `test_project_runtime.py`, exercising
+production project API bodies linked with the real staged SafeStorage, stream
+and codec. Covers RAM-only saves, full RAM/current-edit capture, coherent compressor
+publication, name browsing, boot selection/defaults, read errors, per-call injected
+filesystem failures, short writes, live shuffle dispatch/save without pad-save,
+and retained failed closes retried before staging cleanup. The fake distinguishes
+missing parent/leaf errors and models open-file unlink and single directory-lock
+exclusion. Engine/UI/timer and
+filesystem endpoints remain substitutes, not hardware certification.
+
+`test_project_callsites` guards boot/control dispatch and absence of tmp/autosave,
+slot I/O and automatic transport-stop calls; it executes the literal song RAM
+Save-As and interactive project-load branches (missing file/path versus other
+errors). Existing audio, MIDI, Reload and pattern-selection tests now expect
+no dirty-timer or slot-file calls, rather than retaining obsolete persistence.
+See [runtime format and limits](../docs/PROJECT-STORAGE.md).
+
+## Retired project measurement diagnostic
+
+ProjectMeasure and its two measurement-only tests have been removed. Historical
+coverage and evidence remain in [PROJECT-MEASUREMENT](../docs/PROJECT-MEASUREMENT.md);
+that diagnostic is no longer a build option or part of this suite.

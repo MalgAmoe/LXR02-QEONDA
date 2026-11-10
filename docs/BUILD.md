@@ -69,3 +69,7 @@ checks as well.
 
 For normal updates use only the application `.img`. These instructions do not require
 building or replacing the bootloader.
+
+Project timing instrumentation has been removed. Historical diagnostic evidence is
+retained in [PROJECT-MEASUREMENT](PROJECT-MEASUREMENT.md); its old build commands
+are not supported by the current source.

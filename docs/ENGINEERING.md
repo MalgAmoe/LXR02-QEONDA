@@ -155,20 +155,21 @@ is added. The scan stays out of line to avoid replicating its unrolled ARM code.
 Empty activation associates the currently loaded kit and skips RAM kit loading,
 retaining unsaved sounds; used activation retains the existing kit-mode rules.
 
-`PatV04` appends one tagged byte after the associated kit number: `0xe0` empty,
-`0xe1` used. The unversioned `/tmp/tmp.pat` appends the same byte. V4 requires it;
-legacy files/tmp without it infer occupancy from main-hit words (silent means
-empty). Invalid present tags/read errors fail that pattern read; this is not a
-new loader rollback or recovery policy. Hits override an empty tag. Old firmware
-reads the compatible prefix but does not preserve silent-used history on resave.
-Full staged project saves still write every pattern/kit; there is no global bitmap,
-dirty tracking, automation-lane change or selective-file-save policy.
+`ProjectCodec` explicitly stores the per-pattern occupancy byte in the single
+project payload, alongside all steps, timing, hit words, shuffle, lengths and kit
+association. No raw structs, tmp overlay, individual slot-file saves or dirty
+timers remain in the runtime. Kit/pattern/song/global Save actions affect RAM;
+Project Save captures the edited kit and serializes the full RAM project. Boot
+uses the last successfully saved selection, with RAM-only initialization when
+missing. See [PROJECT-STORAGE](PROJECT-STORAGE.md) for format, entry points,
+publication, compatibility and verification limits.
 
 
 Project loads/saves currently coexist with playback. Storage work therefore interacts
 with audio servicing and interrupt latency, not only file correctness. The save path
 uses staged writes; the load path does not provide full rollback on partial failure.
-Read `Core/Src/Preset/SafeStorage.c`, `SlotFiles.c` and `presetManager.c` together
+Read `Core/Src/Preset/SafeStorage.c`, `ProjectStream.c`, `ProjectCodec.c` and
+`presetManager.c` together
 before changing ownership, commit order or error recovery.
 
 The card layer distinguishes terminal errors from BUSY; persistent BUSY can wait

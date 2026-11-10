@@ -838,7 +838,7 @@ static void buttonHandler_setRemoveStep(uint8_t ledNr, uint8_t seqButtonPressed)
 	}
 #endif
 	//autosave changes
-	preset_touchTimer(PRESET_PAT_TIMER);
+
 
 }
 
@@ -891,7 +891,7 @@ static void buttonHandler_selectLivePattern(uint8_t pad)
 	// A same-slot reload is pending too, until activation acknowledges it.
 	if(menu_getViewedPattern() == menu_playedPattern)
 		led_setBlinkLed(led_idx2StepLed(pad), 1);
-	preset_touchTimer(PRESET_PAT_TIMER);
+
 	frontPanel_sendData(SEQ_CC, SEQ_CHANGE_PAT, pad + 16 * menu_activePatternBank);
 }
 
@@ -966,7 +966,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 					sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
 			soundengine_process();
 			preset_sendDrumsetParameters();
-			preset_touchTimer(PRESET_KIT_TIMER);
+
 			if (menu_getActivePage() == PERF_PAGE) {
 				menu_repaint();
 			}
@@ -1231,20 +1231,6 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 
 				preset_savePatternRAM(seqButtonPressed + 16 * menu_activePatternBank);
 
-				//save to tmp folder
-				#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
-					HAL_TIM_Base_Start_IT(&htim2);	//calc sample interrupt - prio 1
-				#else
-
-				#endif
-					FRESULT saveResult = preset_savePatternSD(seqButtonPressed + 16 * menu_activePatternBank);
-				#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
-							HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
-				#else
-
-				#endif
-                if(saveResult != FR_OK) { menu_showSdError(saveResult); return; }
-                if(preset_fileCleanupWarning) menu_showSaveCleanupWarning();
 
 
 
@@ -1275,7 +1261,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				frontPanel_sendData(SEQ_CC, SEQ_REQUEST_EUKLID_PARAMS,
 						menu_activePage/*menu_getActiveVoice()*/);
 				//update autosave pattern on manual pattern change
-				preset_touchTimer(PRESET_PAT_TIMER);
+
 
 	//-----------------------------------------------------------------
 

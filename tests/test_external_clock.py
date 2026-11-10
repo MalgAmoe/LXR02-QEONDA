@@ -257,7 +257,10 @@ int main(void){
  trigger_clockCnt=3;seq_lastTick=0;seq_deltaT=100;systick_ticks=40;
  cleanupIrq=1;received(MIDI_STOP);
  assert(!cleanupIrq&&trigger_clockCnt==3&&!trigger_clockReceived&&seq_midiRemaining==60);
- trigger_clockCnt=0;seq_masterStepCnt=1;cleanupIrq=1;received(MIDI_CONTINUE);
+ trigger_clockCnt=0;seq_masterStepCnt=1;received(MIDI_CONTINUE);
+ /* Continue has no autosave cleanup callback now. Inject the eligible edge
+  * immediately after publication, before foreground polling instead. */
+ assert(!primask);EXTI4_IRQHandler();
  assert(!cleanupIrq&&sync_midiAwaitClock&&!sync_interpolationAllowed());
  assert(trigger_clockReceived==1); /* eligible edge retained, not executed in callback */
  poll(1000);assert(!sync_midiAwaitClock&&!steps&&seq_deltaT==60);

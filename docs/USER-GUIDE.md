@@ -73,7 +73,7 @@ unchanged. Playback continues. Rotation is not available in pattern selection/li
 other modes, dialogs or Copy/Clear; their encoder behavior is unchanged. Encoder
 click is unchanged. Recording continues at the current playhead. Already-issued triggers are not
 retracted; subsequent sequencer reads use the rotated data. Save the pattern normally
-to keep the edit. This does not change the saved pattern format.
+to commit it to a RAM slot; save the project to keep it across power-off.
 
 ## Master filters
 
@@ -109,15 +109,26 @@ record step locks or automatically save the kit. Save the project explicitly.
 | Startup | Reset to bypass | Defaults to bypass before project settings load |
 | Kit/pattern load or ordinary Reload | Retained | Retained |
 | Shift+Reload | Reset to bypass | Retained |
-| Project load | Retained | Loaded from project, or bypass defaults for older files |
+| Project load | Retained | Loaded from the saved project |
 | Project save | Not stored | Stored |
 
-### Project compatibility
+### Saving and restart
 
-Compressor settings use an eight-byte extension after the legacy 30-byte globals
-file. Older firmware ignores the extension; saving globals with older firmware
-removes it. Loading that rewritten project in QEONDA restores compressor defaults
-with ratio1 bypass. Missing or invalid extensions also use bypass defaults.
+Kit, Pattern and Song Save store/copy slots **in RAM only**. Global changes also
+remain in RAM. **Save Project** is the disk-save action: it includes the current
+edited kit, every RAM kit/pattern/song slot, names and project/global controls.
+Song Save As copies the current song into the chosen RAM slot and selects it.
+
+Boot restores the last explicitly saved project, not the last project you merely
+loaded. A missing project starts initialized RAM without automatically saving it.
+There is no temporary-file recovery or background autosave: power-off discards
+changes since Project Save. Reload is unchanged and is not a disk-project reload.
+
+Projects use a new single-file format (`/projNN/project.qpr`). Old multi-file
+projects and tmp/global files are not imported. Save/load do not automatically
+stop playback. **Saving Project** remains displayed until completion; a post-save warning
+can mean cleanup or the boot-selection index could not be updated even though
+the project file was published.
 
 A failed project load is not an all-or-nothing rollback: depending on where it fails,
 previous or target compressor settings may remain. Reload the intended project
@@ -144,11 +155,8 @@ Whole-pattern copy carries the source's empty/used status, including a silent us
 source. Track/bar copies and recording/generation that add hits make an empty
 pattern used. Automation alone does not mark a pattern used.
 
-Project saving and temporary recovery retain this status. Older files have no
-occupancy history: on first load, any enabled hit means used; a silent legacy
-pattern is treated as empty. New saves retain silent-used history. Older firmware
-can read the pattern data but loses this distinction if it saves the pattern again.
-Unsaved sound edits still need normal kit/project saving for disk persistence.
+Project saving retains this status, including silent-used history.
+Unsaved sound edits need **Save Project** for disk persistence.
 
 ## Shift+Reload
 

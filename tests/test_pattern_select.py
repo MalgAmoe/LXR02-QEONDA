@@ -317,7 +317,7 @@ int main(void){
  }
  assert(menu_activePatternBank==3);
  for(int i=0;i<5;i++)buttonHandler_buttonPressed(BUT_PAGE_DOWN);
- assert(!menu_activePatternBank && !saves && changes==4 && touches==4);
+ assert(!menu_activePatternBank && !saves && changes==4 && !touches);
  /* Every physical pad maps to its bank slot, including same-slot reload. */
  reset(2,19);enter(0);
  for(int bank=0;bank<4;bank++)for(int pad=0;pad<16;pad++){
@@ -326,7 +326,7 @@ int main(void){
   menu_playedPattern=menu_shownPattern;led_initPatternSelectLeds();pads(0,0);
   assert(leds[led_idx2StepLed(pad)]);
  }
- assert(changes==64 && touches==64 && !saves);
+ assert(changes==64 && !touches && !saves);
  /* Explicit exits don't enter STEP or cycle a retained PERF bank/index. */
  reset(3,21);enter(0);buttonHandler_handleModeButtons(SELECT_MODE_VOICE);
  assert(buttonHandler_getMode()==SELECT_MODE_VOICE && menu_activePage==3 && menuIndex==21 && !enteredStep);
@@ -418,15 +418,14 @@ int main(void){
  assert(!stepWrites && !rolls && !heldSeqButtons && !consumedSeqReleases);
  assert(!leds[LED_PAGE_UP] && !leds[LED_PAGE_DOWN]);pads(0,0);
 
- /* Save+Pattern remains the legacy dialog and reports failure/success as before. */
+ /* Save+Pattern commits RAM only, independent of disk faults. */
  for(int fail=0;fail<2;fail++){
   reset(3,13);enter(0);save=1;buttonHandler_seqButtonPressed(SEQ_PATTERN);save=0;
   assert(buttonHandler_getMode()==SELECT_MODE_PATTERN && menu_activePage==PATTERN_SAVE_PAGE);
   buttonHandler_seqButtonReleased(SEQ_PATTERN);saveResult=fail;
-  buttonHandler_seqButtonPressed(6);assert(saves==1 && saveRam==1 && !changes);
+  buttonHandler_seqButtonPressed(6);assert(saves==0 && saveRam==1 && !changes);
   assert(activeParameters[PAR_PATTERN_MODE]==SKIP_NEXT_KIT_AUTOLOAD);
-  if(fail)assert(errors==1 && menu_activePage==PATTERN_SAVE_PAGE);
-  else assert(!errors && menu_activePage==PATTERN_SAVE_PAGE_OK && menu_selectedPresetNr[SAVE_TYPE_PATTERN]==6);
+  assert(!errors && menu_activePage==PATTERN_SAVE_PAGE_OK && menu_selectedPresetNr[SAVE_TYPE_PATTERN]==6);
  }
  return 0;
 }

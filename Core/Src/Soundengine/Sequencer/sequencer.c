@@ -735,7 +735,7 @@ IN_ITCM_RAM void seq_setPendingPatternActive()
 			preset_loadDrumsetRam(seq_patternSet.kitNr[seq_activePattern], 0, 1);
 			menu_selectedPresetNr[SAVE_TYPE_KIT] = seq_patternSet.kitNr[seq_activePattern];
 			menu_loadedPresetNr[CURRENT_KIT] = seq_patternSet.kitNr[seq_activePattern];
-			preset_touchTimer(PRESET_KIT_TIMER);
+
 		}
 
 		//use shuffle value from pattern
@@ -2163,7 +2163,7 @@ void seq_midiRunCleanup(uint8_t run)
         trigger_reset(0);
         midiParser_checkMtc();
     }
-    preset_touchTimer(run ? PRESET_STOP_PAT_TIMER : PRESET_PAT_TIMER);
+
 }
 
 void seq_midiClockAnchor(void)
@@ -2181,14 +2181,9 @@ void seq_setRunning(uint8_t isRunning)
 	seq_running = isRunning;
     sync_cancelPending();
     __set_PRIMASK(mask);
-	//jump to 1st step if sequencer is stopped
-	if(!seq_running)
+	// Position reset remains in seq_resetPosition().
+	if(seq_running)
 	{
-		preset_touchTimer(PRESET_PAT_TIMER);
-		//moved to seq_resetPosition()
-	} else {
-		//abort pattern save timer, since seq is running again...
-		preset_touchTimer(PRESET_STOP_PAT_TIMER);
 
 		trigger_clockReceived = 0;
 		seq_prescaleCounter = 0;

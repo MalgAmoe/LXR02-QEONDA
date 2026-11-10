@@ -2055,8 +2055,11 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 					switch(menu_saveOptions.category)
 					{
 						case SAVE_TYPE_SONG:
-							//nothing to do here
-							break;
+                            if(seq_activeSong != seq_songData[menu_selectedPresetNr[SAVE_TYPE_SONG]])
+                                memcpy(seq_songData[menu_selectedPresetNr[SAVE_TYPE_SONG]], seq_activeSong, MAX_SONG_LENGTH);
+                            seq_activeSong = seq_songData[menu_selectedPresetNr[SAVE_TYPE_SONG]];
+                            menu_loadedPresetNr[CURRENT_SONG] = menu_selectedPresetNr[SAVE_TYPE_SONG];
+                            break;
 						case SAVE_TYPE_PATTERN:
                         {
 
@@ -2064,24 +2067,6 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 
 							preset_savePatternRAM(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);
 
-							//save to tmp folder
-										#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
-											HAL_TIM_Base_Start_IT(&htim2);	//calc sample interrupt - prio 1
-										#else
-
-										#endif
-											FRESULT saveResult = preset_savePatternSD(menu_selectedPresetNr[SAVE_TYPE_PATTERN]);
-										#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
-													HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
-										#else
-
-										#endif
-                            if(saveResult != FR_OK) {
-                                menu_showSdError(saveResult);
-                                menu_resetSaveParameters();
-                                return;
-                            }
-                            if(preset_fileCleanupWarning) menu_showSaveCleanupWarning();
 
                         }
 							break;
@@ -2091,25 +2076,6 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 
 
 							preset_saveDrumsetRam(menu_selectedPresetNr[SAVE_TYPE_KIT],0);
-
-							//save to tmp folder
-							#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
-								HAL_TIM_Base_Start_IT(&htim2);	//calc sample interrupt - prio 1
-							#else
-
-							#endif
-														FRESULT saveResult = preset_saveDrumsetSD(menu_selectedPresetNr[SAVE_TYPE_KIT],0);
-							#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
-										HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
-							#else
-
-							#endif
-                            if(saveResult != FR_OK) {
-                                menu_showSdError(saveResult);
-                                menu_resetSaveParameters();
-                                return;
-                            }
-                            if(preset_fileCleanupWarning) menu_showSaveCleanupWarning();
 
 
 							menu_loadedPresetNr[CURRENT_KIT] = menu_selectedPresetNr[SAVE_TYPE_KIT];
@@ -2128,8 +2094,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 						{
 							FRESULT res;
 							const uint8_t bg = soundengine_backgroundAudioBegin();
-							res = preset_initTmpFolder();
-							if(res == FR_OK) res = preset_saveGlobals();
+							res = preset_saveGlobals();
 							soundengine_backgroundAudioEnd(bg);
 							if(res != FR_OK) menu_showSdError(res);
 						}
@@ -2239,8 +2204,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 
 					preset_loadDrumsetRam(menu_selectedPresetNr[menu_saveOptions.category],0, 0);
 					menu_kitLoaded(menu_selectedPresetNr[menu_saveOptions.category]);
-					//update autosave kit
-					preset_touchTimer(PRESET_KIT_TIMER);
+
 					//store selected kit in current pattern
 #if USE_PATTERN_EDIT_BUFFER
 					patternBackupBuffer.kitNr = menu_loadedPresetNr[CURRENT_KIT];
@@ -2306,7 +2270,7 @@ void menu_handleLoadSaveMenu(int8_t inc, uint8_t btnClicked)
 
 					res = preset_loadProject(menu_selectedPresetNr[SAVE_TYPE_PROJECT], 1);
 
-					if(res == FR_NO_FILE)
+					if(res == FR_NO_FILE || res == FR_NO_PATH)
 					{
 						res = preset_createProject(menu_selectedPresetNr[SAVE_TYPE_PROJECT]);
 					}
@@ -2942,7 +2906,7 @@ static void menu_encoderChangeParameter(int8_t inc)
 	uint16_t paramNr		= pgm_read_word(&menuPages[menu_activePage][activePage].bot1 + activeParameter);
 	if(paramNr == PAR_NONE) return;
 	if(menu_setMasterCompressor(paramNr, (int32_t)activeParameters[paramNr] + inc)) return;
-	preset_touchTimer(PRESET_KIT_TIMER);
+
 	if(menu_setPerformanceFilter(paramNr, (int16_t)activeParameters[paramNr] + inc)) return;
 	//uint8_t *paramValue = &mainParameters[paramNr];
 	uint8_t *paramValue;
@@ -3242,7 +3206,7 @@ void menu_setLoadSaveCategory(uint8_t cat)
 void menu_resetSaveParameters()
 {
 
-	//globals are autosaved now, samples don't exist no more
+	// Globals remain in RAM until Project Save.
 /*
 	//reset save params
 	if(menu_saveOptions.category >= SAVE_TYPE_GLO) // global and samples only have one choice - hit ok.
@@ -3347,7 +3311,7 @@ void menu_switchPage(uint8_t pageNr)
 		led_setMode2(SELECT_MODE_PATTERN);
 	}
 
-	//autosave config page settings
+	// Global settings are project RAM; leaving a page never writes SD.
 	/*
 	if(menu_activePage == MENU_MIDI_PAGE)
 	{
@@ -4296,7 +4260,6 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 		else if(tmpValue>127) tmpValue = 127;
 		saveScreenPots[potNr] = tmpValue;
 
-		preset_touchTimer(PRESET_KIT_TIMER);
 		menu_handleSaveScreenKnobValue(potNr, tmpValue);
 		return 0;
 	}
@@ -4309,16 +4272,12 @@ uint8_t menu_parseKnobValue(uint8_t potNr, int16_t diff)
 		&& buttonHandler_getShift())
 	{
 		uint8_t changed = menu_changeAllKnob(activePage, potNr + isOn2ndPage, diff);
-		if(changed)
-		{
-			preset_touchTimer(PRESET_KIT_TIMER);
-		}
 		return changed;
 	}
 
 	if(paramNr == PAR_NONE) return 0;
 	if(menu_setMasterCompressor(paramNr, (int32_t)activeParameters[paramNr] + diff)) return 1;
-	preset_touchTimer(PRESET_KIT_TIMER);
+
 	if(menu_setPerformanceFilter(paramNr, (int16_t)activeParameters[paramNr] + diff)) return 1;
 
 	//parameter fetch. given the value of the pot, and the parameter number

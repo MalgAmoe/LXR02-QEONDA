@@ -171,8 +171,8 @@ with tempfile.TemporaryDirectory() as directory:
 
 # Source-order guards complement runtime function tests; they are not an SD simulation.
 preset = source('Preset/presetManager.c')
-save = preset[preset.index('FRESULT preset_saveProject('):]
-cleanup = save.index('preset_clearTmpFolder()')
+save = preset[preset.index('FRESULT preset_saveProject(uint8_t presetNr)\n{'):]
+cleanup = save.index('preset_saveLastUsedProjectNrToSD(presetNr)')
 assert save.index('soundengine_backgroundAudioEnd(bg);', cleanup) < save.index('return res;', cleanup)
 assert 'menu_repaint' not in function(source('menu/menu.c'), 'menu_tick')
 assert 'menu_uiTick();' in source('main.c')

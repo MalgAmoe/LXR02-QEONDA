@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Production occupancy, edits/generator, file/tmp codecs and activation bodies.
+"""Production occupancy, edits/generator, backup and activation bodies.
 Memory-backed FatFs and engine/UI seams: not SD fault or hardware timing tests.
 """
 from pathlib import Path
@@ -17,51 +17,19 @@ c = r'''
 #include <stdlib.h>
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/Sequencer/EuklidGenerator.h"
-#define STEPS_PER_PATTERN 64
-#undef USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
-#define USE_INTERRUPT_ONLY_DURING_SAVE_PROJ 0
 #include "Soundengine/MIDI/MidiMessages.h"
-#define FR_OK 0
-#define FR_INT_ERR 2
-#define FR_INVALID_PARAMETER 3
-#define FA_OPEN_EXISTING 0
-#define FA_READ 1
-#define FA_CREATE_ALWAYS 2
-#define FA_WRITE 4
 #define SAVE_TYPE_PATTERN 0
 #define SEQ_CC 0
 #define SEQ_SET_SHOWN_PATTERN 0
-typedef int FRESULT; typedef int FIL; typedef unsigned UINT;
 PatternSet seq_patternSet;
 PatternBackupBuffer patternBackupBuffer;
 uint8_t seq_activePattern, seq_pendingPattern;
 static uint8_t menu_playedPattern,menu_shownPattern,menu_selectedPresetNr[1];
-static FIL SDFile;
-#define PATTERN_NAMES 0
-#define FEXT_PAT 0
-static char savefileNames[64][1][9];
-static uint8_t preset_projectWriteActive,preset_fileCleanupWarning;
-static FRESULT preset_writeResult;
-static unsigned char disk[10000];
-static unsigned pos,size;
-static int readError;
-static FRESULT preset_openFile(FIL*f,const char*n,int flags){(void)f;(void)n;pos=0;if(flags&FA_WRITE)size=0;return 0;}
-static FRESULT preset_closeFile(FIL*f){(void)f;return 0;}
-static FRESULT preset_initTmpFolder(void){return 0;}
-static FRESULT preset_writeFile(FIL*f,const void*v,UINT n,UINT*w){(void)f;assert(pos+n<=sizeof disk);memcpy(disk+pos,v,n);pos+=n;size=pos;*w=n;return 0;}
-static FRESULT f_read(FIL*f,void*v,UINT n,UINT*r){(void)f;if(readError){*r=0;return 1;}*r=n<size-pos?n:size-pos;memcpy(v,disk+pos,*r);pos+=*r;return 0;}
-static unsigned f_tell(FIL*f){(void)f;return pos;}
-static FRESULT f_lseek(FIL*f,unsigned offset){(void)f;assert(offset<=size);pos=offset;return 0;}
-static void preset_makeFileNameSave(char*n,uint8_t p,int ext,const char*name){(void)p;(void)ext;(void)name;strcpy(n,"00-test.pat");}
-static FRESULT preset_makeFileNameLoad(char*n,uint8_t p,int ext){(void)p;(void)ext;strcpy(n,"00-test.pat");return preset_openFile(&SDFile,n,FA_READ);}
-static void preset_makeFileNameOld(char*n,uint8_t p,int ext){(void)p;(void)ext;strcpy(n,"old.pat");}
-static FRESULT storage_removeOtherSlotFiles(const char*d,const char*n){(void)d;(void)n;return 0;}
 static void menu_repaintAll(void){}
 static void frontPanel_sendData(int a,int b,int d){(void)a;(void)b;(void)d;}
 void seq_slipStepWritten(uint8_t p,uint8_t v,uint8_t s){(void)p;(void)v;(void)s;}
 '''
 c += ''.join(fn(s,n) for n in ('seq_patternIsUsed','seq_copyPatternToBackupBuffer','seq_copyBackupBufferToPattern','seq_resetNote','seq_clearTrack','seq_clearPattern','seq_copyTrack','seq_copyPattern','seq_toggleMainStep','seq_setMainStep'))
-c += ''.join(fn(p,n) for n in ('preset_writePatternOccupancy','preset_readPatternOccupancy','preset_writePatternData','preset_readPatternData','preset_LoadTmpPat','preset_saveTmpPat','preset_savePatternSD','preset_loadPatternSD'))
 c += r'''
 int main(void){
  for(int i=0;i<NUM_PATTERN;i++){seq_clearPattern(i);assert(!seq_patternIsUsed(i));}
@@ -94,32 +62,9 @@ int main(void){
   seq_patternSet.seq_mainSteps[3][0][6]=hits?0x8000:0;
   seq_copyPatternToBackupBuffer(0);seq_clearPattern(0);seq_copyBackupBufferToPattern(0);
   assert(seq_patternIsUsed(0)==(used||hits));
-  size=pos=0;preset_writePatternData(0);unsigned full=size;
-  seq_clearPattern(0);pos=0;assert(preset_readPatternData(0,4));
-  assert(seq_patternIsUsed(0)==(used||hits)&&seq_patternSet.kitNr[0]==13);
-  for(int staged=0;staged<2;staged++){
-   preset_projectWriteActive=staged;assert(preset_savePatternSD(0)==0);
-   assert(!memcmp(disk+8,"PatV04",6));
-   memset(&seq_patternSet,0,sizeof seq_patternSet);assert(preset_loadPatternSD(0)==0);
-   assert(seq_patternIsUsed(0)==(used||hits)&&seq_patternSet.kitNr[0]==13);
-  }
-  // Restart from a completely reset RAM image through the real tmp path.
-  menu_playedPattern=0;assert(preset_saveTmpPat()==0);unsigned tmpSize=size;
-  memset(&seq_patternSet,0,sizeof seq_patternSet);assert(preset_LoadTmpPat()==0);
-  assert(seq_patternIsUsed(0)==(used||hits)&&seq_patternSet.kitNr[0]==13);
-  // Old unversioned tmp has no trailing byte: scan hits, not stale history.
-  size=tmpSize-1;seq_patternSet.used[0]=1;assert(preset_LoadTmpPat()==0);
-  assert(seq_patternIsUsed(0)==hits);
-  size=pos=0;preset_writePatternData(0);size=full-1;pos=0;
-  seq_patternSet.used[0]=1;assert(preset_readPatternData(0,3));assert(seq_patternIsUsed(0)==hits);
-  pos=0;assert(!preset_readPatternData(0,4)); // required byte absent
-  size=full;disk[full-1]=0x42;pos=0;assert(!preset_readPatternData(0,4));
  }
- // An empty tag with actual hits is promoted, never loses notes to kit inheritance.
- size=pos=0;seq_clearPattern(0);seq_setMainStep(0,0,0,1);preset_writePatternData(0);
- disk[size-1]=0xe0;seq_patternSet.used[0]=0;pos=0;
- assert(preset_readPatternData(0,4)&&seq_patternSet.used[0]);
- readError=1;assert(!preset_readPatternOccupancy(0,0));
+ // Storage round-trips, including silent-used, now live in test_project_codec
+ // and the actual project-wrapper integration suite, not removed tmp codecs.
  return 0;
 }
 '''
@@ -160,4 +105,4 @@ with tempfile.TemporaryDirectory(prefix='lxr-occupancy-') as d:
         if name=='codec': cmd += [str(ROOT/'Core/Src/Soundengine/Sequencer/EuklidGenerator.c')]
         subprocess.run(cmd+['-o',str(exe)],check=True)
         subprocess.run([str(exe)],check=True)
-print('Production empty-pattern edits, generator, codecs/tmp restart and sound-retaining activation passed.')
+print('Production empty-pattern edits, generator, backup and sound-retaining activation passed.')

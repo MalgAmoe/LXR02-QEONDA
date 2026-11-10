@@ -161,16 +161,12 @@ void sd_formatRoutine()
 		/* Gives a work area to the default drive */
 		f_mount(&fs, "", 0);
 
-		//create glo.cfg file
-		if(preset_createGlobals() != FR_OK) lcd_string("Settings unsaved");
-
-		//load init sound
-		preset_init(0);
-		//save init sound to card
-
-		sprintf(savefileNames[0][PROJECT_NAMES], "Init");
-		//preset_saveDrumsetSD(0);
-		preset_saveProject(0);
+        preset_createProject(0);
+        res = preset_saveProject(0);
+        if(res != FR_OK) {
+            menu_showSdError(res);
+            return;
+        }
 
 		//success
 		lcd_clear();
@@ -447,94 +443,11 @@ adc_checkPots();
 
 //-----------------------
 
-sprintf(currentFolder, "/proj00");
-if(sd_card_ok)
-{
-
-
-
-
-	FRESULT res;
-	FILINFO fno;
-
-	res = f_stat(currentFolder, &fno);
-	if(res == FR_NO_FILE)
-	{
-		res = f_mkdir(currentFolder);
-		if(res == FR_OK)
-		{
-			f_chdir(currentFolder);
-		}
-	}
-	else
-	{
-		f_chdir(currentFolder);
-	}
-}
-
 	soundengine_init();
 
-	if(sd_card_ok)
-	{
-		if(!preset_loadGlobals())
-		{
-			lcd_clear();
-			lcd_home();
-			lcd_string(PSTR("glo.cfg error"));
-			lcd_setcursor(0,2);
-			lcd_string("Using defaults.");
-			if(preset_createGlobals() != FR_OK) lcd_string("Settings unsaved");
-			HAL_Delay(1000);
+	preset_loadDefaultGlobals();
 
-		}
-	}
-
-	//load init preset
-	if(sd_card_ok)
-	{
-
-
-
-		f_chdir(currentFolder);
-
-#if 1
-
-#if LOAD_PROJECT_ON_BOOT
-
-
-#else
-		//load all 64 kits from sd card
-		lcd_clear();
-		lcd_home();
-		lcd_string(PSTR("Loading kits"));
-		lcd_setcursor(0,2);
-		lcd_string("from SD card");
-
-		for(uint8_t i=0;i<NUM_KIT_SLOTS;i++)
-		{
-			preset_loadDrumsetSD(i,0);
-		}
-#endif
-
-		//init morph target to peset 0
-		morphParameters = mainParameters[0];
-
-#if LOAD_PROJECT_ON_BOOT
-
-#else
-		//init to preset 1
-		preset_loadDrumsetRam(0,0, 1);
-#endif
-#else
-		if(!preset_loadDrumsetSD(0,0)) {
-			lcd_clear();
-			lcd_home();
-			lcd_string(PSTR("Kit read error"));
-			HAL_Delay(1000);
-			preset_sendDrumsetParameters(); // send initial parameters (all 0's)
-		}
-#endif
-	}
+	morphParameters = mainParameters[0];
 
   //initialize empty pattern
 if(sd_card_ok)
@@ -806,60 +719,19 @@ if(sd_card_ok)
 			while(1);
 #else
 
-#if LOAD_PROJECT_ON_BOOT
+    // Names are read without changing the working directory or loading slots.
+    for(uint8_t i=0;i<NUM_KIT_SLOTS;i++) preset_loadProjectNames(i);
+    uint8_t lastUsedProject = 0;
+    res = preset_bootProject(&lastUsedProject);
+    if(res != FR_OK) menu_showSdError(res);
+    else menu_loadedPresetNr[CURRENT_PROJECT] = menu_selectedPresetNr[SAVE_TYPE_PROJECT] = lastUsedProject;
 
-#else
-	for(uint8_t i=0;i<NUM_KIT_SLOTS;i++)
-	{
-
-		preset_loadPatternSD(i);
-	}
-	seq_copyPatternToBackupBuffer(0);
-	led_updateSeqLeds();
-#endif
-	//load project + song names
-	for(uint8_t i=0;i<NUM_KIT_SLOTS;i++)
-	{
-		preset_loadProjectNames(i);
-	}
-	//return to project 0
-	f_chdir("/proj00");
-
-#if LOAD_PROJECT_ON_BOOT
-	uint8_t lastUsedProject;
-	preset_loadLastUsedProjectNrFromSD(&lastUsedProject);
-	//do not clean the tmp folder here, as we are just booting
-	preset_loadProject(lastUsedProject, 0);
-	if(res != FR_OK)
-	{
-		menu_showSdError(res);
-	}
-	else
-	{
-		menu_loadedPresetNr[CURRENT_PROJECT] = menu_selectedPresetNr[SAVE_TYPE_PROJECT] = lastUsedProject;
-		//menu_resetSaveParameters();
-	}
-#else
-	for(uint8_t i=0;i<NUM_KIT_SLOTS;i++)
-	{
-		preset_loadSongSD(i);
-	}
-	//if pattern change mode is auto load corresponding kit
-	if(activeParameters[PAR_PATTERN_MODE] == 1)
-	{
-		preset_loadDrumsetRam(seq_patternSet.kitNr[seq_activePattern], 0, 1);
-		menu_selectedPresetNr[SAVE_TYPE_KIT] = seq_patternSet.kitNr[seq_activePattern];
-		menu_loadedPresetNr[CURRENT_KIT] = seq_patternSet.kitNr[seq_activePattern];
-	}
-#endif
 
 
 }
 else
 {
-  copyClear_clearCurrentPattern();
-  preset_init(0);
-  preset_loadDefaultGlobals();
+  preset_createProject(0);
 }
 
 
@@ -898,19 +770,8 @@ else
 uint8_t lastSdState = BSP_SD_IsDetected();
 buttonHandler_init(); //to make sure all leds are properly lit after boot
 
-//make sure to have the tmp folder active
-preset_initTmpFolder();
-//----- load tmp stuff --------
-//manually saved files
-loadTmpFolderFiles();
-//autosave kit
-preset_LoadTmpKit();
-//autosave pattern
-preset_LoadTmpPat();
+// Project RAM is restored only from an explicitly saved project.
 led_updateSeqLeds();
-
-preset_resetAllSaveTimers();
-//-----------------------------
 
 lcd_process_display_interrupt = 1;
 
@@ -1001,7 +862,7 @@ lcd_process_display_interrupt = 1;
 			uart_processMidi();
 
 	  //check if we have to save something
-	  preset_processTimer();
+
 
     checkMainLoc = -7;
 

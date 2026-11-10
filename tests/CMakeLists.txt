@@ -246,3 +246,17 @@ add_test(NAME test_slip_led COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPIL
 add_test(NAME test_pattern_occupancy
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pattern_occupancy.py)
+
+lxr_add_host_test(test_project_stream
+    SOURCES test_project_stream.c
+    FIRMWARE_SOURCES Core/Src/Preset/ProjectStream.c
+)
+
+lxr_add_host_test(test_project_codec
+    SOURCES test_project_codec.c
+    FIRMWARE_SOURCES Core/Src/Preset/ProjectStream.c Core/Src/Preset/ProjectCodec.c
+)
+
+add_test(NAME test_project_callsites
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_project_callsites.py)

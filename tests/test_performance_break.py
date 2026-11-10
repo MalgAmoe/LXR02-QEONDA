@@ -128,7 +128,7 @@ assert release.index('buttonHandler_releasePerformanceBreak') < release.index('b
 assert release.index('buttonHandler_releasePerformanceBreak') < release.index('buttonHandler_getLoad')
 assert 'if(!isRunning) seq_setPerformanceBreak(0);' in function(seq,'seq_setRunning')
 preset=(root/'Core/Src/Preset/presetManager.c').read_text()
-assert 'seq_setPerformanceBreak(0);' in preset[preset.index('FRESULT preset_loadProject('):][:200]
+assert 'seq_setPerformanceBreak(0);' in preset[preset.index('FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp)\n{'):][:500]
 # The shared trigger and repeating roll code must not suppress manual or incoming notes.
 assert 'seq_performanceBreak' not in seq[seq.index('void seq_triggerVoice('):seq.index('void seq_triggerVoice(')+3500]
 assert 'seq_performanceBreak' not in function(seq,'seq_setRoll')
