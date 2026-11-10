@@ -14,6 +14,9 @@
 
 #include "Soundengine/AudioSample.h"
 
+/* History retains old/32767 units; taps convert to normalized old/32768,
+ * bounded feedback converts back. History itself must not be rescaled. */
+
 #include "Soundengine/DSPAudio/FX/Delay.h"
 
 void Delay_init(Delay* d)
@@ -51,8 +54,8 @@ void Delay_calcBufferPingPong(Delay* d, uint8_t bufferIdx)
 		//calc with read pointer 0
 		uint32_t pos2 = d->oldRead+1;
 		pos2 = pos2 & (halfsize);
-		d->tmpBuffer[0] = interpolate_s16((float)FX_HISTORY(d->oldRead), (float)FX_HISTORY(pos2),d->fracReadOld)*32767.f ;
-		d->tmpBuffer2[0] = interpolate_s16((float)FX_HISTORY(halfsize + d->oldRead), (float)FX_HISTORY(halfsize + pos2),d->fracReadOld)*32767.f ;
+		d->tmpBuffer[0] = interpolate_s16((float)FX_HISTORY(d->oldRead), (float)FX_HISTORY(pos2),d->fracReadOld)*(32767.f/32768.f) ;
+		d->tmpBuffer2[0] = interpolate_s16((float)FX_HISTORY(halfsize + d->oldRead), (float)FX_HISTORY(halfsize + pos2),d->fracReadOld)*(32767.f/32768.f) ;
 		d->oldRead++;
 		d->oldRead = d->oldRead & (halfsize);
 	} else
@@ -60,8 +63,8 @@ void Delay_calcBufferPingPong(Delay* d, uint8_t bufferIdx)
 		//calc with read pointetr 2
 		uint32_t pos2 = d->newRead+1;
 		pos2 = pos2 & (halfsize);
-		d->tmpBuffer[1] = interpolate_s16((float)FX_HISTORY(d->newRead), (float)FX_HISTORY(pos2),d->fracReadNew)*32767.f;
-		d->tmpBuffer2[1] = interpolate_s16((float)FX_HISTORY(halfsize + d->newRead), (float)FX_HISTORY(halfsize + pos2),d->fracReadNew)*32767.f;
+		d->tmpBuffer[1] = interpolate_s16((float)FX_HISTORY(d->newRead), (float)FX_HISTORY(pos2),d->fracReadNew)*(32767.f/32768.f);
+		d->tmpBuffer2[1] = interpolate_s16((float)FX_HISTORY(halfsize + d->newRead), (float)FX_HISTORY(halfsize + pos2),d->fracReadNew)*(32767.f/32768.f);
 		d->newRead++;
 		d->newRead = d->newRead & (halfsize);
 	}
@@ -75,7 +78,7 @@ void Delay_calcBuffer(Delay* d, uint8_t bufferIdx)
 		//calc with read pointer 0
 		uint32_t pos2 = d->oldRead+1;
 		pos2 = pos2 & (FX_BUFFER_SIZE);
-		d->tmpBuffer[0] = interpolate_s16((float)FX_HISTORY(d->oldRead), (float)FX_HISTORY(pos2),d->fracReadOld)*32767.f ;
+		d->tmpBuffer[0] = interpolate_s16((float)FX_HISTORY(d->oldRead), (float)FX_HISTORY(pos2),d->fracReadOld)*(32767.f/32768.f) ;
 		d->oldRead++;
 		d->oldRead = d->oldRead & (FX_BUFFER_SIZE);
 	} else
@@ -83,7 +86,7 @@ void Delay_calcBuffer(Delay* d, uint8_t bufferIdx)
 		//calc with read pointetr 2
 		uint32_t pos2 = d->newRead+1;
 		pos2 = pos2 & (FX_BUFFER_SIZE);
-		d->tmpBuffer[1] = interpolate_s16((float)FX_HISTORY(d->newRead), (float)FX_HISTORY(pos2),d->fracReadNew)*32767.f ;;
+		d->tmpBuffer[1] = interpolate_s16((float)FX_HISTORY(d->newRead), (float)FX_HISTORY(pos2),d->fracReadNew)*(32767.f/32768.f) ;;
 		d->newRead++;
 		d->newRead = d->newRead & (FX_BUFFER_SIZE);
 	}
@@ -143,13 +146,13 @@ void Delay_processPingPong(Delay *d, AudioSample*fxBuffer,AudioSample* outL, Aud
 			outR = calcOnePole(&d->tone2, outR);
 
 			float itg = (audio_sample_bound((fxBuffer[idx1]) + ((outL*d->feedback))));
-			float val = itg/32767.f;
+			float val = itg*(32768.f/32767.f);
 			if(val > 1.f) val = 1.f;
 			else if(val < -1.f) val = -1.f;
 			FX_HISTORY((FX_BUFFER_SIZE>>1) + d->write) = val;
 
 			itg = (audio_sample_bound((fxBuffer[idx2]) + ((outR*d->feedback))));
-			val = itg/32767.f;
+			val = itg*(32768.f/32767.f);
 			if(val > 1.f) val = 1.f;
 			else if(val < -1.f) val = -1.f;
 			FX_HISTORY(d->write++) = val;
@@ -222,7 +225,7 @@ void Delay_process(Delay *d, AudioSample*fxBuffer,AudioSample* outL, AudioSample
     out = calcOnePole(&d->tone, out);
 
     float itg = (audio_sample_bound((audio_sample_bound((fxBuffer[idx1]) + (fxBuffer[idx2]))) + ((out*d->feedback))));
-    float val = itg/32767.f;
+    float val = itg*(32768.f/32767.f);
     if(val > 1.f) val = 1.f;
     else if(val < -1.f) val = -1.f;
     FX_HISTORY(d->write++) = val;

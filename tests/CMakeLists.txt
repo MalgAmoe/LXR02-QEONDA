@@ -316,3 +316,8 @@ else()
     target_link_options(test_float_mix_clip PRIVATE -Wl,--gc-sections)
 endif()
 add_test(NAME test_float_mix_clip COMMAND test_float_mix_clip)
+
+# Frozen baseline observations; no Git-history dependency for ordinary runs.
+add_test(NAME test_audio_normalized
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_audio_normalized.py)

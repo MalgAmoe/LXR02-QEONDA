@@ -13,7 +13,7 @@ static void process(float *b,unsigned frames) {
     for(unsigned i=0;i<frames*2;++i) {
         uint32_t v=((uint32_t)(uint16_t)packed[2*i]<<8)|((uint16_t)packed[2*i+1]>>8);
         int32_t signedValue=v&0x800000u?(int32_t)(v|0xff000000u):(int32_t)v;
-        b[i]=signedValue/256.f;
+        b[i]=signedValue/8388608.f;
     }
 }
 static float b[128];
@@ -28,15 +28,15 @@ static void check(void) {
     assert(finiteBits(state.k) && state.k>=0.33332f && state.k<1.415f);
 }
 static void dc(int x,unsigned blocks) {
-    while(blocks--) { for(unsigned i=0;i<128;i++) b[i]=x; process(b,64); check(); }
+    while(blocks--) { for(unsigned i=0;i<128;i++) b[i]=x/32768.f; process(b,64); check(); }
 }
 static void fresh(unsigned hp,unsigned lp,unsigned r) {
     memset(&state,0,sizeof state); MainDjFilter_setTargets(hp,lp,r); dc(0,8);
 }
 static void dry(void) {
     float original[128];
-    for(unsigned i=0;i<128;i++) original[i]=(int16_t)(i*1103u);
-    original[0]=-32768; original[1]=32767;
+    for(unsigned i=0;i<128;i++) original[i]=(int16_t)(i*1103u)/32768.f;
+    original[0]=-(32768.f/32768.f); original[1]=(32767.f/32768.f);
     memcpy(b,original,sizeof b); process(b,64);
     assert(!memcmp(b,original,sizeof b));
 }
@@ -55,21 +55,21 @@ static void saturation(void) {
     unsigned positive=0,negative=0,intermediate=0;
     for(unsigned i=0;i<12000;i++) {
         int16_t x=(int16_t)(24000.f*sinf(6.28318530718f*fc*i/44140.f));
-        float hp=predict(&state.hp,(float)x,0,1);
+        float hp=predict(&state.hp,x/32768.f,0,1);
         float y=predict(&state.lp,hp,0,0);
-        if(fabsf(hp)>32768.f) ++intermediate;
-        float expected=fmaxf(-32768.f,fminf(8388607.f/256.f,y));
-        b[0]=x; b[1]=0; process(b,1); check();
-        assert(fabsf(b[0]-expected)<=1 && b[1]==0);
-        if(y>8388607.f/256.f) {assert(b[0]==8388607.f/256.f);++positive;}
-        if(y< -32768.f) {assert(b[0]==-32768);++negative;}
+        if(fabsf(hp)>(32768.f/32768.f)) ++intermediate;
+        float expected=fmaxf(-(32768.f/32768.f),fminf(8388607.f/8388608.f,y));
+        b[0]=x/32768.f; b[1]=0; process(b,1); check();
+        assert(fabsf(b[0]-expected)<=1.f/32768.f && b[1]==0);
+        if(y>8388607.f/8388608.f) {assert(b[0]==8388607.f/8388608.f);++positive;}
+        if(y< -(32768.f/32768.f)) {assert(b[0]==-(32768.f/32768.f));++negative;}
     }
     assert(positive && negative && intermediate);
 }
 int main(void) {
     dry(); MainDjFilter_setTargets(0,127,127); dry();
-    fresh(0,0,127); dc(1000,500); assert(fabsf(b[126]-1000)<=2);
-    fresh(1,127,127); dc(1000,1000); assert(fabsf(b[126])<=1);
+    fresh(0,0,127); dc(1000,500); assert(fabsf(b[126]-(1000.f/32768.f))<=2.f/32768.f);
+    fresh(1,127,127); dc(1000,1000); assert(fabsf(b[126])<=1.f/32768.f);
     fresh(1,0,127);
     assert(fabsf(state.hp.g-tanf(3.14159265358979323846f*20.f/44140.f))<1.e-6f);
     assert(fabsf(state.lp.g-tanf(3.14159265358979323846f*40.f/44140.f))<1.e-6f);
@@ -100,7 +100,7 @@ int main(void) {
     const unsigned pairs[][2]={{1,0},{127,0},{127,126},{45,90},{100,10}};
     for(unsigned p=0;p<sizeof pairs/sizeof pairs[0];p++) {
         fresh(pairs[p][0],pairs[p][1],127);
-        b[0]=30000; process(b,64); check();
+        b[0]=(30000.f/32768.f); process(b,64); check();
         for(unsigned i=1;i<128;i+=2) assert(b[i]==0);
         dc(0,5000);
         for(unsigned c=0;c<2;c++) {
@@ -111,7 +111,7 @@ int main(void) {
     saturation();
     for(unsigned j=0;j<2000;j++) {
         MainDjFilter_setTargets((j*17)%128,(j*37)%128,127);
-        for(unsigned i=0;i<128;i++) b[i]=(i/2+j)%2?-32768:32767;
+        for(unsigned i=0;i<128;i++) b[i]=(i/2+j)%2?-(32768.f/32768.f):(32767.f/32768.f);
         process(b,64); check();
     }
     MainDjFilter_reset(); dc(12000,4); dry();

@@ -13,6 +13,9 @@
 
 #include "Soundengine/AudioSample.h"
 
+/* Nonlinear integrator states already use old/32767 units. Only the audio
+ * input/output boundaries convert; do not rescale s1/s2/a/b. */
+
 #include "Soundengine/DSPAudio/ResonantFilter.h"
 
 
@@ -173,7 +176,7 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 		{
 			/* alternative 2Pole LP filter to fix the kick transient problems with the nonlinear ZDF LP */
 
-			float x = softClipTwo((buf[i]/((float)0x7fff))*filter->drive);
+			float x = softClipTwo((buf[i]*(32768.f/32767.f))*filter->drive);
 
 #if !USE_FMAF
 			float q = (1-filter->q) *1.4 + (1-filter->q) / (1.0 - f_lp2);
@@ -207,7 +210,7 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 			else if(filter->b < -1) filter->b = -1;
 
             float tmp;
-			tmp = (filter->b  * FILTER_GAIN);
+			tmp = (filter->b  * (FILTER_GAIN/32768.f));
             buf[i] = audio_sample_bound(tmp);
 		}
 
@@ -222,9 +225,9 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 
 
 	#if USE_SHAPER_NONLINEARITY
-			const float x = (buf[i]/((float)0x7fff));
+			const float x = (buf[i]*(32768.f/32767.f));
 	#else
-			const float x = softClipTwo((buf[i]/((float)0x7fff))*filter->drive);
+			const float x = softClipTwo((buf[i]*(32768.f/32767.f))*filter->drive);
 	#endif
 
 	#if ENABLE_NONLINEAR_INTEGRATORS
@@ -296,9 +299,9 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 			case FILTER_LP:
 	#if USE_SHAPER_NONLINEARITY
 
-				buf[i] = FILTER_GAIN * fastTanh( distortion_calcSampleFloat(&filter->shaper, y1));
+				buf[i] = (FILTER_GAIN/32768.f) * fastTanh( distortion_calcSampleFloat(&filter->shaper, y1));
 	#else
-				tmp = fastTanh(y1) * 0x7fff ;//FILTER_GAIN;
+				tmp = fastTanh(y1) * (32767.f/32768.f) ;//(FILTER_GAIN/32768.f);
             buf[i] = audio_sample_bound(tmp);
 	#endif
 				break;
@@ -309,10 +312,10 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 				const float h = x - ugb - y1;
 	#if USE_SHAPER_NONLINEARITY
 
-				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, h);
+				buf[i] = (FILTER_GAIN/32768.f) * distortion_calcSampleFloat(&filter->shaper, h);
 
 	#else
-				tmp = h * FILTER_GAIN;
+				tmp = h * (FILTER_GAIN/32768.f);
             buf[i] = audio_sample_bound(tmp);
 	#endif
 			}
@@ -321,9 +324,9 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 			case FILTER_BP:
 	#if USE_SHAPER_NONLINEARITY
 
-				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, y0);
+				buf[i] = (FILTER_GAIN/32768.f) * distortion_calcSampleFloat(&filter->shaper, y0);
 	#else
-				tmp = y0 * FILTER_GAIN;
+				tmp = y0 * (FILTER_GAIN/32768.f);
             buf[i] = audio_sample_bound(tmp);
 	#endif
 				break;
@@ -333,9 +336,9 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 				const float ugb = 2*R*y0;
 	#if USE_SHAPER_NONLINEARITY
 
-				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, ugb);
+				buf[i] = (FILTER_GAIN/32768.f) * distortion_calcSampleFloat(&filter->shaper, ugb);
 	#else
-				tmp = ugb * FILTER_GAIN;
+				tmp = ugb * (FILTER_GAIN/32768.f);
             buf[i] = audio_sample_bound(tmp);
 	#endif
 			}
@@ -346,9 +349,9 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 				const float ugb = 2*R*y0;
 	#if USE_SHAPER_NONLINEARITY
 
-				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, (x-ugb));
+				buf[i] = (FILTER_GAIN/32768.f) * distortion_calcSampleFloat(&filter->shaper, (x-ugb));
 	#else
-				tmp = (x-ugb) * FILTER_GAIN;
+				tmp = (x-ugb) * (FILTER_GAIN/32768.f);
             buf[i] = audio_sample_bound(tmp);
 	#endif
 			}
@@ -360,9 +363,9 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 				const float h = x - ugb - y1;
 	#if USE_SHAPER_NONLINEARITY
 
-				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, (y1-h));
+				buf[i] = (FILTER_GAIN/32768.f) * distortion_calcSampleFloat(&filter->shaper, (y1-h));
 	#else
-				tmp = (y1-h) * FILTER_GAIN;
+				tmp = (y1-h) * (FILTER_GAIN/32768.f);
             buf[i] = audio_sample_bound(tmp);
 	#endif
 			}
@@ -394,7 +397,7 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 		{
 			/* alternative 2Pole LP filter to fix the kick transient problems with the nonlinear ZDF LP */
 
-			float x = softClipTwo((buf[i]/((float)0x7fff))*filter->drive);
+			float x = softClipTwo((buf[i]*(32768.f/32767.f))*filter->drive);
 
 #if !USE_FMAF
 			float q = (1-filter->q) *1.4 + (1-filter->q) / (1.0 - f_lp2);
@@ -428,7 +431,7 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 			else if(filter->b < -1) filter->b = -1;
 
             float tmp;
-			tmp = (filter->b  * FILTER_GAIN);
+			tmp = (filter->b  * (FILTER_GAIN/32768.f));
             buf[i] = audio_sample_bound(tmp);
 		}
 
@@ -437,9 +440,9 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 		for(i=0;i<size;i++)
 		{
 	#if USE_SHAPER_NONLINEARITY
-			const float x = (buf[i]/((float)0x7fff));
+			const float x = (buf[i]*(32768.f/32767.f));
 	#else
-			const float x = softClipTwo((buf[i]/((float)0x7fff))*filter->drive);
+			const float x = softClipTwo((buf[i]*(32768.f/32767.f))*filter->drive);
 	#endif
 
 	#if 0
@@ -507,9 +510,9 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 			case FILTER_LP:
 	#if USE_SHAPER_NONLINEARITY
 
-				buf[i] = FILTER_GAIN * fastTanh( distortion_calcSampleFloat(&filter->shaper, y1));
+				buf[i] = (FILTER_GAIN/32768.f) * fastTanh( distortion_calcSampleFloat(&filter->shaper, y1));
 	#else
-				tmp = fastTanh(y1) * 0x7fff ;//FILTER_GAIN;
+				tmp = fastTanh(y1) * (32767.f/32768.f) ;//(FILTER_GAIN/32768.f);
             buf[i] = audio_sample_bound(tmp);
 	#endif
 				break;
@@ -520,9 +523,9 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 				const float h = x - ugb - y1;
 	#if USE_SHAPER_NONLINEARITY
 
-				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, h);
+				buf[i] = (FILTER_GAIN/32768.f) * distortion_calcSampleFloat(&filter->shaper, h);
 	#else
-				tmp = h * FILTER_GAIN;
+				tmp = h * (FILTER_GAIN/32768.f);
             buf[i] = audio_sample_bound(tmp);
 	#endif
 			}
@@ -531,9 +534,9 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 			case FILTER_BP:
 	#if USE_SHAPER_NONLINEARITY
 
-				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, y0);
+				buf[i] = (FILTER_GAIN/32768.f) * distortion_calcSampleFloat(&filter->shaper, y0);
 	#else
-				tmp = y0 * FILTER_GAIN;
+				tmp = y0 * (FILTER_GAIN/32768.f);
             buf[i] = audio_sample_bound(tmp);
 	#endif
 				break;
@@ -543,9 +546,9 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 				const float ugb = 2*R*y0;
 	#if USE_SHAPER_NONLINEARITY
 
-				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, ugb);
+				buf[i] = (FILTER_GAIN/32768.f) * distortion_calcSampleFloat(&filter->shaper, ugb);
 	#else
-				tmp = ugb * FILTER_GAIN;
+				tmp = ugb * (FILTER_GAIN/32768.f);
             buf[i] = audio_sample_bound(tmp);
 	#endif
 			}
@@ -556,9 +559,9 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 				const float ugb = 2*R*y0;
 	#if USE_SHAPER_NONLINEARITY
 
-				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, (x-ugb));
+				buf[i] = (FILTER_GAIN/32768.f) * distortion_calcSampleFloat(&filter->shaper, (x-ugb));
 	#else
-				tmp = (x-ugb) * FILTER_GAIN;
+				tmp = (x-ugb) * (FILTER_GAIN/32768.f);
             buf[i] = audio_sample_bound(tmp);
 	#endif
 			}
@@ -570,9 +573,9 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 				const float h = x - ugb - y1;
 	#if USE_SHAPER_NONLINEARITY
 
-				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, (y1-h));
+				buf[i] = (FILTER_GAIN/32768.f) * distortion_calcSampleFloat(&filter->shaper, (y1-h));
 	#else
-				tmp = (y1-h) * FILTER_GAIN;
+				tmp = (y1-h) * (FILTER_GAIN/32768.f);
             buf[i] = audio_sample_bound(tmp);
 	#endif
 			}

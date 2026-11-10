@@ -117,7 +117,7 @@ void Compressor_process(Compressor *c, AudioSample*fxBuffer,AudioSample* outL, A
 		for(uint8_t i=0; i<size;i++)
 		{
 
-			float in = 0.5f * (fxBuffer[i*2]/32768.f) + 0.5f * (fxBuffer[i*2+1]/32768.f);
+			float in = 0.5f * (fxBuffer[i*2]) + 0.5f * (fxBuffer[i*2+1]);
 			AudioReal peak = fabs(in);
 
 			peak += DC_OFFSET;
@@ -150,7 +150,7 @@ void Compressor_process(Compressor *c, AudioSample*fxBuffer,AudioSample* outL, A
 		{
 			const uint8_t idx1 = i*2;
 
-			float in = fxBuffer[idx1]/32768.f;
+			float in = fxBuffer[idx1];
 			AudioReal peak = fabs(in);
 
 			peak += DC_OFFSET;

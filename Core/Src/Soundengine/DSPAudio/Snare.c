@@ -198,10 +198,10 @@ void Snare_calcSyncBlock(AudioSample* buf, const uint8_t size)
 			//tmp	= __QADD16(transBuf[j],(int16_t)tmp);
 			tmp	+= transBuf[j];
 			// Clip the source mix before envelope, velocity and fader attenuation.
-			tmp = tmp > 32767.f ? 32767.f : (tmp < -32768.f ? -32768.f : tmp);
+			tmp = audio_sample_bound(tmp);
 			float output = snareVoice.combinedVolume  * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, faderTarget);
-			// Defensive conversion: signed envelope undershoot or extended gains.
-			output = output > 32767.f ? 32767.f : (output < -32768.f ? -32768.f : output);
+			// Retain the exceptional-range output bound after signed EG/extended gains.
+			output = audio_sample_bound(output);
 			buf[j] = (AudioSample)output;
 
 #else
@@ -228,10 +228,10 @@ void Snare_calcSyncBlock(AudioSample* buf, const uint8_t size)
 			//tmp	= __QADD16(transBuf[j],(int16_t)tmp);
 			tmp	+= transBuf[j];
 			// Clip the source mix before envelope, velocity and fader attenuation.
-			tmp = tmp > 32767.f ? 32767.f : (tmp < -32768.f ? -32768.f : tmp);
+			tmp = audio_sample_bound(tmp);
 			float output = snareVoice.combinedVolume * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, faderTarget);
-			// Defensive conversion: signed envelope undershoot or extended gains.
-			output = output > 32767.f ? 32767.f : (output < -32768.f ? -32768.f : output);
+			// Retain the exceptional-range output bound after signed EG/extended gains.
+			output = audio_sample_bound(output);
 			buf[j] = (AudioSample)output;
 #else
 			//add filter to buffer

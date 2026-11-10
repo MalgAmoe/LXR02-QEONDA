@@ -67,7 +67,8 @@ checks as well.
 - `cmake --preset debug`: O3 with debugging symbols, not an unoptimised audio engine.
 - `-DLXR_GENERATE_LISTING=ON`: generate a disassembly listing.
 
-Audio is always float32 with padded 24-bit output on both stereo pairs and
+Audio is always normalized float32 (original sample / 32768) with padded 24-bit
+output on both stereo pairs and
 per-operation mix clipping. Original int16 waveform tables and uint32 phases
 remain unchanged. No audio variant switches are supported; use a fresh build
 directory rather than an old variant cache.
@@ -79,7 +80,8 @@ python3 tests/check_audio_float32_arm.py build/release
 ```
 
 Historical experiment reports: [transport](AUDIO-24BIT.md),
-[float32](AUDIO-FLOAT32.md), [mix clipping](AUDIO-FLOAT32-CLIP.md).
+[float32](AUDIO-FLOAT32.md), [mix clipping](AUDIO-FLOAT32-CLIP.md). Current normalization boundaries and
+verification: [AUDIO-NORMALIZED](AUDIO-NORMALIZED.md).
 Their old variant commands are not current build modes.
 
 For normal updates use only the application `.img`. These instructions do not require

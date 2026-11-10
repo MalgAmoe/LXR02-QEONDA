@@ -264,9 +264,13 @@ when relevant rather than treating isolated DSP math as full-system coverage.
 
 ## Audio representation
 
-The production audio path is always float32, including delay history, with
-padded 24-bit encoding on both output pairs. Mix saturation is applied at each
-original saturating add/subtract, retaining fractions below the bounds.
+The production audio path is normalized float32 (original signed16 / 32768),
+including float32 delay history with its separate original /32767 convention, with
+padded 24-bit encoding on both output pairs. Mixer routing and FX-return saturation
+retain the clipped-float baseline's per-operation bounds and fractional values.
+This is not a blanket clip on every voice-internal addition.
 Original int16 waveform tables, uint32 phase arithmetic and deliberate nonlinear
 effects remain. There are no legacy16, transport-only, main-only or unclipped
 build variants. See [BUILD](BUILD.md) and [tests](../tests/README.md).
+
+See [AUDIO-NORMALIZED](AUDIO-NORMALIZED.md) for conversion boundaries and verification.

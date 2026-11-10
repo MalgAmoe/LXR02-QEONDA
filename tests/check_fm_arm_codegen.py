@@ -21,6 +21,11 @@ for name in ('calcFmSineBlock', 'calcFmBlock', 'calcPwmFmBlock'):
     conversions = 2 if name == 'calcPwmFmBlock' else 1  # PWM offset plus FM
     assert len(re.findall(r'\bvcvt\.u32\.f32\b', text)) == conversions, text
     assert re.search(r'vmul\.f32[^\n]*\n[^\n]*vcvt\.u32\.f32', text), text
+    # Reference GCC14.3: phase modulation is restored by 32768 before the
+    # float multiply/uint32 quantizer; waveform endpoints use 1/32768.
+    # Power-of-two scaling may commute across the multiply in fast-math.
+    assert '.word\t0x47000000' in text, text  # 32768.f
+    assert '.word\t0x38000000' in text, text  # 1.f/32768.f
     float_pwm = name == 'calcPwmFmBlock'
     if float_pwm:
         # Original QSUB16 PWM waveform saturation becomes float min/max.

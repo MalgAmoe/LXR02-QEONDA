@@ -35,11 +35,11 @@ void Ringmod_process(Ringmod *rm, AudioSample*fxBuffer, AudioSample* outL, Audio
     AudioSample mod[size];
     calcNextOscSampleBlock(&rm->osc, mod, size, 1.f, 0.3f);
     for(unsigned i=0;i<size;++i) {
-        float wet = fxBuffer[2*i]*mod[i]/65536.f;
+        float wet = fxBuffer[2*i]*mod[i]*0.5f;
         if(channels==1) wet = audio_mix_add(wet, outL[2*i]);
         outL[2*i] = audio_mix_add(outL[2*i], fxBuffer[2*i] + audio_mix_bound((wet-fxBuffer[2*i])*dryWet));
         if(channels==2) {
-            wet = fxBuffer[2*i+1]*mod[i]/65536.f;
+            wet = fxBuffer[2*i+1]*mod[i]*0.5f;
             outR[2*i] = audio_mix_add(outR[2*i], fxBuffer[2*i+1] + audio_mix_bound((wet-fxBuffer[2*i+1])*dryWet));
         }
     }

@@ -174,7 +174,7 @@ static inline void bufferTool_addGainInterpolatedDoubleDithered(Dither* dither, 
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
-		AudioReal in = (buf[i]/32768.0f);
+		AudioReal in = (buf[i]);
 		if(in>1.0)in=1.0;
 		else if( in < -1.0)in=-1.0;
 		const AudioReal frac = i/(size-1.0);

@@ -9,11 +9,11 @@ exec(helpers)
 source=implementation('Core/Src/Soundengine/DSPAudio/Oscillator.c').replace('IN_ITCM_RAM ','')
 functions=''.join(extract(source,n) for n in ('calcFmSineBlock','calcWavetableOscBlock','calcFmBlock','calcPwmBlock','calcPwmFmBlock'))
 # Only the three exact conversion sites may be adapted for negative host tests.
-cast='(uint32_t)(modBuffer[i]*osc->fmMod)'
+cast='(uint32_t)((modBuffer[i]*32768.f)*osc->fmMod)'
 assert functions.count(cast)==3
 for name in ('calcFmSineBlock','calcFmBlock','calcPwmFmBlock'):
  assert extract(source,name).count(cast)==1
-adapted=functions.replace(cast,'arm_unsigned_model(modBuffer[i]*osc->fmMod)')
+adapted=functions.replace(cast,'arm_unsigned_model((modBuffer[i]*32768.f)*osc->fmMod)')
 code=r'''
 #include <stdint.h>
 #include "Soundengine/AudioSample.h"
@@ -36,7 +36,7 @@ static uint32_t arm_unsigned_model(float x){
 '''+ 'FUNCTIONS_PLACEHOLDER' +r'''
 static float sample(const int16_t *t,uint32_t phase){
  unsigned i=phase>>22,next=(i+1)&1023u;
- return (float)t[i]+(t[next]-t[i])*((phase&0x3fffff)/4194304.f);
+ return (t[i]/32768.f)+(t[next]/32768.f-t[i]/32768.f)*((phase&0x3fffff)/4194304.f);
 }
 int main(void){
  const int16_t (*tables[])[1024]={sawTable,triTable,recTable};
@@ -44,7 +44,7 @@ int main(void){
  for(unsigned t=0;t<3;t++)for(unsigned row=0;row<11;row++)
  for(unsigned i=0;i<1024;i++)for(unsigned f=0;f<3;f++){
   uint32_t phase=(i<<22)+(f==0?0:f==1?0x200000:0x3fffff);
-  OscInfo o={phase,12345,row,1,0};float out,mod=1;
+  OscInfo o={phase,12345,row,1,0};float out,mod=1.f/32768.f;
   calcWavetableOscBlock(&o,tables[t],&out,1,1);
   assert(out==sample(tables[t][row],phase)&&o.phase==phase+12345);checks++;
   o.phase=phase;calcFmBlock(&o,tables[t],&mod,&out,1,1);
@@ -55,7 +55,7 @@ int main(void){
    uint32_t p2=phase+offset;
    o.phase=phase;calcPwmBlock(&o,&out,1,1,pwm);
    assert(out==pwm_bound(sample(sawTable[row],phase),sample(sawTable[row],p2)));checks++;
-   o.phase=phase;mod=1;calcPwmFmBlock(&o,&mod,&out,1,1,pwm);
+   o.phase=phase;mod=1.f/32768.f;calcPwmFmBlock(&o,&mod,&out,1,1,pwm);
    assert(out==pwm_bound(sample(sawTable[row],phase+(1u<<19)),sample(sawTable[row],phase+(1u<<19)+offset)));checks++;
   }
  }
@@ -66,7 +66,7 @@ int main(void){
   const float amounts[]={-1.f,0.f,0.125f,0.5f,1.f};
   float x=m*amounts[g];uint32_t q=x<0?0:(uint32_t)x;
   uint32_t phase=0xffe00000u;
-  OscInfo o={phase,12345,10,amounts[g],0};float mod=m,out;
+  OscInfo o={phase,12345,10,amounts[g],0};float mod=m/32768.f,out;
   calcFmBlock(&o,recTable,&mod,&out,1,1);
   assert(out==sample(recTable[10],phase+(q<<19)));checks++;
   o.phase=phase;calcPwmFmBlock(&o,&mod,&out,1,1,1.f);
@@ -74,7 +74,7 @@ int main(void){
   assert(out==pwm_bound(sample(sawTable[10],index),sample(sawTable[10],index+0x80000000u)));checks++;
   o.phase=phase;calcFmSineBlock(&o,&mod,&out,1,1);
   index=phase+(q<<17);unsigned it=index>>20;
-  float expected=(float)sine_table[it]+(sine_table[it+1]-sine_table[it])*((index&0xfffff)/1048576.f);
+  float expected=sine_table[it]/32768.f+(sine_table[it+1]/32768.f-sine_table[it]/32768.f)*((index&0xfffff)/1048576.f);
   assert(out==expected);checks++;
  }
 #else
@@ -82,7 +82,7 @@ int main(void){
  for(int m=0;m<=32767;m++)for(unsigned g=0;g<4;g++){
   const float amounts[]={0.f,0.125f,0.5f,1.f};
   uint32_t phase=0xffe00000u,q=(uint32_t)(m*amounts[g]);
-  OscInfo o={phase,12345,10,amounts[g],0};float mod=m,out;
+  OscInfo o={phase,12345,10,amounts[g],0};float mod=m/32768.f,out;
   calcFmBlock(&o,recTable,&mod,&out,1,1);
   assert(out==sample(recTable[10],phase+(q<<19)));checks++;
   o.phase=phase;calcPwmFmBlock(&o,&mod,&out,1,1,1.f);
@@ -90,7 +90,7 @@ int main(void){
   assert(out==pwm_bound(sample(sawTable[10],index),sample(sawTable[10],index+0x80000000u)));checks++;
   o.phase=phase;calcFmSineBlock(&o,&mod,&out,1,1);
   index=phase+(q<<17);unsigned it=index>>20;
-  float expected=(float)sine_table[it]+(sine_table[it+1]-sine_table[it])*((index&0xfffff)/1048576.f);
+  float expected=sine_table[it]/32768.f+(sine_table[it+1]/32768.f-sine_table[it]/32768.f)*((index&0xfffff)/1048576.f);
   assert(out==expected);checks++;
  }
 #endif

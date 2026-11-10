@@ -28,10 +28,10 @@ IN_ITCM_RAM void calcDistBlock(const Distortion *dist, AudioSample* buf, const u
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
-			float x = buf[i]/32767.f;
+			float x = buf[i]*(32768.f/32767.f);
 			//const float shape1 = 1+dist->shape;
 			x = (1+dist->shape)*x/(1+dist->shape*fabsf(x));
-			buf[i] = (x*32767);
+			buf[i] = (x*(32767.f/32768.f));
 	}
 }
 //--------------------------------------------------
@@ -45,10 +45,10 @@ void calcDistBlockFiltered(Distortion *dist, AudioSample* buf, const uint8_t siz
 #else
 			float shape = dist->shape;
 #endif
-			float x = buf[i]/32767.f;
+			float x = buf[i]*(32768.f/32767.f);
 			//const float shape1 = 1+dist->shape;
 			x = (1+shape)*x/(1+shape*fabsf(x));
-			buf[i] = (x*32767);
+			buf[i] = (x*(32767.f/32768.f));
 	}
 }
 //--------------------------------------------------

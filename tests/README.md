@@ -148,7 +148,7 @@ that diagnostic is no longer a build option or part of this suite.
 
 ## Production float32 audio
 
-All audio tests compile the sole production path: float32 samples and delay
+All audio tests compile the sole production path: normalized float32 samples and delay
 history, padded 24-bit output on both stereo pairs, per-operation mix clipping.
 Original int16 tables and uint32 phases remain. Scheduling tests use the same
 DMA geometry. Hardware/RNG/fader endpoints remain substitutes.
@@ -176,3 +176,20 @@ across routes and effects; the second checks numerical history, voices, routing
 and both output encoders. Filter/compressor tests decode the real packed output
 without an alternate int16 API. See the historical
 [operation audit](../docs/AUDIO-FLOAT32-CLIP.md) for clipping placement.
+
+### Normalized audio differential
+
+`test_audio_normalized.py` compiles `audio_normalized_probe.c` against production
+sources at O1 and O3/fast-math with ASan/UBSan/float-cast-overflow. Frozen normalized
+observations in `fixtures/audio_baseline_20e6e6b.txt.gz` came from the unchanged
+20e6e6b tree using AppleClang 17, not from the normalized implementation. The same
+probe runs against either tree; `--source ROOT --scale 1.f --record FILE.gz` is an
+explicit baseline capture, not part of normal testing. Ordinary runs need no Git
+history. Do not refresh the fixture to accommodate regressions.
+
+The probe covers six voice paths, positive FM quantization, nonlinear voice/FX
+processing, normal/ping-pong delay, every route and both output encoders. Negative
+FM remains the explicitly labeled model in `test_wavetable_wrap.py` plus actual
+ARM instruction checks. The integration test also checks both renderer DMA halves
+and signed transient reads. See [AUDIO-NORMALIZED](../docs/AUDIO-NORMALIZED.md) for
+measured differences, source/build identities and hardware gaps.

@@ -14,7 +14,7 @@ static void process(float *b,unsigned frames) {
     for(unsigned i=0;i<frames*2;++i) {
         uint32_t v=((uint32_t)(uint16_t)packed[2*i]<<8)|((uint16_t)packed[2*i+1]>>8);
         int32_t signedValue=v&0x800000u?(int32_t)(v|0xff000000u):(int32_t)v;
-        b[i]=signedValue/256.f;
+        b[i]=signedValue/8388608.f;
     }
 }
 static double oracle(double e) {
@@ -26,58 +26,58 @@ static void transitions(void) {
     memset(&comp,0,sizeof comp);
     const uint8_t on[4]={12,19,0,0}, off[4]={30,0,17,20};
     MainCompressor_setControls(on); assert(MainCompressor_beginBlock());
-    float last=16000;
-    for(unsigned i=0;i<30000;i++){float x[2]={16000,8000};MainCompressor_processPair(x);last=x[0];}
+    float last=(16000.f/32768.f);
+    for(unsigned i=0;i<30000;i++){float x[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(x);last=x[0];}
     MainCompressor_setParameter(302,36);MainCompressor_beginBlock();
-    float x[2]={16000,8000};MainCompressor_processPair(x);
+    float x[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(x);
     /* Relative continuity bound: full makeup changes absolute output level.
      * A 24 dB threshold edit ramps over 221 samples (~1.2%/sample here). */
-    assert(fabsf(x[0]-last)<0.02f*fmaxf(fabsf(last),16000.f));
-    for(unsigned i=0;i<30000;i++){float y[2]={16000,8000};MainCompressor_processPair(y);last=y[0];}
+    assert(fabsf(x[0]-last)<0.02f*fmaxf(fabsf(last),(16000.f/32768.f)));
+    for(unsigned i=0;i<30000;i++){float y[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(y);last=y[0];}
     MainCompressor_setParameter(303,1);MainCompressor_beginBlock();
     for(unsigned i=0;i<221;i++) {
-      float y[2]={16000,8000};MainCompressor_processPair(y);
-      assert(fabsf(y[0]-last)<0.02f*fmaxf(fabsf(last),16000.f));last=y[0];
+      float y[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(y);
+      assert(fabsf(y[0]-last)<0.02f*fmaxf(fabsf(last),(16000.f/32768.f)));last=y[0];
     }
     assert(comp.curveRamp==0 && comp.slope==comp.goalSlope);
-    for(unsigned i=0;i<30000;i++){float y[2]={16000,8000};MainCompressor_processPair(y);last=y[0];}
+    for(unsigned i=0;i<30000;i++){float y[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(y);last=y[0];}
     /* Same complete publication used by project adoption, including ratio1. */
     MainCompressor_setControls(off);assert(MainCompressor_beginBlock());
     assert(comp.envelope>0); /* Not reset at publication/block boundary. */
     for(unsigned i=0;i<300;i++) {
-      float y[2]={16000,8000};MainCompressor_processPair(y);
-      assert(fabsf(y[0]-last)<0.02f*fmaxf(fabsf(last),16000.f));assert(y[0]==2*y[1]);last=y[0];
+      float y[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(y);
+      assert(fabsf(y[0]-last)<0.02f*fmaxf(fabsf(last),(16000.f/32768.f)));assert(y[0]==2*y[1]);last=y[0];
     }
-    assert(!MainCompressor_beginBlock());assert(last==16000);
+    assert(!MainCompressor_beginBlock());assert(last==(16000.f/32768.f));
     assert(comp.envelope==0 && comp.gain==1 && comp.makeup==1);
     MainCompressor_setControls(on);assert(MainCompressor_beginBlock());
-    float y[2]={16000,8000};MainCompressor_processPair(y);assert(fabsf(y[0]-16000)<100);
+    float y[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(y);assert(fabsf(y[0]-(16000.f/32768.f))<100.f/32768.f);
     /* Reverse a drain before settling: no premature state clear or wet jump. */
-    for(unsigned i=0;i<221;i++){float x[2]={16000,8000};MainCompressor_processPair(x);}
+    for(unsigned i=0;i<221;i++){float x[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(x);}
     MainCompressor_setControls(off);assert(MainCompressor_beginBlock());
-    for(unsigned i=0;i<70;i++){float x[2]={16000,8000};MainCompressor_processPair(x);}
+    for(unsigned i=0;i<70;i++){float x[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(x);}
     float wet=comp.wet, env=comp.envelope;
     MainCompressor_setControls(on);assert(MainCompressor_beginBlock());
     assert(comp.wet==wet && comp.envelope==env);
-    for(unsigned i=0;i<221;i++){float x[2]={16000,8000};MainCompressor_processPair(x);}
+    for(unsigned i=0;i<221;i++){float x[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(x);}
     assert(comp.wet==1 && comp.wetRamp==0 && comp.curveRamp==0);
     /* Disable midway through a curve edit: freeze its current configuration. */
     MainCompressor_setParameter(302,36);MainCompressor_beginBlock();
-    for(unsigned i=0;i<70;i++){float x[2]={16000,8000};MainCompressor_processPair(x);}
+    for(unsigned i=0;i<70;i++){float x[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(x);}
     float threshold=comp.threshold;
     MainCompressor_setControls(off);assert(MainCompressor_beginBlock());
     assert(comp.threshold==threshold && !comp.curveRamp);
-    for(unsigned i=0;i<221;i++){float x[2]={16000,8000};MainCompressor_processPair(x);}
+    for(unsigned i=0;i<221;i++){float x[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(x);}
     assert(!MainCompressor_beginBlock() && comp.envelope==0);
     MainCompressor_setControls(on);assert(MainCompressor_beginBlock());
     /* Public filter entry must not skip the disabling compressor. */
-    for(unsigned i=0;i<30000;i++){float x[2]={16000,8000};MainCompressor_processPair(x);last=x[0];}
+    for(unsigned i=0;i<30000;i++){float x[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(x);last=x[0];}
     MainCompressor_setControls(off);
-    float frame[2]={16000,8000};process(frame,1);
-    float previousOutput=fminf(last,8388607.f/256.f);
-    assert(fabsf(frame[0]-previousOutput)<0.02f*fmaxf(fabsf(last),16000.f) && frame[0]!=16000);
-    for(unsigned i=0;i<220;i++){frame[0]=16000;frame[1]=8000;process(frame,1);}
-    assert(frame[0]==16000 && frame[1]==8000);
+    float frame[2]={(16000.f/32768.f),(8000.f/32768.f)};process(frame,1);
+    float previousOutput=fminf(last,8388607.f/8388608.f);
+    assert(fabsf(frame[0]-previousOutput)<0.02f*fmaxf(fabsf(last),(16000.f/32768.f)) && frame[0]!=(16000.f/32768.f));
+    for(unsigned i=0;i<220;i++){frame[0]=(16000.f/32768.f);frame[1]=(8000.f/32768.f);process(frame,1);}
+    assert(frame[0]==(16000.f/32768.f) && frame[1]==(8000.f/32768.f));
     assert(!MainCompressor_beginBlock() && comp.envelope==0);
     memset(&comp,0,sizeof comp);
 }
@@ -113,10 +113,10 @@ int main(void) {
       assert(MainCompressor_beginBlock());
       double env=0,errmax=0;
       for(unsigned i=0;i<30000;i++) {
-        float v=(i%6000<3000)?32768.f:0.f;
+        float v=(i%6000<3000)?(32768.f/32768.f):0.f;
         float x[2]={v,-v*.5f};
-        double a=v/32768.>env?comp.attack:comp.release;
-        env=v/32768.+a*(env-v/32768.);
+        double a=v>env?comp.attack:comp.release;
+        env=v+a*(env-v);
         MainCompressor_processPair(x);
         double err=fabs(20*log10(comp.gain/oracle(env)));
         if(err>errmax)errmax=err;
@@ -129,12 +129,12 @@ int main(void) {
       assert(errmax<0.002);
     }
     MainCompressor_setParameter(303,0);assert(MainCompressor_beginBlock());
-    for(unsigned i=0;i<221;i++){float x[2]={16000,8000};MainCompressor_processPair(x);}
+    for(unsigned i=0;i<221;i++){float x[2]={(16000.f/32768.f),(8000.f/32768.f)};MainCompressor_processPair(x);}
     assert(!MainCompressor_beginBlock());
     assert(comp.gain==1 && comp.makeup==1 && comp.envelope==0);
     float samples[128], original[128];
-    for(unsigned i=0;i<128;i++) original[i]=(int16_t)(i*1103u);
-    original[0]=-32768;original[1]=32767;
+    for(unsigned i=0;i<128;i++) original[i]=(int16_t)(i*1103u)/32768.f;
+    original[0]=-(32768.f/32768.f);original[1]=(32767.f/32768.f);
     memcpy(samples,original,sizeof samples);
     process(samples,64);
     assert(!memcmp(samples,original,sizeof samples));
@@ -150,13 +150,13 @@ int main(void) {
       int16_t v=(int16_t)(24000*sinf(6.28318530718f*20.f*powf(400.f,79.f/126.f)*i/44140.f));
       unsigned char savedFilter[sizeof state],savedComp[sizeof comp];
       memcpy(savedFilter,&state,sizeof state);memcpy(savedComp,&comp,sizeof comp);
-      float x[2]={v,-v};processStage(&state.hp,x,1);processStage(&state.lp,x,0);
-      if(fabsf(x[0])>32768)overrange++;
+      float x[2]={v/32768.f,-v/32768.f};processStage(&state.hp,x,1);processStage(&state.lp,x,0);
+      if(fabsf(x[0])>(32768.f/32768.f))overrange++;
       MainCompressor_processPair(x);
-      float expected=fmaxf(-32768.f,fminf(8388607.f/256.f,x[0]));
+      float expected=fmaxf(-(32768.f/32768.f),fminf(8388607.f/8388608.f,x[0]));
       memcpy(&state,savedFilter,sizeof state);memcpy(&comp,savedComp,sizeof comp);
-      samples[0]=v;samples[1]=-v;process(samples,1);
-      assert(fabsf(samples[0]-expected)<=1);
+      samples[0]=v/32768.f;samples[1]=-v/32768.f;process(samples,1);
+      assert(fabsf(samples[0]-expected)<=1.f/32768.f);
     }
     assert(overrange);
     /* Times are RC 63.2% amplitude constants, logarithmic endpoints/defaults. */

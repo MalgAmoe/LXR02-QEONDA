@@ -33,15 +33,15 @@ static void setup(int route,int ratio,float wet,float threshold) {
 /* Two independent interleaved physical output buffers, with outer guards. */
 static void block(int sample,float expected,int route) {
  _Alignas(4) AudioSample in[128], a[132], b[132];
- for(int i=0;i<128;i++) in[i]=(route<2)?sample:((i%2)?1234:sample);
+ for(int i=0;i<128;i++) in[i]=(route<2)?sample/32768.f:((i%2)?1234.f/32768.f:sample/32768.f);
  memset(a,0,sizeof a);memset(b,0,sizeof b);
  a[0]=a[131]=b[0]=b[131]=777;
  FxBus_process(in,a+2,a+3,b+2,b+3,64);
  AudioSample *target=(route==0 || route==2 || route==3)?b:a;
  int channel=(route==3 || route==5);
  for(int i=0;i<128;i++) {
-  assert(a[i+2]==((target==a && (route<2 || i%2==channel))?expected:0));
-  assert(b[i+2]==((target==b && (route<2 || i%2==channel))?expected:0));
+  assert(a[i+2]==((target==a && (route<2 || i%2==channel))?expected/32768.f:0));
+  assert(b[i+2]==((target==b && (route<2 || i%2==channel))?expected/32768.f:0));
  }
  assert(a[0]==777 && a[1]==0 && a[130]==0 && a[131]==777);
  assert(b[0]==777 && b[1]==0 && b[130]==0 && b[131]==777);
@@ -58,12 +58,12 @@ int main(void) {
   for(int ratio=0;ratio<6;ratio++) {
    setup(r,ratio,1,0);
    /* First attack sample must clip for every ratio at slow attack. */
-   AudioSample in[2]={20000,-1234}, out[2]={0};
+   AudioSample in[2]={20000.f/32768.f,-1234.f/32768.f}, out[2]={0};
    Compressor_process(&fxBus.compressor,in,out,NULL,1,1,1);
-   assert(out[0]==32767); assert(fxBus.compressor.env>0 && fxBus.compressor.env<1);
+   assert(out[0]==32767.f/32768.f); assert(fxBus.compressor.env>0 && fxBus.compressor.env<1);
    double previous=fxBus.compressor.env;
    _Alignas(4) AudioSample buf[128],a[128],b[128];
-   for(int i=0;i<128;i++)buf[i]=20000;
+   for(int i=0;i<128;i++)buf[i]=20000.f/32768.f;
    for(int n=0;n<1000;n++) {
     memset(a,0,sizeof a);memset(b,0,sizeof b);
     FxBus_process(buf,a,a+1,b,b+1,64);

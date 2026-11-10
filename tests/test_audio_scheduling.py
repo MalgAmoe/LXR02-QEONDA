@@ -111,7 +111,7 @@ void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *h);
 static void mixer_calcNextSampleBlock(AudioSample *a,AudioSample *b) {
     static unsigned renderCount;
     lastHalf = renderCount++ == 1 ? 1 : 0;
-    for(unsigned i=0;i<128;++i) {a[i]=(int16_t)(i-64); b[i]=(int16_t)(64-i);}
+    for(unsigned i=0;i<128;++i) {a[i]=(int16_t)(i-64)/32768.f; b[i]=(int16_t)(64-i)/32768.f;}
     if(renderingLate) HAL_I2S_TxCpltCallback(&hi2s3);
 }
 '''
@@ -134,7 +134,7 @@ int main(void) {
     for(unsigned i=0;i<128;++i) src[i]=(int16_t)(i%4==0 ? -32768 : i%4==1 ? 32767 : i%4==2 ? -1 : 0);
     for(unsigned half=0;half<2;++half) {
         for(unsigned i=0;i<514;++i) guarded[i]=1234;
-        for(unsigned i=0;i<128;++i) audio_output24_store(guarded+1+half*256+2*i,src[i]);
+        for(unsigned i=0;i<128;++i) audio_output24_store(guarded+1+half*256+2*i,src[i]/32768.f);
         for(unsigned i=0;i<128;++i) {
             assert(guarded[1+half*256+2*i]==src[i]);
             assert(guarded[2+half*256+2*i]==0);

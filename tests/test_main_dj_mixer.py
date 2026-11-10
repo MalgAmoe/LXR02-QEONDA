@@ -38,7 +38,7 @@ static uint8_t mixer_audioRouting[6];
 static void modNode_resetTargets(void){} static void modNode_reassignVeloMod(void){}
 static void lfo_dispatchNextValue(void*p){} static void SVF_recalcFreq(void*p){}
 static void calcDrumVoiceAsync(int n){} static void Snare_calcAsync(void){} static void Cymbal_calcAsync(void){} static void HiHat_calcAsync(void){}
-static void calcDrumVoiceSyncBlock(int n,AudioSample*p,unsigned len){for(unsigned i=0;i<len;i++)p[i]=n==0?1000:0;}
+static void calcDrumVoiceSyncBlock(int n,AudioSample*p,unsigned len){for(unsigned i=0;i<len;i++)p[i]=n==0?1000.f/32768.f:0;}
 static void Snare_calcSyncBlock(AudioSample*p,unsigned n){memset(p,0,n*sizeof(*p));}
 #define Cymbal_calcSyncBlock Snare_calcSyncBlock
 #define HiHat_calcSyncBlock Snare_calcSyncBlock
@@ -86,7 +86,7 @@ c+=body('Core/Src/Soundengine/Soundengine.c','soundengine_calcNextSampleBlock')
 c+='''
 static float decoded(const int16_t *p,unsigned i){
  uint32_t v=((uint32_t)(uint16_t)p[2*i]<<8)|((uint16_t)p[2*i+1]>>8);
- return (v&0x800000u?(int32_t)(v|0xff000000u):(int32_t)v)/256.f;
+ return (v&0x800000u?(int32_t)(v|0xff000000u):(int32_t)v)/8388608.f;
 }
 static void render(unsigned half){bCurrentSampleValid=half;assert(soundengine_calcNextSampleBlock());}
 int main(void){
@@ -107,8 +107,8 @@ int main(void){
    int left=(i%2)==0;
    int st1=t==0||t==6||(t==2&&left)||(t==3&&!left);
    int st2=t==1||t==7||(t==4&&left)||(t==5&&!left);
-   assert(decoded(dma_buffer2,128*half+i)==(st1?1000:0));
-   assert(decoded(dma_buffer,128*half+i)==(st2?1000:0));
+   assert(decoded(dma_buffer2,128*half+i)==(st1?1000.f/32768.f:0));
+   assert(decoded(dma_buffer,128*half+i)==(st2?1000.f/32768.f:0));
   }
   int16_t a[256],b[256];memcpy(a,dma_buffer+256*half,sizeof a);memcpy(b,dma_buffer2+256*half,sizeof b);
   MainDjFilter_setTargets(settings[setting][0],settings[setting][1],settings[setting][2]);for(unsigned j=0;j<120;j++)render(half);
@@ -116,7 +116,7 @@ int main(void){
   int st2Changed=memcmp(a,dma_buffer+256*half,sizeof a)!=0;
   int mainRoute=t==0||t==2||t==3||t==6;
   int dcRejected=1;
-  if(mainRoute && settings[setting][0])for(unsigned i=0;i<128;i++)dcRejected &= decoded(dma_buffer2,128*half+i)>=-1 && decoded(dma_buffer2,128*half+i)<=1;
+  if(mainRoute && settings[setting][0])for(unsigned i=0;i<128;i++)dcRejected &= decoded(dma_buffer2,128*half+i)>=-1.f/32768.f && decoded(dma_buffer2,128*half+i)<=1.f/32768.f;
   int ok=mainRoute?(!st2Changed&&dcRejected&&(settings[setting][0]?st1Changed:1)):(!st1Changed&&!st2Changed);
   printf("%s half=%u: St1 changed=%d St2 changed=%d expected main-only: %s\\n",names[t],half,st1Changed,st2Changed,ok?"PASS":"FAIL");
   for(unsigned i=0;i<256;i++){
@@ -138,11 +138,11 @@ int main(void){
    int left=(i%2)==0;
    int st1=t==0||t==6||(t==2&&left)||(t==3&&!left);
    int st2=t==1||t==7||(t==4&&left)||(t==5&&!left);
-   assert(decoded(dma_buffer,128*half+i)==(st2?1000:0));
+   assert(decoded(dma_buffer,128*half+i)==(st2?1000.f/32768.f:0));
    /* Settled DC: reduction at input level plus reference makeup minus growing margin. */
    double reductionDb=(20.0*log10(1000.0/32768.0)+48.0)*0.95;
-   double expected=1000.0*pow(10.0,(45.6-4.0*45.6/(45.6+12.0)-reductionDb)/20.0);
-   assert(st1?fabs(decoded(dma_buffer2,128*half+i)-expected)<3.0:decoded(dma_buffer2,128*half+i)==0);
+   double expected=(1000.0/32768.0)*pow(10.0,(45.6-4.0*45.6/(45.6+12.0)-reductionDb)/20.0);
+   assert(st1?fabs(decoded(dma_buffer2,128*half+i)-expected)<3.0/32768.0:decoded(dma_buffer2,128*half+i)==0);
    assert(dma_buffer[256*(1-half)+i]==12345);
    assert(dma_buffer2[256*(1-half)+i]==12345);
   }
@@ -152,7 +152,7 @@ int main(void){
  // Drain the finite DSP-owned bypass ramp before asserting exact routing.
  for(unsigned i=0;i<4;i++)render(i%2);
  render(0);render(1);
- for(unsigned i=0;i<256;i++)assert(decoded(dma_buffer2,i)==1000);
+ for(unsigned i=0;i<256;i++)assert(decoded(dma_buffer2,i)==1000.f/32768.f);
  printf("%u/64 intended main-only routing checks failed\\n",failures);
  return failures?1:0;
 }

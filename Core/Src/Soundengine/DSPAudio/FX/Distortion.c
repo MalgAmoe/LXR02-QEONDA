@@ -207,8 +207,9 @@ float foldback(float in, float threshold)
 }
 
 /* Same tube/fold/RAT laws and route-specific gains. Wet source clips
- * remain musical; interpolation and destination addition do not clip.
- * Tube overload retains its original 512-unit fractional remainder. */
+ * remain musical; wet deltas and each destination add retain their bounds.
+ * Tube cell selection is bounded, but its overload fraction is not.
+ * Tube overload uses frac(normalizedInput * 64), including beyond full scale. */
 void Distortion_process(MasterDistortion *dist, AudioSample*fxBuffer, AudioSample* outL, AudioSample* outR, uint16_t size, uint8_t channels, float dryWet)
 {
 	if(dist->distortionType == DISTORTION_TUBE)
@@ -230,13 +231,13 @@ void Distortion_process(MasterDistortion *dist, AudioSample*fxBuffer, AudioSampl
 				float input1 = (fxBuffer[idx1]) * (1.f + dist->drive*4);
 				float input2 = (fxBuffer[idx2]) * (1.f + dist->drive*4);
 
-				float index1 = (audio_sample_bound(input1)+32768.f)/512.f;
+				float index1 = (audio_sample_bound(input1)+1.f)*64.f;
                 unsigned itg1 = (unsigned)index1;
-				float index2 = (audio_sample_bound(input2)+32768.f)/512.f;
+				float index2 = (audio_sample_bound(input2)+1.f)*64.f;
                 unsigned itg2 = (unsigned)index2;
 
-				float frac1 = input1/512.f - floorf(input1/512.f);
-				float frac2 = input2/512.f - floorf(input2/512.f);
+				float frac1 = input1*64.f - floorf(input1*64.f);
+				float frac2 = input2*64.f - floorf(input2*64.f);
 
 				float val1 = (float)ecc83Table[itg1] + ((float)ecc83Table[itg1+1]-(float)ecc83Table[itg1]) * frac1;
 				float val2 = (float)ecc83Table[itg2] + ((float)ecc83Table[itg2+1]-(float)ecc83Table[itg2]) * frac2;
@@ -247,9 +248,9 @@ void Distortion_process(MasterDistortion *dist, AudioSample*fxBuffer, AudioSampl
 				val1 = dist->lp3_state[0] * outputModifier * dist->p3;
 				val2 = dist->lp3_state[1] * outputModifier * dist->p3;
 
-				const float wet = audio_sample_bound((val1 * 32768.0f));
+				const float wet = audio_sample_bound((val1));
 
-				const float wet2 = audio_sample_bound((val2 * 32768.0f));
+				const float wet2 = audio_sample_bound((val2));
 
 				float x[2] = {fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet)), fxBuffer[idx2] + (audio_mix_bound((wet2 - fxBuffer[idx2]) * dryWet))};
 
@@ -263,15 +264,15 @@ void Distortion_process(MasterDistortion *dist, AudioSample*fxBuffer, AudioSampl
 			{
 				const uint8_t idx1 = i*2;
 				float input1 = (fxBuffer[idx1]) * (1.f + dist->drive);
-				float index1 = (audio_sample_bound(input1)+32768.f)/512.f;
+				float index1 = (audio_sample_bound(input1)+1.f)*64.f;
                 unsigned itg1 = (unsigned)index1;
-				float frac1 = input1/512.f - floorf(input1/512.f);
+				float frac1 = input1*64.f - floorf(input1*64.f);
 				float val1 = (float)ecc83Table[itg1] + ((float)ecc83Table[itg1+1]-(float)ecc83Table[itg1]) * frac1;
 
 				dist->lp3_state[0] += coff * (val1 - dist->lp3_state[0]);
 				val1 = dist->lp3_state[0] * outputModifier * dist->p3;
 
-				float wet = audio_sample_bound((val1 * 32768.0f));
+				float wet = audio_sample_bound((val1));
 				float dw = fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet));
 				*outL = audio_mix_add(*outL, dw);
 
@@ -293,8 +294,8 @@ void Distortion_process(MasterDistortion *dist, AudioSample*fxBuffer, AudioSampl
 				const uint8_t idx1 = i*2;
 				const uint8_t idx2 = i*2+1;
 
-				float input1 = ( (fxBuffer[idx1])  ) / 32768.f;
-				float input2 = ( (fxBuffer[idx2]) ) / 32768.f ;
+				float input1 = ( (fxBuffer[idx1])  );
+				float input2 = ( (fxBuffer[idx2]) ) ;
 
 				float val1 = input1  * (1.f + dist->drive*4.f)  + dist->p1;
 				float val2 = input2  * (1.f + dist->drive*4.f)  + dist->p1;
@@ -316,9 +317,9 @@ void Distortion_process(MasterDistortion *dist, AudioSample*fxBuffer, AudioSampl
 	#endif
 
 				float x[2];
-				const float wet = audio_sample_bound((val1 * 32768.0f));
+				const float wet = audio_sample_bound((val1));
 
-				const float wet2 = audio_sample_bound((val2 * 32768.0f));
+				const float wet2 = audio_sample_bound((val2));
 
 				{ float pair[2] = {fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet)), fxBuffer[idx2] + (audio_mix_bound((wet2 - fxBuffer[idx2]) * dryWet))}; x[0]=pair[0]; x[1]=pair[1]; }
 
@@ -333,14 +334,14 @@ void Distortion_process(MasterDistortion *dist, AudioSample*fxBuffer, AudioSampl
 			{
 				const uint8_t idx1 = i*2;
 
-				float input1 = ( (fxBuffer[idx1])  ) / 32768.f;
+				float input1 = ( (fxBuffer[idx1])  );
 				float val1 = input1  * (1.f + dist->drive*4.f)  + dist->p1;
 
 				dist->lp3_state[0] += coff * (val1 - dist->lp3_state[0]);
 
 				val1 = foldback(dist->lp3_state[0], 1.f) * dist->p3;
 
-				float wet = audio_sample_bound((val1 * 32768.0f));
+				float wet = audio_sample_bound((val1));
 				float dw = fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet));
 
 				*outL = audio_mix_add(*outL, dw);
@@ -372,8 +373,8 @@ void Distortion_process(MasterDistortion *dist, AudioSample*fxBuffer, AudioSampl
 				const uint8_t idx1 = i*2;
 				const uint8_t idx2 = i*2+1;
 
-				float signal1 = ( (fxBuffer[idx1])  ) / 32768.f;
-				float signal2 = ( (fxBuffer[idx2])  ) / 32768.f;
+				float signal1 = ( (fxBuffer[idx1])  );
+				float signal2 = ( (fxBuffer[idx2])  );
 
 				signal1 += dist->lastOut[0] * dist->p1 * 0.125f;
 				signal2 += dist->lastOut[1] * dist->p1 * 0.125f;
@@ -427,9 +428,9 @@ void Distortion_process(MasterDistortion *dist, AudioSample*fxBuffer, AudioSampl
 				dist->lastOut[0] = dist->lp3_state[0] * dist->p3;
 				dist->lastOut[1] = dist->lp3_state[1] * dist->p3;
 
-				float wet = audio_sample_bound((dist->lastOut[0] * 32768.0f));
+				float wet = audio_sample_bound((dist->lastOut[0]));
 
-				float wet2 = audio_sample_bound((dist->lastOut[1] * 32768.0f));
+				float wet2 = audio_sample_bound((dist->lastOut[1]));
 
 				{ float pair[2] = {fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet)), fxBuffer[idx2] + (audio_mix_bound((wet2 - fxBuffer[idx2]) * dryWet))}; x[0]=pair[0]; x[1]=pair[1]; }
 
@@ -443,7 +444,7 @@ void Distortion_process(MasterDistortion *dist, AudioSample*fxBuffer, AudioSampl
 			{
 
 				const uint8_t idx1 = i*2;
-				float signal1 = ( (fxBuffer[idx1])  ) / 32768.f;
+				float signal1 = ( (fxBuffer[idx1])  );
 
 				signal1 += dist->lastOut[0] * dist->p1 * 0.125f;
 
@@ -475,7 +476,7 @@ void Distortion_process(MasterDistortion *dist, AudioSample*fxBuffer, AudioSampl
 
 				dist->lastOut[0] = dist->lp3_state[0] * dist->p3;
 
-				float wet = audio_sample_bound((dist->lastOut[0] * 32768.0f));
+				float wet = audio_sample_bound((dist->lastOut[0]));
 				float dw = fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet));
 				*outL = audio_mix_add(*outL, dw);
 				outL += 2;
