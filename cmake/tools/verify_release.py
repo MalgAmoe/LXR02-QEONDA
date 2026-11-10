@@ -7,7 +7,7 @@ import sys
 
 
 def verify(directory):
-    image = directory / 'LXR_QEONDA_V0.1.img'
+    image = directory / 'LXR_QEONDA_V0.2.img'
     data = image.read_bytes()
     binary = (directory / 'LXR_V2_STM32F765.bin').read_bytes()
     if len(data) < 16:

@@ -34,7 +34,7 @@ if(NOT CMAKE_TOOLCHAIN_FILE)
 endif()
 
 project(LXR_V2_STM32F765
-    VERSION 0.1
+    VERSION 0.2
     DESCRIPTION "LXR QEONDA custom drum machine firmware"
     LANGUAGES C ASM
 )
@@ -165,7 +165,7 @@ if(NOT bootloader)
 endif()
 
 if(bootloader)
-    # LXR_QEONDA_V0.1_full.hex/.bin: bootloader at 0x08000000 + firmware at 0x08008000.
+    # LXR_QEONDA_V0.2_full.hex/.bin: bootloader at 0x08000000 + firmware at 0x08008000.
     lxr_add_combined_image(full_image
         OUTPUT_NAME LXR_QEONDA_V${PROJECT_VERSION}_full
         BOOTLOADER ${bootloader}

@@ -56,7 +56,7 @@ typedef struct ImageFileHeaderStruct
 /* Private define ------------------------------------------------------------*/
 // The CMake build passes FIRMWARE_VERSION from project(VERSION); this is the fallback for STM32CubeIDE.
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION " 0.1"
+#define FIRMWARE_VERSION " 0.2"
 #endif
 //#define f_unmount(path) f_mount(0, path, 0)
 

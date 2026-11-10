@@ -1,4 +1,4 @@
-# LXR QEONDA 0.1
+# LXR QEONDA 0.2
 
 Custom firmware for the Erica Synths LXR-02 desktop drum machine, based on the
 [open-source LXR V2 firmware by Erica Synths](https://github.com/erica-synths/lxr-desktop-app).
@@ -6,8 +6,7 @@ Custom firmware for the Erica Synths LXR-02 desktop drum machine, based on the
 **LXR QEONDA is unofficial firmware. It is not affiliated with, endorsed by or
 approved by Erica Synths. Installation and use are at your own risk.**
 
-**Version 0.1 is feature-frozen.** Further work focuses on documentation and fixes
-for confirmed bugs rather than new features.
+**Version 0.2 is the current local development build, not a published release.**
 
 ## Project compatibility — read before installing
 
@@ -25,6 +24,14 @@ for the tradeoff.
 
 ## Features
 
+Version 0.2 brings together single-file project storage (see the
+compatibility warning above), normalized float32 audio with clipped, padded 24-bit
+output, Save Kit linking to the active pattern, improved pattern/edit navigation
+and responsive screensaver wake. Current development also includes pending Last
+Step, Config and load/save dialog exits with held-pad release handling; these
+latest navigation changes still need hardware acceptance. See the
+[current controls](docs/USER-GUIDE.md).
+
 - Momentary pattern mute: hold button 8 in PERF mode to mute programmed hits while keeping rolls available. Release to bring the pattern back in, still in time.
 - Looping: in PERF buttons 9–12 for 2/4/6/8-step loop while the real playhead keeps advancing. First-held FIFO ownership; see the [control guide](docs/USER-GUIDE.md).
 - Selected-track rotation: Shift + data encoder in Voice mode rotates steps with their locks and timing.
@@ -37,8 +44,8 @@ for the tradeoff.
 
 ## Download and install
 
-Published firmware builds are available under [GitHub Releases](https://github.com/MalgAmoe/LXR02-QEONDA/releases).
-Download **`LXR_QEONDA_V0.1.img`** and **`SHA256SUMS`** from the same release—not the
+Version 0.2 is local and not published. Published builds, when available, are under [GitHub Releases](https://github.com/MalgAmoe/LXR02-QEONDA/releases).
+Download **`LXR_QEONDA_V0.2.img`** and **`SHA256SUMS`** from the same release—not the
 GitHub source-code ZIP. If no release has been published yet, build from source below.
 You do not need to compile a published image.
 
@@ -115,7 +122,7 @@ cmake --build --preset release
 ```
 
 If needed, configure with `-DARM_TOOLCHAIN_DIR=/path/to/arm-none-eabi/bin`.
-The resulting image is `build/release/LXR_QEONDA_V0.1.img`; install it using the steps above.
+The resulting image is `build/release/LXR_QEONDA_V0.2.img`; install it using the steps above.
 
 ## Documentation
 

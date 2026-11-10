@@ -1,4 +1,10 @@
-# QEONDA 0.1 — controls and compatibility
+# QEONDA 0.2 controls and compatibility
+
+Version **0.2** identifies the current local build, not a published release.
+This guide includes
+pending development navigation for Last Step, Config and load/save dialogs; those
+latest changes are not yet hardware-accepted. Audio uses normalized float32 with
+clipped, padded 24-bit output.
 
 A supplement to the stock desktop LXR manual. For downloads and installation, see
 [the README](../README.md#download-and-install).
@@ -64,6 +70,35 @@ patterns rather than playing PERF rolls or momentarily muting programmed hits.
 Pattern saving remains a separate operation.
 Kit autoload still replaces sound settings, including the displayed FX type. Ordinary
 knob recording still targets the playing pattern, not a pending selection.
+
+In either Last Step mode (track or all tracks), an ordinary edit-section button
+exits to Voice on the current voice and opens that section's first screen. The
+same modifier exclusions apply. Voice buttons still select the track whose length
+you are editing.
+
+From Config, an ordinary voice button exits to Voice on the selected voice at
+OSC’s first screen (the Config index is not an edit section). An ordinary
+edit-section button exits on the current voice at the requested section’s first
+screen. The same modifier exclusions apply; Voice/Edit also retains its existing
+exit behavior.
+
+## Leaving load/save dialogs
+
+In Kit, Morph, Song and Project load/save dialogs (including name editing and
+confirmation), an ordinary voice button leaves for that voice at OSC’s first
+screen. An ordinary edit-section button leaves for the current voice at that
+section’s first screen. This also works in Save+Pattern slot selection and on
+the Kit/Pattern saved messages. Shift, physical Copy, active copy/clear and erase
+keep their existing routes rather than taking these exits.
+
+Leaving does not confirm a save/load, and does not undo an operation already
+completed. A held slot/shortcut pad is consumed on exit: releasing it does not
+write a step. Saved messages cannot later time out back over your chosen page.
+This is cancellation of the dialog, not rollback of UI edits: browsed slot
+selections remain selected, and existing eager in-memory name changes (such as
+initializing an empty name to “Unnamed”) are not restored. Unconfirmed name-buffer
+edits are not committed by this exit. Use Save Project for disk persistence of
+completed RAM saves as usual.
 
 ## Selected-track rotation
 
