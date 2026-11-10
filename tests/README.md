@@ -203,3 +203,21 @@ shared-saver semantics, both edit-buffer configurations, and saved PRIMASK
 restoration. It does not model interrupt scheduling or device playback.
 `test_project_codec` round-trips a non-identity pattern/kit link through the actual
 project codec using memory-backed I/O; real SD/restart behavior remains a hardware check.
+
+## Screensaver wake regression
+
+`test_screensaver_wake.py` compiles the actual screensaver source and extracted
+LCD nonblocking functions, menu sender, repaint request and UI handoff, using
+production LCD constants. Its companion C scenarios sweep all four reachable
+animation wait states over 0–500 ms remaining, drain every clear/command/data
+phase (both LCD rows), check audio servicing, inactive/repeated touches, deferred
+cache invalidation and completed redraw, including an already-pending menu flush.
+The deadline assertion fails on the pre-fix source. Run directly with
+`CC=clang python3 tests/test_screensaver_wake.py` or through CTest; no private
+fixtures, historical Git objects or investigation-directory files are required.
+
+GPIO, time, audio processing and page painting are host substitutes. The sender
+poll advances simulated time; the measured bounds are deterministic model checks,
+not device latency measurements. This does not verify OLED electrical timing,
+real interrupt interleaving, audible continuity or time until visible repaint.
+Unused plasma/state11 behavior and tick wrap are outside this regression's scope.

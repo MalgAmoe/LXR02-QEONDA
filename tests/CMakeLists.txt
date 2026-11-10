@@ -325,3 +325,7 @@ add_test(NAME test_audio_normalized
 add_test(NAME test_save_kit
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_save_kit.py)
+
+add_test(NAME test_screensaver_wake
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_screensaver_wake.py)
