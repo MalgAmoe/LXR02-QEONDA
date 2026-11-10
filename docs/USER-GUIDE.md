@@ -200,16 +200,17 @@ occupancy even for empty slots, and only appear in the displayed bank. Flashing
 follows the existing sequencer LED clock. Bank changes redraw the slots; leaving
 selection restores the normal step LEDs/chase. Save+Pattern LEDs are unchanged.
 
-New pattern slots are empty. Selecting an empty slot keeps the current kit and
-unsaved sound edits, without reloading sounds, and associates that slot with the
-currently loaded kit. Enabling its first step makes it **used**. Removing the last
+New pattern slots are empty. Selecting any slot preserves its stored kit link.
+Empty and used slots follow the same pattern kit mode: auto loads the linked RAM
+kit; manual/off keeps current sounds. Skip-next suppresses one kit autoload, then
+returns to auto. Enabling its first step makes a slot **used**. Removing the last
 hit individually, clearing tracks, or replacing generated hits does not
 make a used pattern empty: silent used patterns keep ordinary kit-change behavior.
 Only an explicit whole-pattern erase resets a slot to empty.
 
-Whole-pattern copy carries the source's empty/used status, including a silent used
-source. Track/bar copies and recording/generation that add hits make an empty
-pattern used. Automation alone does not mark a pattern used.
+Whole-pattern copy and pattern Save As carry the source's kit link unchanged and
+its empty/used status, including a silent used source. Track/bar copies and
+recording/generation that add hits make an empty pattern used. Automation alone does not mark a pattern used.
 
 Project saving retains this status, including silent-used history.
 Unsaved sound edits need **Save Project** for disk persistence.

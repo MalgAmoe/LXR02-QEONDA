@@ -104,7 +104,9 @@ comparison. Do not refresh this oracle merely to match changed production code.
 `test_pattern_occupancy` compiles extracted production mutation/backup bodies
 with the real pattern/step layout and the whole Euclidean generator translation
 unit. Activation and RAM-kit bodies exercise stopped/queued switching, all kit
-modes, unchanged unsaved sounds and ordinary silent-used kit loading. Project
+modes (including one-shot skip), same-slot reloads, non-identity kit links and
+empty/silent-used/imported-hit destinations. Empty/used whole copy and Save As
+retain source links; full-field retention remains covered by `test_perf_reload`. Project
 codec/runtime tests below now own persistence coverage; obsolete file/tmp format
 and legacy fallback tests were removed with those runtime paths.
 `test_slip_core` also checks occupancy through the production recording writer;

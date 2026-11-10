@@ -709,11 +709,9 @@ IN_ITCM_RAM void seq_setPendingPatternActive()
 			seq_activateTmpPattern();
 		}
 		*/
-		//Keep outgoing edits in RAM; empty destinations inherit sounds without reloading.
+		//Observe occupancy before snapshotting; activation preserves the destination kit link.
         seq_patternIsUsed(seq_activePattern);
-        const uint8_t incomingUsed = seq_patternIsUsed(seq_pendingPattern);
-        if(!incomingUsed)
-            seq_patternSet.kitNr[seq_pendingPattern] = menu_loadedPresetNr[CURRENT_KIT];
+        seq_patternIsUsed(seq_pendingPattern);
 
 		// Snapshot the incoming pattern.
 		seq_copyPatternToBackupBuffer(seq_pendingPattern);
@@ -728,7 +726,7 @@ IN_ITCM_RAM void seq_setPendingPatternActive()
 		{
 			activeParameters[PAR_PATTERN_MODE] = 1;
 		}
-		else if(activeParameters[PAR_PATTERN_MODE] == 1 && incomingUsed)
+		else if(activeParameters[PAR_PATTERN_MODE] == 1)
 		{
 			//turn FX off to save cycles
 			fxBus.fxType = FX_OFF;

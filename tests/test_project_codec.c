@@ -74,6 +74,14 @@ int main(void)
     fill(37);
     /* A Save Kit-style non-identity link must survive project persistence. */
     patterns.kitNr[3] = 61;
+    patterns.kitNr[2] = 60; /* Empty destination retains its own non-identity link. */
+    patterns.used[2] = 0;
+    patterns.used[3] = 1; /* Silent-used history is independent of kit linkage. */
+    for (unsigned bar = 0; bar < NUM_BARS; ++bar)
+        for (unsigned track = 0; track < NUM_TRACKS; ++track) {
+            patterns.seq_mainSteps[bar][2][track] = 0;
+            patterns.seq_mainSteps[bar][3][track] = 0;
+        }
     ProjectStream_InitWrite(&stream, &file);
     CHECK_EQ(ProjectCodec_Write(&stream, &data), FR_OK);
     CHECK_EQ(length, PROJECT_CODEC_FILE_BYTES);
@@ -89,7 +97,9 @@ int main(void)
     fill(99);
     CHECK_EQ(load((uint32_t)length), FR_OK);
     CHECK_EQ(patterns.kitNr[3], 61);
-    CHECK_EQ(patterns.kitNr[2], 2);
+    CHECK_EQ(patterns.kitNr[2], 60);
+    CHECK_EQ(patterns.used[2], 0);
+    CHECK_EQ(patterns.used[3], 1);
     CHECK_EQ(patterns.kitNr[4], 4);
     CHECK_EQ(reads, (length + 4095) / 4096);
     /* Re-encode compares every meaningful field, not padding or ignored names. */

@@ -68,7 +68,7 @@ int main(void){
  return 0;
 }
 '''
-# Actual activation + RAM-kit load bodies; deliberately empty slots below.
+# Actual activation, copy/save-as and RAM-kit load bodies.
 a = ns['pre'] + '#include "Parameters.h"\n' + ns['stubs'].replace('assert(activeParameters[PAR_MORPH]==0);', '')
 order=clean(src('Core/Src/Parameters.c')); order=order[order.index('uint8_t parameterOrder'):];order=order[:order.index('};')+2]
 a += order
@@ -76,24 +76,49 @@ for n in ('interpolate','preset_morph','preset_morph_tick','preset_sendDrumsetPa
     body = fn(p,n)
     if n == "preset_loadDrumsetRam": body = body.replace("{", "{loads++;", 1)
     a += body
-for n in ('seq_patternIsUsed','seq_copyPatternToBackupBuffer','seq_setPendingPatternActive','seq_setNextPattern'):
+for n in ('seq_patternIsUsed','seq_copyPatternToBackupBuffer','seq_setPendingPatternActive','seq_setNextPattern','seq_copyPattern'):
     a += fn(s,n)
+a += fn(p,'preset_savePatternRAM')
 a += ns['main'].split('int main(void){')[0]
 a += r'''
 int main(void){
- for(int run=0;run<2;run++)for(int md=0;md<3;md++){
-  setup(run,md,0,0);seq_patternSet.used[1]=0;seq_patternSet.kitNr[1]=1;
+ // Empty, silent-used and imported-hit destinations use identical activation policy.
+ for(int run=0;run<2;run++)for(int md=0;md<3;md++)
+ for(int state=0;state<3;state++)for(int same=0;same<2;same++){
+  setup(run,md,0,0);int dest=same?0:1;
+  seq_patternSet.used[dest]=state==1;
+  seq_patternSet.seq_mainSteps[3][dest][6]=state==2?0x8000:0;
+  seq_patternSet.kitNr[dest]=2; // differs from both loaded kit and destination slot
+  seq_patternSet.kitNr[1-dest]=0;
   uint8_t before[NUM_PARAMS];memcpy(before,activeParameters,sizeof before);
-  int oldLoads=loads;seq_setNextPattern(1);if(run)seq_setPendingPatternActive();
-  assert(seq_activePattern==1 && !seq_patternSet.used[1]);
-  assert(seq_patternSet.kitNr[1]==0 && patternBackupBuffer.kitNr==0 && !patternBackupBuffer.used);
-  assert(loads==oldLoads); // no reload, no morph reset or unsaved sound overwrite
-  for(int i=0;i<NUM_PARAMS;i++)if(i!=PAR_PATTERN_MODE && i!=PAR_SHUFFLE)assert(before[i]==activeParameters[i]);
+  seq_setNextPattern(dest);
+  if(run){assert(seq_activePattern==0 && seq_loadPendigFlag && loads==0);seq_setPendingPatternActive();}
+  drain();
+  assert(seq_activePattern==dest && !seq_loadPendigFlag);
+  assert(seq_patternSet.used[dest]==(state!=0));
+  assert(seq_patternSet.kitNr[dest]==2 && patternBackupBuffer.kitNr==2);
+  assert(patternBackupBuffer.used==(state!=0));
+  assert(seq_patternSet.kitNr[1-dest]==0);
+  assert(loads==(md==1));
+  assert(menu_loadedPresetNr[0]==(md==1?2:0));
+  assert(menu_selectedPresetNr[0]==(md==1?2:0));
   assert(activeParameters[PAR_PATTERN_MODE]==(md==2?1:md));
-  // A silent but used destination must still perform ordinary kit behavior.
-  seq_patternSet.used[0]=1;seq_patternSet.kitNr[0]=1;
-  seq_setNextPattern(0);if(run)seq_setPendingPatternActive();drain();
-  assert(loads==oldLoads+(md!=0));assert(menu_loadedPresetNr[0]==(md?1:0));
+  if(md!=1){for(int i=0;i<NUM_PARAMS;i++)if(i!=PAR_PATTERN_MODE && i!=PAR_SHUFFLE)assert(before[i]==activeParameters[i]);}
+  // Skip applies only once; manual remains off, auto and consumed skip now load.
+  seq_setNextPattern(dest);if(run)seq_setPendingPatternActive();drain();
+  assert(loads==(md==0?0:md==1?2:1));
+  assert(seq_patternSet.kitNr[dest]==2 && seq_patternSet.used[dest]==(state!=0));
+ }
+ // Whole copy and save-as preserve source association even for empty sources.
+ for(int run=0;run<2;run++)for(int md=0;md<3;md++)for(int used=0;used<2;used++){
+  setup(run,md,0,0);seq_patternSet.used[0]=used;seq_patternSet.kitNr[0]=2;
+  seq_copyPattern(0,1);
+  assert(seq_patternSet.kitNr[0]==2 && seq_patternSet.kitNr[1]==2 && seq_patternSet.used[1]==used);
+  seq_patternSet.kitNr[1]=0;seq_patternSet.used[1]=!used;
+  assert(preset_savePatternRAM(1)==FR_OK);if(run)seq_setPendingPatternActive();drain();
+  assert(seq_activePattern==1 && seq_patternSet.kitNr[0]==2 && seq_patternSet.kitNr[1]==2);
+  assert(seq_patternSet.used[0]==used && seq_patternSet.used[1]==used);
+  assert(patternBackupBuffer.kitNr==2 && patternBackupBuffer.used==used);
  }
  return 0;
 }
@@ -105,4 +130,4 @@ with tempfile.TemporaryDirectory(prefix='lxr-occupancy-') as d:
         if name=='codec': cmd += [str(ROOT/'Core/Src/Soundengine/Sequencer/EuklidGenerator.c')]
         subprocess.run(cmd+['-o',str(exe)],check=True)
         subprocess.run([str(exe)],check=True)
-print('Production empty-pattern edits, generator, backup and sound-retaining activation passed.')
+print('Production empty-pattern edits, generator, backup and occupancy-independent kit activation/copy/save-as passed.')

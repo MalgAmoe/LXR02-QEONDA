@@ -152,8 +152,11 @@ Edit paths observe before destructive hit replacement and after insertion (inclu
 recording, bar/track copy and Euclidean generation). Whole-pattern copy transfers
 source occupancy, including silent-used history. No per-tick or audio-sample scan
 is added. The scan stays out of line to avoid replicating its unrolled ARM code.
-Empty activation associates the currently loaded kit and skips RAM kit loading,
-retaining unsaved sounds; used activation retains the existing kit-mode rules.
+Activation preserves the destination `kitNr` regardless of occupancy and applies
+the normal `PAR_PATTERN_MODE` rules: auto loads the linked RAM kit, manual/off
+does not; `SKIP_NEXT_KIT_AUTOLOAD` skips once and returns to auto. Occupancy
+queries still latch imported hits before the incoming backup snapshot. Whole-pattern
+copy and Save As carry the source kit link unchanged, even for empty patterns.
 
 `ProjectCodec` explicitly stores the per-pattern occupancy byte in the single
 project payload, alongside all steps, timing, hit words, shuffle, lengths and kit
