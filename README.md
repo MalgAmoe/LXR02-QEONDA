@@ -9,6 +9,20 @@ approved by Erica Synths. Installation and use are at your own risk.**
 **Version 0.1 is feature-frozen.** Further work focuses on documentation and fixes
 for confirmed bugs rather than new features.
 
+## Project compatibility — read before installing
+
+**QEONDA uses `/projNN/project.qpr`, a new, incompatible project format.**
+There is no old multi-file project importer or converter, and QEONDA projects
+cannot be loaded by stock/older multi-file firmware. A legacy folder without
+`project.qpr` appears **Empty** and loads defaults, not your old work.
+
+**Do not use your only legacy card: Save Project may replace that slot's entire
+legacy directory and delete its files.** Retain your original card/backups untouched
+and use a separate FAT32 card for QEONDA. Kit/Pattern/Song/Globals Save are RAM-only;
+**Save Project** is required for SD durability. See [storage and restart](docs/USER-GUIDE.md#saving-and-restart)
+for practical guidance and [format rationale and measurements](docs/PROJECT-STORAGE.md#why-change-the-format)
+for the tradeoff.
+
 ## Features
 
 - Momentary pattern mute: hold button 8 in PERF mode to mute programmed hits while keeping rolls available. Release to bring the pattern back in, still in time.

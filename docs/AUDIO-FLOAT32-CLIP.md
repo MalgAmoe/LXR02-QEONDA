@@ -2,9 +2,11 @@
 
 > **Historical experiment evidence.** The variant options and commands below
 > describe earlier source only and are no longer supported build modes.
-> This branch now always uses full float32 audio, 24-bit output on both pairs,
-> and per-operation mix clipping. Original int16 tables, uint32 phases and
-> deliberate nonlinear effects remain. See [BUILD](BUILD.md) for current commands.
+> Snapshot from the 2026-11-10 experiments, superseded by clipped-float
+> simplification `20e6e6b` and normalization `95297b3`, now included in
+> development `8a81f1c`. Current audio is normalized float32 with 24-bit output
+> on both pairs and per-operation mix clipping. Original tables/phases remain.
+> See [AUDIO-NORMALIZED](AUDIO-NORMALIZED.md) and [BUILD](BUILD.md).
 
 ## Single-path simplification verification
 

@@ -159,7 +159,9 @@ retaining unsaved sounds; used activation retains the existing kit-mode rules.
 project payload, alongside all steps, timing, hit words, shuffle, lengths and kit
 association. No raw structs, tmp overlay, individual slot-file saves or dirty
 timers remain in the runtime. Kit/pattern/song/global Save actions affect RAM;
-Project Save captures the edited kit and serializes the full RAM project. Boot
+Kit Save selects the saved RAM kit and assigns it to the active pattern only;
+Save Morph leaves those assignments unchanged. Project Save captures the edited
+kit and serializes the full RAM project, including kit links. Boot
 uses the last successfully saved selection, with RAM-only initialization when
 missing. See [PROJECT-STORAGE](PROJECT-STORAGE.md) for format, entry points,
 publication, compatibility and verification limits.

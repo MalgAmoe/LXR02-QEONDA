@@ -1,6 +1,14 @@
 # Normalized float32 audio
 
-## Scope and identities
+> **2026-11-10 implementation snapshot.** The working-tree/branch identities and
+> no-commit/no-card statements below describe the verification stage only.
+> Normalization was committed as `95297b3`, included in development `8a81f1c`.
+> The user chose normalized development and prefers float over 16-bit, but is
+> unsure about pre-normalized versus normalized sound. No exhaustive equivalence
+> or intermittent-glitch resolution is established. Current architecture and
+> commands: [ENGINEERING](ENGINEERING.md#audio-representation), [BUILD](BUILD.md).
+
+## Scope and identities (historical)
 
 Implemented on `audio-float32-24bit`, HEAD
 `20e6e6b6f7cee1b17504bcd68148a6e61fce11a8` plus uncommitted normalization changes.

@@ -132,9 +132,22 @@ loaded. A missing project starts initialized RAM without automatically saving it
 There is no temporary-file recovery or background autosave: power-off discards
 changes since Project Save. Reload is unchanged and is not a disk-project reload.
 
-Projects use a new single-file format (`/projNN/project.qpr`). Old multi-file
-projects and tmp/global files are not imported. Save/load do not automatically
-stop playback. **Saving Project** remains displayed until completion; a post-save warning
+**Compatibility warning:** projects use a new single-file format
+(`/projNN/project.qpr`). There is no old multi-file project importer or converter;
+legacy projects and tmp/global files are not imported or recovered. A legacy slot
+folder without `project.qpr` appears **Empty** and loading it initializes defaults,
+not the old project. QEONDA projects cannot be loaded by stock/older multi-file
+firmware: there is no reverse compatibility.
+
+**Before using QEONDA, retain your original card/backups untouched and use a
+separate FAT32 card. Do not save on your only legacy card.** Save Project stages a
+new directory and replaces the selected slot directory; cleanup can delete the
+legacy files in that slot. An Empty label is not permission to overwrite an old
+folder safely. There is no automatic migration or recovery of that work.
+See [storage rationale and measured tradeoffs](PROJECT-STORAGE.md#why-change-the-format).
+Staged saves are not a guarantee against power loss or card failure.
+
+Save/load do not automatically stop playback. **Saving Project** remains displayed until completion; a post-save warning
 can mean cleanup or the boot-selection index could not be updated even though
 the project file was published.
 
@@ -205,3 +218,15 @@ is not implemented.
 
 Play and both bar/bank buttons respond immediately. Each rearms independently
 after 20 ms of stable release, suppressing contact-bounce repeats in all modes.
+
+## Screensaver
+
+When enabled, the screensaver starts after **120 seconds** without qualifying
+control activity. It is enabled by default; the Global menu's screensaver on/off
+control enables or disables it. Save Project to retain that setting.
+
+Control buttons, data-encoder turns/clicks and parameter knobs wake the display
+and reset the inactivity timer. The waking action continues through its normal
+control handler; it is not generally swallowed. A waking encoder click does not
+toggle ordinary parameter edit mode, though context-specific click actions still
+apply. Faders are not claimed as wake controls.

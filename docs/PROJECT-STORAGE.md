@@ -1,8 +1,62 @@
 # Single-file project storage
 
-Runtime integration is complete in the working tree (not hardware-accepted).
+Runtime integration is committed as `38cf955`, included in development `8a81f1c`.
+Single-file storage received hardware acceptance for beat/sound/shuffle restart
+and a small save/load timing sample; this is not media-fault or power-loss certification.
 Only **Save Project** writes musical work to SD. No legacy project compatibility
 is provided: old multi-file directories are not imported or overlaid.
+
+## Compatibility and protecting existing work
+
+**This is a deliberate format break, not an automatic migration.** QEONDA reads
+`/projNN/project.qpr`; there is currently no importer or converter for old
+multi-file projects, nor reverse compatibility with stock/older multi-file
+firmware. A legacy folder without `project.qpr` appears **Empty** in browsing;
+loading it initializes default RAM rather than importing or recovering old files.
+
+**Retain the original card/backups untouched and use a separate FAT32 card for
+QEONDA. Do not use your only legacy card for saving.** SafeStorage stages the new
+project in `/projNNn`, renames an existing `/projNN` to `/projNNo`, publishes the
+staging directory as `/projNN`, then removes the old directory and its contents.
+Thus Save Project can replace a legacy slot and delete its multi-file work; it
+does not promise to leave legacy folders unchanged. This is directory replacement,
+not a format-aware merge. Staging is not power-failure-proof storage.
+
+Kit, Pattern, Song and Globals Save affect RAM only; **Save Project** is the SD
+durability action. See [saving and restart](USER-GUIDE.md#saving-and-restart).
+
+## Why change the format
+
+The goal is faster saving during playback with fewer tiny FAT operations. One
+explicit, versioned project serializes the full RAM project through a buffered,
+contiguous stream instead of many small slot files. “Contiguous” here describes
+the logical stream, not a guarantee of contiguous physical allocation on the card.
+It uses a 4096-byte buffer rather than a second project-sized RAM image.
+There is no tmp-file overlay or second persistence model: RAM edits become durable
+through one explicit Save Project operation.
+
+The compatibility break is the tradeoff for that simpler persistence model and
+reduced filesystem work. An importer is not currently implemented; that does not
+mean conversion is impossible, and it is not a promise of future migration support.
+
+### Local measurements, not universal guarantees
+
+Earlier local implementation samples measured saves at **9.325–10.889 s** and
+loads at **3.249–3.310 s**, with roughly **194 files** and **19,488 write calls**
+per save. The single-file implementation writes a **255,118-byte** project with
+**64 write calls** (including the boot-selection index byte) and loads with
+**63 read calls**. Hardware samples recorded steady playing saves of
+**642 / 655 / 793 ms**, a playing load of **375 ms**, and a boot load of **327 ms**.
+The first new-format save took **3568 ms**, including legacy-directory cleanup
+(195 unlinks), and is excluded from the steady-save figures.
+
+These are small local samples of the earlier and single-file implementations,
+not a stock-firmware benchmark, universal speed guarantee or worst-case timing
+bound. Card, project, cleanup and workload matter; diagnostic report-writing time
+was excluded. They do not certify audio/MIDI continuity for every workload,
+concurrent-edit snapshots, media faults or power-loss recovery. The historical
+[diagnostic description](PROJECT-MEASUREMENT.md) explains the retired measurement
+mechanism; the current format and limitations are documented below.
 
 ## Runtime behavior
 
@@ -83,6 +137,9 @@ buffers, queues and UI selection are not codec fields.
 
 ## Verification
 
+The following verification account is a 2026-11-10 pre-commit snapshot.
+Its no-commit/no-install statements describe that stage, not later acceptance.
+
 `test_project_codec` checks all slots/fields and exact wire bytes, header mutations,
 length rejection, truncation and I/O errors. `test_master_comp_persistence` and
 `test_master_comp_save` now run `test_project_runtime.py`: extracted **production
@@ -106,7 +163,15 @@ These tests substitute engine/UI/timer or filesystem endpoints; they are not
 hardware timing, audible, stack-margin, concurrent recording or SD-media/power-loss
 certification. No commits, card writes or installation were performed.
 
-## Final integration build evidence
+## Historical verification snapshots (2026-11-10)
+
+The working-tree identities, test counts and no-commit/no-card/no-hardware
+statements below record the pre-commit verification stage, not current status.
+They were superseded by storage commit `38cf955` and subsequent hardware feedback.
+Later `8a81f1c` added Save Kit assignment and navigation; the runtime description
+above includes its assignment behavior. Historical image identities remain unchanged.
+
+## Final integration build evidence (historical)
 
 The OFF/ON diagnostic comparison below is historical, before ProjectMeasure was
 removed. The measurement build and its two dedicated tests are retired; see
