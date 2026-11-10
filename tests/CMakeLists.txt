@@ -209,15 +209,17 @@ add_test(NAME test_main_dj_filter_ui
 lxr_add_host_test(test_main_compressor SOURCES test_main_compressor.c)
 target_link_libraries(test_main_compressor PRIVATE m)
 
-add_test(NAME test_master_comp_persistence
-    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
-            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_master_comp_persistence.py)
+foreach(case persistence save)
+    add_test(NAME test_project_${case}
+        COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+                ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_project_runtime.py ${case})
+endforeach()
 
 add_test(NAME test_master_compressor_ui
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_master_compressor_ui.py)
 
-foreach(case master_comp_save master_comp_publication)
+foreach(case master_comp_publication)
     add_test(NAME test_${case}
         COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
                 ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_${case}.py)
@@ -231,9 +233,9 @@ add_test(NAME test_change_all
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_change_all.py)
 
-add_test(NAME test_pattern_select
+add_test(NAME test_panel_navigation
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
-            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pattern_select.py)
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_panel_navigation.py)
 
 add_test(NAME test_track_rotation
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
@@ -329,3 +331,6 @@ add_test(NAME test_save_kit
 add_test(NAME test_screensaver_wake
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_screensaver_wake.py)
+
+add_test(NAME test_release_metadata
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_release_metadata.py)

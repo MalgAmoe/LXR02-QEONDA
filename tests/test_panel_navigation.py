@@ -44,7 +44,7 @@ c = '''#include <stdint.h>
 #define FR_OK 0
 typedef int FRESULT;
 '''
-for p in ('Core/Inc/buttonHandler.h','Core/Inc/menu/menu.h','Core/Inc/ledHandler.h','Core/Inc/menu/copyClearTools.h'):
+for p in ('Core/Inc/buttonHandler.h','Core/Inc/menu/menu.h','Core/Inc/ledHandler.h','Core/Inc/menu/copyClearTools.h','Core/Inc/Preset/PresetManager.h'):
     c += '\n'.join(re.findall(r'enum\s*\w*\s*\{[^}]*\}\s*;', clean(read(p)))) + '\n'
 c += re.search(r'enum saveStateEnum.*?};', clean(menu), re.S).group() + '\n'
 c += re.search(r'typedef struct PageStruct.*?}Page;', clean(read('Core/Inc/menu/menu.h')), re.S).group() + '\n'
@@ -141,9 +141,6 @@ static void menu_showSaveCleanupWarning(void){warnings++;}
 static void menu_repaint(void){repaints++;}
 static void menu_repaintAll(void){repaints++;}
 static void screensaver_touch(void){}
-static void menu_setLoadSaveCategory(uint8_t c){menu_saveOptions.category=c;}
-static void menu_resetSaveParameters(void){}
-static void copyNameToEditBuffer(uint8_t p,uint8_t b){(void)p;(void)b;}
 static void menu_resetPerformanceFilter(void){}
 static uint8_t has2ndPage(uint8_t p){return p<6;}
 static void copyClear_executeClear(void){}
@@ -165,7 +162,7 @@ void frontPanel_sendData(uint8_t s,uint8_t p,uint8_t v){
  if(s==SEQ_CC && p==SEQ_ROLL_ON_OFF){if(v>>4)rolls|=1u<<(v&15);else rolls&=~(1u<<v);}
 }
 #define NUM_PATTERN 64
-#define NUM_CHARS 40
+#define NUM_CHARS 76
 #define NUM_CURRENT 4
 #define CURRENT_KIT 0
 #define CURRENT_MORPH 1
@@ -174,7 +171,7 @@ void frontPanel_sendData(uint8_t s,uint8_t p,uint8_t v){
 #define MAX_SONG_LENGTH 64
 #define FR_NO_FILE 4
 #define FR_NO_PATH 5
-static char savefileNames[64][6][20],nameEditBuffer[20];
+static char savefileNames[64][NUM_SAVEFILE_NAMES][8],nameEditBuffer[8];
 static uint8_t menu_loadedPresetNr[4],seq_songData[64][64],*seq_activeSong;
 static uint8_t preset_projectCleanupWarning;
 static unsigned __get_PRIMASK(void);
@@ -182,7 +179,6 @@ static unsigned __get_PRIMASK(void);
 static void __disable_irq(void);
 static void __set_PRIMASK(unsigned);
 static uint8_t preset_isNameEmpty(char *s){return !s[0];}
-static void copyEditBufferToName(uint8_t p,uint8_t b){memcpy(savefileNames[p][b],nameEditBuffer,8);}
 static void preset_saveDrumsetRam(uint8_t p,uint8_t m){(void)p;(void)m;saves++;}
 static FRESULT preset_saveGlobals(void){saves++;return 0;}
 static FRESULT preset_saveProject(uint8_t p){(void)p;saves++;return 0;}
@@ -213,6 +209,9 @@ static void led_updateBarLeds(void);
 static void led_updateSeqLeds(void);
 static void led_initPatternSelectLeds(void);
 '''
+c += re.search(r'const uint8_t characterOrder\[NUM_CHARS\].*?};', clean(menu), re.S).group() + '\n'
+for name in ('copyNameToEditBuffer', 'copyEditBufferToName', 'menu_setLoadSaveCategory', 'menu_resetSaveParameters'):
+    c += fn(menu, name)
 # Actual slip publication/capture paired with the real panel dispatcher.
 c += r'''
 
@@ -263,6 +262,11 @@ static void reset(uint8_t page,uint8_t index){
  menu_shownPattern=menu_playedPattern=0;heldSeqButtons=consumedSeqReleases=0;
  shift=load=save=copy=0;rolls=breakHeld=performanceBreakButtonHeld=0;
  saves=saveRam=changes=touches=stepWrites=errors=warnings=0;saveResult=0;
+ loads=lengthWrites=panelMessages=repaints=0;
+ buttonHandler_stateMemory.seqRunning=buttonHandler_stateMemory.seqRecording=0;
+ memset(&menu_saveOptions,0,sizeof menu_saveOptions);
+ memset(menu_selectedPresetNr,0,sizeof menu_selectedPresetNr);
+ memset(savefileNames,0,sizeof savefileNames);memset(nameEditBuffer,0,sizeof nameEditBuffer);
  enteredStep=0;copyClear_Mode=MODE_NONE;activeParameters[PAR_PATTERN_MODE]=1;
 }
 static void enter(int route){
@@ -278,7 +282,7 @@ static void shifted_pad(uint8_t pad){
  shift=1;buttonHandler_seqButtonPressed(pad);shift=0;
  buttonHandler_seqButtonReleased(pad);
 }
-int main(void){
+static void occupancy_and_slip(void){
  /* Production occupancy painter/query/blinker: all banks, silent used, and
     empty current/queued. Only engine, LED registers and blink registration
     are seams; normal step/bar chase suppression is exercised below. */
@@ -350,6 +354,8 @@ int main(void){
   assert(!saves&&!changes&&!stepWrites && buttonHandler_buttonTimerStepNr==NO_STEP_SELECTED);
   unsigned savedIndex=menuIndex;buttonHandler_enterLivePatternSelect();assert(menuIndex==savedIndex);
  }
+}
+static void live_selection_navigation(void){
  /* Bank bounds, pending selection, ordinary LED painters, immediate ACK seam. */
  reset(2,19);enter(0);
  for(int bank=0;bank<4;bank++){
@@ -421,6 +427,8 @@ int main(void){
    buttonHandler_selectButtonPressed(target);assert(menuIndex==target*8+(has2ndPage(target)?4:0));
   }
  }
+}
+static void last_step_navigation(void){
  /* Last Step: actual entry, both modes, every current voice and requested
     section, retained second-screen/focus. Navigation must be UI-only. */
  for(int all=0;all<2;all++)for(int v=0;v<7;v++)for(int target=0;target<8;target++)for(int index=0;index<64;index++){
@@ -465,6 +473,8 @@ int main(void){
   assert(buttonHandler_getMode()==mode && menu_activePage==MENU_LAST_STEP_PAGE && menu_activeVoice==v);
   assert(lengthWrites==writes);
  }
+}
+static void config_navigation(void){
  /* Actual Config entry (also from Last Step), every index, voice/section.
     Global indices must never become voice sections. Only normal voice requests
     are allowed; no settings, length, transport or pattern mutation. */
@@ -472,7 +482,7 @@ int main(void){
   reset(current,12);
   if(origin){shifted_pad(SEQ_LAST_STEP);if(origin==2)shifted_pad(SEQ_LAST_STEP);}
   shifted_pad(SEQ_CONFIG);
-  assert(menu_activePage==MENU_MIDI_PAGE && buttonHandler_getMode()==SELECT_MODE_LAST_STEP_ALL);
+  assert(menu_activePage==MENU_MIDI_PAGE && buttonHandler_getMode()==SELECT_MODE_MENU);
   menuIndex=index;editModeActive=1;
   buttonHandler_stateMemory.seqRunning=buttonHandler_stateMemory.seqRecording=1;
   pending=37;menu_playedPattern=4;menu_shownPattern=9;
@@ -493,13 +503,29 @@ int main(void){
   assert(buttonHandler_stateMemory.seqRunning && buttonHandler_stateMemory.seqRecording);
   assert(heldSeqButtons==held && consumedSeqReleases==consumed);
  }
+ /* Config must never alias length-editing mode, at any index/pad. */
+ for(int index=0;index<64;index++)for(int pad=0;pad<16;pad++){
+  reset(2,index);shifted_pad(SEQ_CONFIG);menuIndex=index;menu_activeBar=2;
+  unsigned writes=lengthWrites;
+  buttonHandler_seqButtonPressed(pad);buttonHandler_seqButtonReleased(pad);
+  led_updateBarLeds();
+  assert(buttonHandler_getMode()==SELECT_MODE_MENU && lengthWrites==writes && !stepWrites);
+  assert(!leds[LED_PAGE_UP] && leds[LED_PAGE_DOWN]);
+ }
+ for(int all=0;all<2;all++)for(int pad=0;pad<16;pad++){
+  reset(2,0);shifted_pad(SEQ_LAST_STEP);if(all)shifted_pad(SEQ_LAST_STEP);
+  menu_activeBar=2;unsigned writes=lengthWrites;
+  buttonHandler_seqButtonPressed(pad);buttonHandler_seqButtonReleased(pad);
+  assert(lengthWrites==writes+(all?7:1));
+  led_updateBarLeds();assert(!leds[LED_PAGE_UP] && leds[LED_PAGE_DOWN]);
+ }
  /* Excluded gestures keep existing Config navigation, not a Voice exit. */
  for(int kind=0;kind<2;kind++)for(int target=0;target<(kind?8:7);target++)for(int modifier=0;modifier<3+MODE_COPY_TRACK;modifier++){
   reset(2,12);shifted_pad(SEQ_CONFIG);
   shift=modifier==0;copy=modifier==1;buttonHandler_stateMemory.seqErasing=modifier==2;
   if(modifier>=3)copyClear_Mode=modifier-2;
   if(kind)buttonHandler_selectButtonPressed(target);else buttonHandler_voiceButtonPressed(target);
-  assert(menu_activePage==MENU_MIDI_PAGE && buttonHandler_getMode()==SELECT_MODE_LAST_STEP_ALL);
+  assert(menu_activePage==MENU_MIDI_PAGE && buttonHandler_getMode()==SELECT_MODE_MENU);
  }
  buttonHandler_stateMemory.seqRunning=buttonHandler_stateMemory.seqRecording=0;
  /* Modifiers and active erase must not trigger either new exit route. */
@@ -512,6 +538,8 @@ int main(void){
   buttonHandler_stateMemory.seqErasing=0;
  }
 
+}
+static void dialog_navigation(void){
  /* Actual shortcut entry for every reachable shared category, all states,
     both exits and held shortcut releases. UI selectors/names are not rolled
     back; exit must not invoke the production confirmation handler. */
@@ -575,16 +603,29 @@ int main(void){
   assert(menu_activePage==pageList[p] && buttonHandler_getMode()==mode);
  }
 
+}
+static void names_and_confirmation(void){
  /* Real empty-name prompt eagerly initializes the name; cancellation must
     neither claim rollback nor commit the later edit buffer. */
  reset(2,0);save=1;buttonHandler_seqButtonPressed(SEQ_KIT);save=0;
  menu_selectedPresetNr[SAVE_TYPE_KIT]=11;menu_saveOptions.nameBuffer=0;
  savefileNames[11][0][0]=0;menu_saveOptions.state=SAVE_STATE_EDIT_PRESET_NR;
  menu_handleLoadSaveMenu(0,1);
- assert(menu_saveOptions.state==SAVE_STATE_EDIT_NAME1 && !strcmp(savefileNames[11][0],"Unnamed"));
+ assert(menu_saveOptions.state==SAVE_STATE_EDIT_NAME1 && !memcmp(savefileNames[11][0],"Unnamed",8));
  memset(nameEditBuffer,9,sizeof nameEditBuffer);
  buttonHandler_selectButtonPressed(3);buttonHandler_seqButtonReleased(SEQ_KIT);
- assert(!strcmp(savefileNames[11][0],"Unnamed") && !saves && !stepWrites);
+ assert(!memcmp(savefileNames[11][0],"Unnamed",8) && !saves && !stepWrites);
+ /* Reentry regenerates indices, unsupported characters become spaces. */
+ save=1;buttonHandler_seqButtonPressed(SEQ_KIT);save=0;
+ assert(menu_saveOptions.state==SAVE_STATE_EDIT_PRESET_NR);
+ assert(nameEditBuffer[0]==21); /* U in the real table */
+ memcpy(savefileNames[11][KIT_NAMES],"Ab9_?~+\001",8);
+ copyNameToEditBuffer(11,KIT_NAMES);
+ assert(nameEditBuffer[7]==0);
+ copyEditBufferToName(11,KIT_NAMES);
+ assert(!memcmp(savefileNames[11][KIT_NAMES],"Ab9_?~+ ",8));
+ buttonHandler_voiceButtonPressed(2);buttonHandler_seqButtonReleased(SEQ_KIT);
+ assert(!saves && !stepWrites);
  /* Ordinary confirmed shared save/load operations are still reachable. */
  for(int saving=0;saving<2;saving++)for(int cat=0;cat<4;cat++){
   reset(2,0);loads=0;seq_activeSong=seq_songData[0];save=saving;load=!saving;
@@ -597,6 +638,8 @@ int main(void){
   else assert(saving?saves==1:loads==1);
  }
  buttonHandler_stateMemory.seqRunning=buttonHandler_stateMemory.seqRecording=0;
+}
+static void retained_controls(void){
  /* Standalone FX routing is unchanged. */
  for(int mode=0;mode<1;mode++)for(int kind=0;kind<2;kind++){
   reset(mode?PATTERN_SAVE_PAGE:FX_MODE_PAGE,12);
@@ -698,6 +741,10 @@ int main(void){
   assert(activeParameters[PAR_PATTERN_MODE]==SKIP_NEXT_KIT_AUTOLOAD);
   assert(!errors && menu_activePage==PATTERN_SAVE_PAGE_OK && menu_selectedPresetNr[SAVE_TYPE_PATTERN]==6);
  }
+}
+int main(void){
+ occupancy_and_slip();live_selection_navigation();last_step_navigation();
+ config_navigation();dialog_navigation();names_and_confirmation();retained_controls();
  return 0;
 }
 '''

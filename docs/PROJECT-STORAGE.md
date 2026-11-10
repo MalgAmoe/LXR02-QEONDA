@@ -137,6 +137,9 @@ buffers, queues and UI selection are not codec fields.
 
 ## Verification
 
+Current CTest names are `test_project_persistence` and `test_project_save`,
+calling `test_project_runtime.py` directly. Earlier names below are historical.
+
 The following verification account is a 2026-11-10 pre-commit snapshot.
 Its no-commit/no-install statements describe that stage, not later acceptance.
 

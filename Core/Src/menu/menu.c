@@ -3427,42 +3427,11 @@ void menu_switchPage(uint8_t pageNr)
 
 
 	case SAVE_PAGE:
-		{
-
-			//re-init the save page variables
-			menu_resetSaveParameters();
-
-			if((menu_activePage != LOAD_PAGE) && (menu_activePage != SAVE_PAGE))
-			{
-				//when coming from another page, do a complete reset and show the sound select page
-				menu_resetSaveParameters();
-				//menu_saveOptions.what	= SAVE_TYPE_SOUND;
-			}
-
-			menu_activePage = SAVE_PAGE;
-
-			// load the name of the current preset
-			copyNameToEditBuffer(menu_selectedPresetNr[menu_saveOptions.category],menu_saveOptions.nameBuffer );
-			//preset_loadName(menu_currentPresetNr[menu_saveOptions.category], menu_saveOptions.nameBuffer, menu_saveOptions.category);
-		}
-		break;
 	case LOAD_PAGE:
-		{
-			//re-init the save page variables
-			menu_resetSaveParameters();
-
-			if((menu_activePage != LOAD_PAGE) && (menu_activePage != SAVE_PAGE))
-			{
-				//when coming from another page, do a complete reset and show the sound select page
-				menu_resetSaveParameters();
-				//menu_saveOptions.what	= SAVE_TYPE_SOUND;
-			}
-
-			menu_activePage = LOAD_PAGE;
-			// load the name of the current preset from disk
-			copyNameToEditBuffer(menu_selectedPresetNr[menu_saveOptions.category],menu_saveOptions.nameBuffer );
-			//preset_loadName(menu_currentPresetNr[menu_saveOptions.category], menu_saveOptions.nameBuffer, menu_saveOptions.category);
-		}
+		// Reset before changing page, then populate the selected category's name.
+		menu_resetSaveParameters();
+		menu_activePage = pageNr;
+		copyNameToEditBuffer(menu_selectedPresetNr[menu_saveOptions.category],menu_saveOptions.nameBuffer );
 		break;
 
 	default: //voice pages etc

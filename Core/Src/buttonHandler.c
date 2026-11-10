@@ -974,7 +974,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 			break;
 
 		case SEQ_CONFIG: //config
-			buttonHandler_setMode(SEQ_CONFIG);
+			buttonHandler_setMode(SELECT_MODE_MENU);
 			led_clearAllBlinkLeds();
 			led_setBlinkLed(LED_STEP12,1);
 			menu_switchPage(MENU_MIDI_PAGE);
@@ -1578,9 +1578,7 @@ static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 	if ((menu_activePage == MENU_MIDI_PAGE || buttonHandler_isLoadSavePage()) &&
 		!buttonHandler_getShift() && !buttonHandler_getCopy() &&
 		copyClear_Mode == MODE_NONE && !buttonHandler_stateMemory.seqErasing) {
-		if(buttonHandler_isLoadSavePage() || menu_activePage == MENU_MIDI_PAGE ||
-		   menu_activePage == MENU_LAST_STEP_PAGE) buttonHandler_leaveDialogForVoice();
-		else buttonHandler_handleModeButtons(SELECT_MODE_VOICE);
+		buttonHandler_leaveDialogForVoice();
 		menu_switchSubPageFirstScreen(0);
 		led_setActiveSelectButton(0);
 	}

@@ -100,6 +100,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 # Linked at 0x08008000, behind the 32 KB bootloader.
 lxr_firmware_executable(${PROJECT_NAME} LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/STM32F765VGTX_FLASH.ld)
 lxr_add_firmware_outputs(${PROJECT_NAME} IMAGE_MAGIC LXRV2IMG IMAGE_NAME LXR_QEONDA_V${PROJECT_VERSION})
+configure_file(cmake/release-metadata.json.in release-metadata.json @ONLY)
 
 # "flash": application only, the bootloader on the device is left alone.
 lxr_add_openocd_flash_target(flash

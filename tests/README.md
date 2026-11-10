@@ -84,7 +84,7 @@ an extracted `afde83f` disabled-slip differential (38,880 pulses per optimizatio
 production automation-source fetch with stubbed endpoints, exact FIFO handover/
 release event traces, FIFO, short-track aliases, prepress gates, live mutation/erase, phase-preserving
 switches and all four windows × seven unequal tracks × 15 shifts × six flams.
-`test_pattern_select` now pairs the real panel dispatcher with the real slip core
+`test_panel_navigation` now pairs the real panel dispatcher with the real slip core
 for plain/modifier presses, owned releases, stopped no-op and mode cancellation.
 `test_external_clock` pairs real clock/transport bodies with the slip core (step
 and audio endpoints remain adapters). `test_perf_reload` checks cancellation
@@ -112,7 +112,7 @@ existing retention/save-as and kit-only Reload regressions remain enabled with
 explicit used-slot fixtures. These tests do not certify SD interruption recovery,
 physical restart, concurrent storage/edit timing, worst-case cycles or listening.
 
-`test_pattern_select` also executes production occupancy-query, selection-painter
+`test_panel_navigation` also executes production occupancy-query, selection-painter
 and blink-handler bodies for all four banks, silent-used and first-hit slots,
 empty current/queued markers, their 2:1 blink cadence, bank redraw, activation
 handover and exit to normal step/chase. LED output and blink registration are
@@ -122,8 +122,8 @@ host seams; physical readability and clock cadence still need instrument review.
 
 `test_project_codec` links production codec/stream with memory-backed FatFs and
 covers full-project round-trip, explicit wire bytes, malformed headers, length
-rejection, truncation and I/O errors. The existing `test_master_comp_persistence`
-and `test_master_comp_save` names now invoke `test_project_runtime.py`, exercising
+rejection, truncation and I/O errors. `test_project_persistence` and `test_project_save` invoke
+`test_project_runtime.py persistence` and `test_project_runtime.py save` directly, exercising
 production project API bodies linked with the real staged SafeStorage, stream
 and codec. Covers RAM-only saves, full RAM/current-edit capture, coherent compressor
 publication, name browsing, boot selection/defaults, read errors, per-call injected
@@ -221,3 +221,22 @@ poll advances simulated time; the measured bounds are deterministic model checks
 not device latency measurements. This does not verify OLED electrical timing,
 real interrupt interleaving, audible continuity or time until visible repaint.
 Unused plasma/state11 behavior and tick wrap are outside this regression's scope.
+
+## Panel navigation and release tooling
+
+`test_panel_navigation.py` covers live pattern selection, occupancy LEDs, slip
+controls, Last Step, Config and load/save dialog exits. Config pads must not
+change track lengths; Last Step retains track/all length editing. Held shortcut
+releases cannot become step edits after dialog exits. Production category/reset
+and eight-character name conversion helpers cover reentry, unsupported characters,
+confirmation and cancellation. Named scenarios share engine/storage/LCD seams;
+they do not certify physical-panel behavior or real-time performance.
+
+`test_release_metadata.py` checks CMake metadata consumption, exact image selection
+without stale-image fallback, missing/malformed metadata, invalid paths, payload
+mismatches and CI output generation. It does not execute the hosted publishing job.
+
+The frozen audio fixture is a **normalization regression reference**: it checks
+that numerical-unit changes preserve the earlier float engine's intended results.
+It is not support for old firmware or project files. Deliberate sound changes need
+reviewed expectation changes, not automatic fixture regeneration.

@@ -27,7 +27,6 @@ jobs:
       cancel-in-progress: false
     env:
       RELEASE_SHA: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
-      RELEASE_TAG: v0.2-build.${{ github.run_number }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -53,15 +52,20 @@ jobs:
           cmake --build --preset host-tests --parallel 4
           ctest --preset host-tests
       - name: Build normal firmware
+        id: firmware
         run: |
           arm-none-eabi-gcc --version
           cmake --preset release -DLXR_MEASUREMENT=OFF
           cmake --build --preset release --parallel 4
           python3 tests/check_fm_arm_codegen.py build/release
-          python3 cmake/tools/verify_release.py build/release
+          python3 tests/check_audio_float32_arm.py build/release
+          python3 cmake/tools/verify_release.py build/release "$GITHUB_OUTPUT"
       - name: Publish verified firmware
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v${{ steps.firmware.outputs.version }}-build.${{ github.run_number }}
+          RELEASE_VERSION: ${{ steps.firmware.outputs.version }}
+          RELEASE_IMAGE: ${{ steps.firmware.outputs.image }}
         shell: bash
         run: |
           set -euo pipefail
@@ -78,7 +82,7 @@ jobs:
           else
             gh release create "$RELEASE_TAG" --target "$RELEASE_SHA" --draft \
               --title "LXR QEONDA $RELEASE_TAG" \
-              --notes "Normal QEONDA 0.2 firmware. Source: $RELEASE_SHA. Project format is incompatible with stock/older multi-file firmware; no importer is provided. Keep original projects on an untouched card or backup: saving can replace legacy slot files. Host tests and ARM build passed; CI is not hardware acceptance. Install LXR_QEONDA_V0.2.img; verify against SHA256SUMS."
+              --notes "Normal QEONDA $RELEASE_VERSION firmware. Source: $RELEASE_SHA. Project format is incompatible with stock/older multi-file firmware; no importer is provided. Keep original projects on an untouched card or backup: saving can replace legacy slot files. Host tests and ARM build passed; CI is not hardware acceptance. Install $RELEASE_IMAGE; verify against SHA256SUMS."
           fi
-          gh release upload "$RELEASE_TAG" build/release/LXR_QEONDA_V0.2.img build/release/SHA256SUMS --clobber
+          gh release upload "$RELEASE_TAG" "build/release/$RELEASE_IMAGE" build/release/SHA256SUMS --clobber
           gh release edit "$RELEASE_TAG" --draft=false
