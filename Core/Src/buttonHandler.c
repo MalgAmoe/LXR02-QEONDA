@@ -1476,14 +1476,39 @@ static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 }
 
 //--------------------------------------------------------
+// These pages are dialogs regardless of category or name/confirmation state.
+static uint8_t buttonHandler_isLoadSavePage(void)
+{
+	return menu_activePage == LOAD_PAGE || menu_activePage == SAVE_PAGE ||
+		menu_activePage == PATTERN_SAVE_PAGE ||
+		menu_activePage == KIT_SAVE_PAGE_OK || menu_activePage == PATTERN_SAVE_PAGE_OK;
+}
+
+static void buttonHandler_leaveDialogForVoice(void)
+{
+	// Held dialog/shortcut pads must not become step releases in Voice mode.
+	consumedSeqReleases |= heldSeqButtons;
+	if(buttonHandler_armedAutomationStep != NO_STEP_SELECTED)
+		buttonHandler_disarmTimerActionStep();
+	buttonHandler_buttonTimerStepNr = NO_STEP_SELECTED;
+	buttonHandler_handleModeButtons(SELECT_MODE_VOICE);
+	menu_muteModeActive = 0;
+	led_setActiveVoiceLeds((uint8_t)(1u << menu_getActiveVoice()));
+}
+
 // one of the 8 part buttons is pressed
 static void buttonHandler_selectButtonPressed(uint8_t partNr)
 {
-	if (buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE &&
+	if (((buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE &&
+		  (menu_activePage < NUM_TRACKS || menu_activePage == FX_MODE_PAGE || menu_activePage == PERF_PAGE)) ||
+		 (menu_activePage == MENU_MIDI_PAGE) || buttonHandler_isLoadSavePage() ||
+		 ((buttonHandler_getMode() == SELECT_MODE_LAST_STEP_TRACK ||
+		   buttonHandler_getMode() == SELECT_MODE_LAST_STEP_ALL) && menu_activePage == MENU_LAST_STEP_PAGE)) &&
 		!buttonHandler_getShift() && !buttonHandler_getCopy() &&
-		copyClear_Mode == MODE_NONE && !buttonHandler_stateMemory.seqErasing &&
-		(menu_activePage < NUM_TRACKS || menu_activePage == FX_MODE_PAGE || menu_activePage == PERF_PAGE)) {
-		buttonHandler_handleModeButtons(SELECT_MODE_VOICE);
+		copyClear_Mode == MODE_NONE && !buttonHandler_stateMemory.seqErasing) {
+		if(buttonHandler_isLoadSavePage() || menu_activePage == MENU_MIDI_PAGE ||
+		   menu_activePage == MENU_LAST_STEP_PAGE) buttonHandler_leaveDialogForVoice();
+		else buttonHandler_handleModeButtons(SELECT_MODE_VOICE);
 		menu_switchSubPageFirstScreen(partNr);
 		led_setActiveSelectButton(partNr);
 		menu_repaintAll();
@@ -1558,7 +1583,18 @@ static void buttonHandler_partButtonReleased(uint8_t partNr)
 // one of the 7 voice buttons pressed
 static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 {
-	if (buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE &&
+	// Identify Config and load/save dialogs by page, not their mode aliases.
+	// Their menu indices are not voice edit sections: start at OSC.
+	if ((menu_activePage == MENU_MIDI_PAGE || buttonHandler_isLoadSavePage()) &&
+		!buttonHandler_getShift() && !buttonHandler_getCopy() &&
+		copyClear_Mode == MODE_NONE && !buttonHandler_stateMemory.seqErasing) {
+		if(buttonHandler_isLoadSavePage() || menu_activePage == MENU_MIDI_PAGE ||
+		   menu_activePage == MENU_LAST_STEP_PAGE) buttonHandler_leaveDialogForVoice();
+		else buttonHandler_handleModeButtons(SELECT_MODE_VOICE);
+		menu_switchSubPageFirstScreen(0);
+		led_setActiveSelectButton(0);
+	}
+	else if (buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE &&
 		!buttonHandler_getShift() && !buttonHandler_getCopy() &&
 		copyClear_Mode == MODE_NONE && !buttonHandler_stateMemory.seqErasing &&
 		(menu_activePage < NUM_TRACKS || menu_activePage == FX_MODE_PAGE)) {
