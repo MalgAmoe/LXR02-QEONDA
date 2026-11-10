@@ -1,12 +1,22 @@
-/* Legacy int16 API regression, also retained in experimental suites. */
-#undef LXR_MAIN_OUTPUT_24BIT
 /* Actual production TU, including inspection of recursive float32 state. */
 #include "../Core/Src/Soundengine/DSPAudio/MainDjFilter.c"
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-static int16_t b[128];
+
+/* Exercise the sole packed-output API; decode in sample units for DSP oracles. */
+static void process(float *b,unsigned frames) {
+    int16_t packed[256];
+    assert(frames<=64);
+    MainDjFilter_process24(b,packed,frames);
+    for(unsigned i=0;i<frames*2;++i) {
+        uint32_t v=((uint32_t)(uint16_t)packed[2*i]<<8)|((uint16_t)packed[2*i+1]>>8);
+        int32_t signedValue=v&0x800000u?(int32_t)(v|0xff000000u):(int32_t)v;
+        b[i]=signedValue/256.f;
+    }
+}
+static float b[128];
 static int finiteBits(float x) { uint32_t v; memcpy(&v,&x,4); return (v&0x7f800000u)!=0x7f800000u; }
 static void checkStage(FilterStage *s) {
     assert(finiteBits(s->g) && finiteBits(s->wet));
@@ -18,16 +28,16 @@ static void check(void) {
     assert(finiteBits(state.k) && state.k>=0.33332f && state.k<1.415f);
 }
 static void dc(int x,unsigned blocks) {
-    while(blocks--) { for(unsigned i=0;i<128;i++) b[i]=x; MainDjFilter_process(b,64); check(); }
+    while(blocks--) { for(unsigned i=0;i<128;i++) b[i]=x; process(b,64); check(); }
 }
 static void fresh(unsigned hp,unsigned lp,unsigned r) {
     memset(&state,0,sizeof state); MainDjFilter_setTargets(hp,lp,r); dc(0,8);
 }
 static void dry(void) {
-    int16_t original[128];
+    float original[128];
     for(unsigned i=0;i<128;i++) original[i]=(int16_t)(i*1103u);
     original[0]=-32768; original[1]=32767;
-    memcpy(b,original,sizeof b); MainDjFilter_process(b,64);
+    memcpy(b,original,sizeof b); process(b,64);
     assert(!memcmp(b,original,sizeof b));
 }
 /* Independent scalar recurrence from pre-sample production state. No clamp
@@ -48,18 +58,18 @@ static void saturation(void) {
         float hp=predict(&state.hp,(float)x,0,1);
         float y=predict(&state.lp,hp,0,0);
         if(fabsf(hp)>32768.f) ++intermediate;
-        int16_t expected=y>32767.f?32767:y< -32768.f?-32768:(int16_t)y;
-        b[0]=x; b[1]=0; MainDjFilter_process(b,1); check();
-        assert(abs(b[0]-expected)<=1 && b[1]==0);
-        if(y>32767.f) {assert(b[0]==32767);++positive;}
+        float expected=fmaxf(-32768.f,fminf(8388607.f/256.f,y));
+        b[0]=x; b[1]=0; process(b,1); check();
+        assert(fabsf(b[0]-expected)<=1 && b[1]==0);
+        if(y>8388607.f/256.f) {assert(b[0]==8388607.f/256.f);++positive;}
         if(y< -32768.f) {assert(b[0]==-32768);++negative;}
     }
     assert(positive && negative && intermediate);
 }
 int main(void) {
     dry(); MainDjFilter_setTargets(0,127,127); dry();
-    fresh(0,0,127); dc(1000,500); assert(abs(b[126]-1000)<=2);
-    fresh(1,127,127); dc(1000,1000); assert(abs(b[126])<=1);
+    fresh(0,0,127); dc(1000,500); assert(fabsf(b[126]-1000)<=2);
+    fresh(1,127,127); dc(1000,1000); assert(fabsf(b[126])<=1);
     fresh(1,0,127);
     assert(fabsf(state.hp.g-tanf(3.14159265358979323846f*20.f/44140.f))<1.e-6f);
     assert(fabsf(state.lp.g-tanf(3.14159265358979323846f*40.f/44140.f))<1.e-6f);
@@ -90,7 +100,7 @@ int main(void) {
     const unsigned pairs[][2]={{1,0},{127,0},{127,126},{45,90},{100,10}};
     for(unsigned p=0;p<sizeof pairs/sizeof pairs[0];p++) {
         fresh(pairs[p][0],pairs[p][1],127);
-        b[0]=30000; MainDjFilter_process(b,64); check();
+        b[0]=30000; process(b,64); check();
         for(unsigned i=1;i<128;i+=2) assert(b[i]==0);
         dc(0,5000);
         for(unsigned c=0;c<2;c++) {
@@ -102,7 +112,7 @@ int main(void) {
     for(unsigned j=0;j<2000;j++) {
         MainDjFilter_setTargets((j*17)%128,(j*37)%128,127);
         for(unsigned i=0;i<128;i++) b[i]=(i/2+j)%2?-32768:32767;
-        MainDjFilter_process(b,64); check();
+        process(b,64); check();
     }
     MainDjFilter_reset(); dc(12000,4); dry();
     MainDjFilter_setTargets(255,255,255); dc(0,4);

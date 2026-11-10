@@ -30,7 +30,6 @@ void Ringmod_init(Ringmod *rm)
 	rm->osc.pitchMod = 1.0f;
 	osc_setFreq(&rm->osc);
 }
-#if LXR_AUDIO_FLOAT32
 void Ringmod_process(Ringmod *rm, AudioSample*fxBuffer, AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet)
 {
     AudioSample mod[size];
@@ -45,56 +44,6 @@ void Ringmod_process(Ringmod *rm, AudioSample*fxBuffer, AudioSample* outL, Audio
         }
     }
 }
-#else
-void Ringmod_process(Ringmod *rm, AudioSample*fxBuffer, AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet)
-{
-	int16_t buf[size];
-	int32_t x;
-	int32_t* stereoOut = (int32_t*)outL;
-
-	calcNextOscSampleBlock(&rm->osc, buf, size, 1.f, 0.3f);
-
-	if(channels==2)
-	{
-		for(uint8_t i=0;i<size;i++)
-		{
-			const uint8_t idx1 = i*2;
-			const uint8_t idx2 = i*2+1;
-
-			//TODO could probably be simd optimized
-			int32_t val1 = ((int32_t)fxBuffer[idx1]) * buf[i];
-			int32_t val2 = ((int32_t)fxBuffer[idx2]) * buf[i];
-			//int32_t val2 = *outR * buf[i];
-
-
-			int16_t wet =  val1>>16;
-			int16_t wet2 =  val2>>16;
-			//int16_t dw = fxBuffer[i] + __SSAT((wet - fxBuffer[i]) * dryWet,16);
-
-			x = __PKHBT(fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16), fxBuffer[idx2] + __SSAT((wet2 - fxBuffer[idx2]) * dryWet,16), 16);
-			//LERP dryWet
-			*stereoOut = __QADD16(*stereoOut, x);
-			stereoOut++;
-		}
-	}
-	else
-	{
-		for(uint8_t i=0;i<size;i++)
-		{
-			const uint8_t idx1 = i*2;
-			int32_t val1 = ((int32_t)fxBuffer[idx1]) * buf[i];
-
-			//*outL = val1>>16;
-			//*outR = val2>>16;
-
-			const int16_t wet = __QADD16(*outL, val1>>16);
-			const int16_t dw = fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16);
-			*outL = __QADD16(*outL, dw);
-			outL += 2;
-		}
-	}
-}
-#endif
 void Ringmod_setFreq(Ringmod *rm, float f)
 {
 	rm->osc.freq = f*880.f;

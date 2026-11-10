@@ -1,8 +1,7 @@
-/* Reuse production integration wiring, not its unclipped expectations. */
-#define main unclipped_fixture_main
+/* Focused production per-add clipping regressions. */
+#define main integration_fixture_main
 #include "test_audio_float32.c"
 #undef main
-static float bound(float x) {return fmaxf(-32768.f,fminf(32767.f,x));}
 int main(void) {
  assert(audio_mix_add(0.125f,0.25f)==0.375f);
  assert(audio_mix_add(-0.125f,-0.25f)==-0.375f);

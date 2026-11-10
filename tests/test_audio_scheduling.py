@@ -27,11 +27,7 @@ transport = transport[transport.index('/* HAL Size'):transport.index('/* Mask fo
 fixture = r'''
 #include <assert.h>
 #include <stdint.h>
-#if LXR_AUDIO_FLOAT32
 typedef float AudioSample;
-#else
-typedef int16_t AudioSample;
-#endif
 #include "Soundengine/AudioOutput24.h"
 #include <stddef.h>
 #define OUTPUT_DMA_SIZE 64
@@ -78,18 +74,14 @@ static unsigned lastHalf;
 #define HAL_NVIC_DisableIRQ(i) ((void)0)
 #define HAL_NVIC_EnableIRQ(i) ((void)0)
 #define HAL_NVIC_ClearPendingIRQ(i) ((void)0)
-#if LXR_AUDIO_24BIT
 static int packingSeam;
-#endif
 void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *h);
 static unsigned __get_PRIMASK(void) {
-#if LXR_AUDIO_24BIT
     if(packingSeam && dma_buffer[0]==-64 && dma_buffer2[0]==64 &&
        dma_buffer[255]==0 && dma_buffer2[255]==0) {
         packingSeam=0;
         HAL_I2S_TxCpltCallback(&hi2s3);
     }
-#endif
     return mask;
 }
 static void __disable_irq(void) {mask=1;}
@@ -117,15 +109,9 @@ static HAL_StatusTypeDef HAL_I2S_Transmit_DMA(I2S_HandleTypeDef *h,uint16_t *p,u
 void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *h);
 void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *h);
 static void mixer_calcNextSampleBlock(AudioSample *a,AudioSample *b) {
-#if LXR_AUDIO_24BIT
     static unsigned renderCount;
     lastHalf = renderCount++ == 1 ? 1 : 0;
     for(unsigned i=0;i<128;++i) {a[i]=(int16_t)(i-64); b[i]=(int16_t)(64-i);}
-#else
-    assert(a >= dma_buffer && a < dma_buffer+256);
-    lastHalf=(a-dma_buffer)/128;
-    assert(b == dma_buffer2+lastHalf*128);
-#endif
     if(renderingLate) HAL_I2S_TxCpltCallback(&hi2s3);
 }
 '''
@@ -133,67 +119,49 @@ for name in ('codec_ignoreFifoErrors', 'codec_blockSent', 'HAL_I2S_TxHalfCpltCal
              'HAL_I2S_TxCpltCallback', 'HAL_I2S_ErrorCallback', 'codec_serviceDmaRecovery'):
     fixture += function(codec, name)
 fixture += r'''
-#if LXR_MAIN_OUTPUT_24BIT
 static unsigned mainCalls;
 static void MainDjFilter_process24(const AudioSample *src,int16_t *dst,unsigned frames) {
     assert(frames==OUTPUT_DMA_SIZE); ++mainCalls;
-    #if LXR_AUDIO_FLOAT32
     for(unsigned i=0;i<frames*2;++i) audio_output24_store(dst+2*i,src[i]);
-#else
-    codec_pack24(dst,src);
-#endif /* DSP tested separately; physical destination here. */
 }
-#endif
 '''
 for name in ('soundengine_calcNextSampleBlock', 'soundengine_backgroundAudioBegin',
              'soundengine_backgroundAudioEnd'):
     fixture += function(engine, name)
 fixture += r'''
 int main(void) {
-#if LXR_AUDIO_24BIT
     int16_t src[128], guarded[514];
     for(unsigned i=0;i<128;++i) src[i]=(int16_t)(i%4==0 ? -32768 : i%4==1 ? 32767 : i%4==2 ? -1 : 0);
     for(unsigned half=0;half<2;++half) {
         for(unsigned i=0;i<514;++i) guarded[i]=1234;
-        codec_pack24(guarded+1+half*256,src);
+        for(unsigned i=0;i<128;++i) audio_output24_store(guarded+1+half*256+2*i,src[i]);
         for(unsigned i=0;i<128;++i) {
             assert(guarded[1+half*256+2*i]==src[i]);
             assert(guarded[2+half*256+2*i]==0);
         }
         assert(guarded[half*256]==1234 && guarded[257+half*256]==1234);
     }
-#endif
     HAL_I2S_TxHalfCpltCallback(&hi2s2);
     assert(bCurrentSampleValid == SAMPLE_VALID);
     HAL_I2S_TxHalfCpltCallback(&hi2s3);
     assert(bCurrentSampleValid == 0);
     assert(soundengine_calcNextSampleBlock() == 1 && lastHalf == 0);
     assert(bCurrentSampleValid == SAMPLE_VALID);
-#if LXR_MAIN_OUTPUT_24BIT
     assert(mainCalls==1);
-#endif
-#if LXR_AUDIO_24BIT
     for(unsigned i=0;i<128;++i) {
         assert(dma_buffer[2*i]==(int16_t)(i-64) && dma_buffer[2*i+1]==0);
         assert(dma_buffer2[2*i]==(int16_t)(64-i) && dma_buffer2[2*i+1]==0);
     }
-#endif
     HAL_I2S_TxCpltCallback(&hi2s3);
     assert(soundengine_calcNextSampleBlock() == 1 && lastHalf == 1);
-#if LXR_AUDIO_24BIT
     for(unsigned i=0;i<128;++i) {
         assert(dma_buffer[256+2*i]==(int16_t)(i-64) && dma_buffer[257+2*i]==0);
         assert(dma_buffer2[256+2*i]==(int16_t)(64-i) && dma_buffer2[257+2*i]==0);
     }
-#endif
     assert(soundengine_calcNextSampleBlock() == 0);
     HAL_I2S_TxHalfCpltCallback(&hi2s3);
-#if LXR_AUDIO_24BIT
     packingSeam=1;
     dma_buffer[0]=dma_buffer2[0]=999;
-#else
-    renderingLate=1;
-#endif
     assert(soundengine_calcNextSampleBlock() == 1 && lastHalf == 0);
     assert(bCurrentSampleValid == 1); /* newer request was not erased */
     renderingLate=0;
@@ -243,7 +211,7 @@ with tempfile.TemporaryDirectory() as directory:
     c = Path(directory) / 'scheduling.c'
     exe = Path(directory) / 'scheduling'
     c.write_text(fixture)
-    subprocess.run([os.environ.get('CC', 'cc'), '-std=c11', '-I'+str(root/'Core/Inc'), '-DLXR_AUDIO_FLOAT32='+os.environ.get('LXR_AUDIO_FLOAT32','0'), '-DLXR_AUDIO_24BIT=' + os.environ.get('LXR_AUDIO_24BIT', '0'), '-DLXR_MAIN_OUTPUT_24BIT=' + os.environ.get('LXR_MAIN_OUTPUT_24BIT', '0'), '-Wall', '-Werror',
+    subprocess.run([os.environ.get('CC', 'cc'), '-std=c11', '-I'+str(root/'Core/Inc'), '-Wall', '-Werror',
                     '-fsanitize=address,undefined', '-g', str(c), '-o', str(exe)], check=True)
     subprocess.run([str(exe)], check=True)
 

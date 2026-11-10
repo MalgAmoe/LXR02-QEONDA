@@ -18,8 +18,7 @@ if os.environ.get('LXR_BASE_REV'):
     source = subprocess.check_output(['git', '-C', str(root), 'show', os.environ['LXR_BASE_REV']+':Core/Src/Soundengine/DSPAudio/Snare.c'], text=True)
 pre = r'''
 #include <stdint.h>
-typedef int16_t AudioSample;
-typedef double AudioReal;
+#include "Soundengine/AudioSample.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -34,16 +33,16 @@ typedef struct {
  OnePoleFilter FaderVolumeFilter;
 } SnareVoice;
 static SnareVoice snareVoice;
-static int16_t tone,noise,transient;
+static float tone,noise,transient;
 static float fader;
 static unsigned reads,dist_calls;
 static int32_t __SSAT(int32_t x,int n){assert(n==16);return x>32767?32767:x< -32768?-32768:x;}
 static float adc_getFaderVolume(int v){assert(v==3);reads++;return fader;}
-static void calcNoiseBlock(int*o,int16_t*b,uint8_t n,float g){assert(g==0.9f);for(int i=0;i<n;i++)b[i]=noise;}
-static void SVF_calcBlockZDF(int*f,int t,int16_t*b,uint8_t n){}
-static void calcNextOscSampleBlock(int*o,int16_t*b,uint8_t n,float g,float p){for(int i=0;i<n;i++)b[i]=(int16_t)(tone*g);}
-static void transient_calcBlock(int*t,int16_t*b,uint8_t n){for(int i=0;i<n;i++)b[i]=transient;}
-static void calcDistBlock(int*d,int16_t*b,uint8_t n){dist_calls++;}
+static void calcNoiseBlock(int*o,AudioSample*b,uint8_t n,float g){assert(g==0.9f);for(int i=0;i<n;i++)b[i]=noise;}
+static void SVF_calcBlockZDF(int*f,int t,AudioSample*b,uint8_t n){}
+static void calcNextOscSampleBlock(int*o,AudioSample*b,uint8_t n,float g,float p){for(int i=0;i<n;i++)b[i]=(tone*g);}
+static void transient_calcBlock(int*t,AudioSample*b,uint8_t n){for(int i=0;i<n;i++)b[i]=transient;}
+static void calcDistBlock(int*d,AudioSample*b,uint8_t n){dist_calls++;}
 '''
 main = r'''
 int main(void){
@@ -57,11 +56,11 @@ int main(void){
   tone=sign*30001;noise=sign*29001;transient=tr?sign*32001:0;
   fader=level*0.5f;reads=dist_calls=0;
   float state=snareVoice.FaderVolumeFilter.b;
-  int16_t expected[64],out[64];
+  float expected[64],out[64];
   for(int i=0;i<64;i++){
    state=fmaf(0.1f,fader-state,state);
    float combined=snareVoice.vol*(mode?snareVoice.velo:1)*snareVoice.egValueOscVol;
-   float tmp=fmaf(noise,snareVoice.mix,(int16_t)(tone*(1-snareVoice.mix)));
+   float tmp=fmaf(noise,snareVoice.mix,(tone*(1-snareVoice.mix)));
    tmp+=transient;
    if(tmp>32767){tmp=32767;positive++;}
    else if(tmp< -32768){tmp=-32768;negative++;}
@@ -69,10 +68,11 @@ int main(void){
    int32_t integral=(int32_t)value;
    if(integral>32767){expected[i]=32767;}
    else if(integral< -32768){expected[i]=-32768;}
-   else {expected[i]=(int16_t)value;if(value!=integral)fractional++;}
+   else {expected[i]=value;if(value!=integral)fractional++;}
   }
   Snare_calcSyncBlock(out,64);
-  for(int i=0;i<64;i++)assert(out[i]==expected[i]);
+  /* Float reassociation under production fast-math may differ by a few ULP. */
+  for(int i=0;i<64;i++)assert(fabsf(out[i]-expected[i])<=2e-6f*fmaxf(1.f,fabsf(expected[i])));
   /* Target read once per block; output/state checks above retain per-sample smoothing. */
   assert(reads==1 && dist_calls==1);
   assert(fabsf(state-snareVoice.FaderVolumeFilter.b)<0.000001f);
@@ -87,16 +87,16 @@ int main(void){
    .velo=gain==1?0.5f:1,.egValueOscVol=gain==0?0.5f:1,
    .FaderVolumeFilter={gain==3?0.5f:1,0.1f}};
   fader=gain==3?0.5f:1;tone=sign*30000;noise=0;transient=sign*30000;
-  int16_t out;Snare_calcSyncBlock(&out,1);
+  float out;Snare_calcSyncBlock(&out,1);
   float scale=(gain==1&&!mode)?1:0.5f;
-  assert(out==(int16_t)((sign>0?32767.f:-32768.f)*scale));
+  assert(out==((sign>0?32767.f:-32768.f)*scale));
  }
  /* Fractional mix survives until final conversion: 100.5 * 2 = 201. */
  for(int mode=FIRST_MODE;mode<2;mode++){
   snareVoice=(SnareVoice){.volumeMod=mode,.vol=2,.velo=1,.egValueOscVol=1,
    .mix=0.5f,.FaderVolumeFilter={1,0.1f}};
   fader=1;tone=0;noise=201;transient=0;
-  int16_t out;Snare_calcSyncBlock(&out,1);assert(out==201);
+  float out;Snare_calcSyncBlock(&out,1);assert(out==201);
   /* Signed envelope undershoot and asymmetric endpoint; extended invalid gains. */
   tone=-32768;noise=0;transient=-32768;snareVoice.mix=0;
   snareVoice.vol=1;snareVoice.egValueOscVol=-1;
@@ -115,5 +115,5 @@ with tempfile.TemporaryDirectory() as tmp:
     (p/'test.c').write_text(pre+extract((dsp/'1PoleLp.c').read_text(),'calcOnePole')+'\n'+extract(source,'Snare_calcSyncBlock')+'\n'+main)
     for flags in (['-O1'], ['-O3','-ffast-math','-freciprocal-math']):
         print('snare flags:',flags,flush=True)
-        subprocess.run([os.environ.get('CC','cc'),'-std=gnu11','-DFIRST_MODE='+os.environ.get('LXR_FIRST_MODE','0'),*flags,'-fsanitize=address,undefined,float-cast-overflow','-fno-sanitize-recover=all',str(p/'test.c'),'-lm','-o',str(p/'test')],check=True)
+        subprocess.run([os.environ.get('CC','cc'),'-std=gnu11','-DFIRST_MODE='+os.environ.get('LXR_FIRST_MODE','0'),*flags,'-fsanitize=address,undefined,float-cast-overflow','-fno-sanitize-recover=all','-I'+str(root/'Core/Inc'),str(p/'test.c'),'-lm','-o',str(p/'test')],check=True)
         subprocess.run([str(p/'test')],check=True)

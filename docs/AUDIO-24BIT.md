@@ -1,5 +1,13 @@
 # Experimental 24-bit output stages
 
+> **Historical experiment evidence.** The variant options and commands below
+> describe earlier source only and are no longer supported build modes.
+> This branch now always uses full float32 audio, 24-bit output on both pairs,
+> and per-operation mix clipping. Original int16 tables, uint32 phases and
+> deliberate nonlinear effects remain. See [BUILD](BUILD.md) for current commands.
+
+## Historical record (unchanged below)
+
 For the separately gated full active float32 experiment, see
 [AUDIO-FLOAT32](AUDIO-FLOAT32.md). The transport-only and main-output-only modes
 below remain unchanged when that experiment is OFF.

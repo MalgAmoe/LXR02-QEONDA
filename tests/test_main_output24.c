@@ -1,5 +1,3 @@
-#undef LXR_MAIN_OUTPUT_24BIT
-#define LXR_MAIN_OUTPUT_24BIT 1
 #include "../Core/Src/Soundengine/DSPAudio/MainCompressor.c"
 #include "../Core/Src/Soundengine/DSPAudio/MainDjFilter.c"
 #include <assert.h>
@@ -10,7 +8,7 @@ static int32_t unpack(const int16_t *p) {
     return v&0x800000u ? (int32_t)(v|0xff000000u) : (int32_t)v;
 }
 int main(void) {
-    int16_t p[6]={123,0,0,0,0,456}, b[2];
+    int16_t p[6]={123,0,0,0,0,456}; float b[2];
     const float values[]={0,0.25f,-0.25f,32767,-32768,40000,-40000};
     const int32_t codes[]={0,64,-64,8388352,-8388608,8388607,-8388608};
     for(unsigned i=0;i<7;i++) {
@@ -55,8 +53,8 @@ int main(void) {
         b[0]=(int16_t)(24000.f*sinf(6.28318530718f*fc*i/44140.f));b[1]=0;
         MainDjFilter_process24(b,p+1,1);
         int32_t a=unpack(p+1);
-        positive += a==32767*256; negative += a==-8388608;
-        assert(a<=32767*256 && a>=-8388608 && unpack(p+3)==0);
+        positive += a==8388607; negative += a==-8388608;
+        assert(a<=8388607 && a>=-8388608 && unpack(p+3)==0);
     }
     assert(positive && negative);
     assert(p[0]==123 && p[5]==456);

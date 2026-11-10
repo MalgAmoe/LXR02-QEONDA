@@ -194,18 +194,7 @@ void Cymbal_calcSyncBlock(AudioSample* buf, const uint8_t size)
 			//const float vol = ;
 
 #if 1
-			#if LXR_AUDIO_FLOAT32
             for(unsigned i=0;i<size;++i) buf[i] += mod[i];
-#else
-int32_t* x = (int32_t*)buf;
-			int32_t* y = (int32_t*)mod;
-
-			//add filter to buffer
-			for(uint8_t i=0;i<size/2;i++)
-			{
-				x[i] = __QADD16(x[i],y[i]);
-			}
-#endif
 
 			for(j=0;j<size;j++)
 			{
@@ -227,18 +216,7 @@ int32_t* x = (int32_t*)buf;
 			//const float vol = cymbalVoice.combinedVolume ;
 
 #if 1
-			#if LXR_AUDIO_FLOAT32
             for(unsigned i=0;i<size;++i) buf[i] += mod[i];
-#else
-int32_t* x = (int32_t*)buf;
-			int32_t* y = (int32_t*)mod;
-
-			//add filter to buffer
-			for(uint8_t i=0;i<size/2;i++)
-			{
-				x[i] = __QADD16(x[i],y[i]);
-			}
-#endif
 
 			for(j=0;j<size;j++)
 			{

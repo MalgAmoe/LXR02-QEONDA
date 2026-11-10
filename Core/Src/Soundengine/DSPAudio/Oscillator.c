@@ -73,11 +73,7 @@ IN_ITCM_RAM void calcSineBlock(OscInfo* osc, AudioSample* buf, const uint8_t siz
 			//oscOut += frac*(sine_table[itg] - oscOut);
 			//a + t * (b - a);
 			uint32_t frac = index&0xFFFFF;
-			#if LXR_AUDIO_FLOAT32
 oscOut = oscOut + (sine_table[itg] - oscOut) * ((float)frac / 1048576.f);
-#else
-oscOut = oscOut + (int16_t)(((int64_t)(sine_table[itg] - oscOut) * frac)   >>20);
-#endif
 		#else
 			oscOut = sine_table[itg];
 		#endif
@@ -109,11 +105,7 @@ IN_ITCM_RAM void calcFmSineBlock(OscInfo* osc, AudioSample* modBuffer, AudioSamp
 		//const float frac	= (index&0x7ffff)*0.0000019073486328125f;
 		//oscOut += frac*(sine_table[itg] - oscOut);
 		uint32_t frac = index&0xFFFFF;
-		#if LXR_AUDIO_FLOAT32
 oscOut = oscOut + (sine_table[itg] - oscOut) * ((float)frac / 1048576.f);
-#else
-oscOut = oscOut + (int16_t)(((int64_t)(sine_table[itg] - oscOut) * frac)   >>20);
-#endif
 	#else
 		oscOut = sine_table[itg];
 	#endif
@@ -140,11 +132,7 @@ IN_ITCM_RAM void calcFmBlock(OscInfo* osc, const int16_t table[][1024], AudioSam
 		//const float frac	= (index&0x003FFFFF)*2.38418579101562e-07f;
 		//oscOut += frac*(table[osc->tableOffset][itg] - oscOut);
 		uint32_t frac = index & 0x3FFFFF;
-		#if LXR_AUDIO_FLOAT32
 oscOut = oscOut + (table[osc->tableOffset][itg & 1023u] - oscOut) * ((float)frac / 4194304.f);
-#else
-oscOut = oscOut + (int16_t)(((int64_t)(table[osc->tableOffset][itg & 1023u] - oscOut) * frac)   >>22);
-#endif
 
 	#else
 		oscOut = table[overtoneIndex][itg];
@@ -177,27 +165,15 @@ void calcPwmFmBlock(OscInfo* osc, AudioSample* modBuffer, AudioSample* buf, uint
 		//const float frac	= (index&0x003FFFFF)*2.38418579101562e-07f;
 		//oscOut += frac*(sawTable[osc->tableOffset][itg] - oscOut);
 		uint32_t frac = index & 0x3FFFFF;
-		#if LXR_AUDIO_FLOAT32
 oscOut = oscOut + (sawTable[osc->tableOffset][itg & 1023u] - oscOut) * ((float)frac / 4194304.f);
-#else
-oscOut = oscOut + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg & 1023u] - oscOut) * frac)   >>22);
-#endif
 
 		AudioSample osc2Out = sawTable[osc->tableOffset][itg2++];// * -1;
 		//const float frac	= (index&0x003FFFFF)*2.38418579101562e-07f;
 		frac = index2 & 0x3FFFFF;
 		//osc2Out += frac*(sawTable[osc->tableOffset][itg2] * -1 - osc2Out);
-		#if LXR_AUDIO_FLOAT32
 osc2Out = osc2Out + (sawTable[osc->tableOffset][itg2 & 1023u] - osc2Out) * ((float)frac / 4194304.f);
-#else
-osc2Out = osc2Out + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg2 & 1023u] - osc2Out) * frac)   >>22);
-#endif
 
-		#if LXR_AUDIO_FLOAT32
         oscOut = audio_sample_bound(oscOut-osc2Out); /* PWM waveform saturation */
-#else
-        oscOut =  __QSUB16(oscOut,osc2Out);
-#endif
 
 
 	#else
@@ -320,11 +296,7 @@ IN_ITCM_RAM void calcWavetableOscBlock(OscInfo* osc, const int16_t table[][1024]
 			//const float frac = (itg&0x003FFFFF)*2.38418579101562e-07f; //2.38... => 1.f/0x3fffff
 			//oscOut += frac*(table[osc->tableOffset][itg] - oscOut);
 			uint32_t frac = oscPhase & 0x3FFFFF;
-			#if LXR_AUDIO_FLOAT32
 oscOut = oscOut + (table[osc->tableOffset][itg & 1023u] - oscOut) * ((float)frac / 4194304.f);
-#else
-oscOut = oscOut + (int16_t)(((int64_t)(table[osc->tableOffset][itg & 1023u] - oscOut) * frac)   >>22);
-#endif
 		#else
 			oscOut = table[osc->tableOffset][itg];
 		#endif
@@ -375,27 +347,15 @@ IN_ITCM_RAM void calcPwmBlock(OscInfo* osc, AudioSample* buf, uint8_t size ,cons
 			//const float frac = (itg&0x003FFFFF)*2.38418579101562e-07f;
 			//oscOut += frac*(sawTable[osc->tableOffset][itg] - oscOut);
 			uint32_t frac = oscPhase & 0x3FFFFF;
-			#if LXR_AUDIO_FLOAT32
 oscOut = oscOut + (sawTable[osc->tableOffset][itg & 1023u] - oscOut) * ((float)frac / 4194304.f);
-#else
-oscOut = oscOut + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg & 1023u] - oscOut) * frac)   >>22);
-#endif
 
 			AudioSample osc2Out = sawTable[osc->tableOffset][itg2++] ;//* -1;
 			//const float frac	= (index&0x003FFFFF)*2.38418579101562e-07f;
 			//osc2Out += frac*(sawTable[osc->tableOffset][itg2] * -1 - osc2Out);
 			frac = oscPhase2 & 0x3FFFFF;
-			#if LXR_AUDIO_FLOAT32
 osc2Out = osc2Out + (sawTable[osc->tableOffset][itg2 & 1023u] - osc2Out) * ((float)frac / 4194304.f);
-#else
-osc2Out = osc2Out + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg2 & 1023u] - osc2Out) * frac)   >>22);
-#endif
 
-			#if LXR_AUDIO_FLOAT32
         oscOut = audio_sample_bound(oscOut-osc2Out); /* PWM waveform saturation */
-#else
-        oscOut =  __QSUB16(oscOut,osc2Out);
-#endif
 
 		#else
 			oscOut = sawTable[overtoneIndex][itg];

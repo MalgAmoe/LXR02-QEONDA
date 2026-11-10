@@ -146,15 +146,14 @@ ProjectMeasure and its two measurement-only tests have been removed. Historical
 coverage and evidence remain in [PROJECT-MEASUREMENT](../docs/PROJECT-MEASUREMENT.md);
 that diagnostic is no longer a build option or part of this suite.
 
-## Full-float audio experiment
+## Production float32 audio
 
-`test_audio_float32` compiles production oscillator, voice, filter, mixer helpers,
-FX and main-output paths with float32 enabled even in the normal host suite.
-Legacy C tests explicitly keep the legacy sample type; scheduling runs the selected
-configuration. Hardware/RNG/fader endpoints remain substitutes.
-See [AUDIO-FLOAT32](../docs/AUDIO-FLOAT32.md) for exact coverage, build commands,
-ARM codegen checks and static-memory/stack limitations. No hardware timing or
-negative-FM host conversion claim follows from these tests.
+All audio tests compile the sole production path: float32 samples and delay
+history, padded 24-bit output on both stereo pairs, per-operation mix clipping.
+Original int16 tables and uint32 phases remain. Scheduling tests use the same
+DMA geometry. Hardware/RNG/fader endpoints remain substitutes.
+Run both `check_fm_arm_codegen.py` and `check_audio_float32_arm.py` against a
+fresh ARM release; these are instruction checks, not hardware timing tests.
 
 ### Float handoff coverage
 
@@ -166,11 +165,14 @@ renderer body through the real main DSP and both encoders, checking both DMA
 halves. Control-rate async/modulation/LFO calls, GPIO, RNG, faders and IRQ state
 are substitutes; held fractional decimator samples make routing deterministic.
 This does not establish hardware timing or real control-rate integration. See
-[float experiment](../docs/AUDIO-FLOAT32.md) for precise coverage and gaps.
+[historical float investigation](../docs/AUDIO-FLOAT32.md) for context and gaps.
 
-### Float mix clipping comparison
+### Per-operation mix clipping
 
-`test_float_mix_clip` shares production float sources with the unclipped
-`test_audio_float32` target. Both run in the full host suite; the latter explicitly
-deselects clipping even in a clip configuration. See
-[operation audit, build commands and evidence](../docs/AUDIO-FLOAT32-CLIP.md).
+`test_float_mix_clip` shares production float sources and integration wiring
+with `test_audio_float32`; neither changes compile-time audio behavior. The
+first focuses on per-add overload/cancellation, wet-delta and destination bounds
+across routes and effects; the second checks numerical history, voices, routing
+and both output encoders. Filter/compressor tests decode the real packed output
+without an alternate int16 API. See the historical
+[operation audit](../docs/AUDIO-FLOAT32-CLIP.md) for clipping placement.

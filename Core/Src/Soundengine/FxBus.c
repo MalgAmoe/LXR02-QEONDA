@@ -77,38 +77,10 @@ IN_ITCM_RAM void FxBus_process(AudioSample*fxBuffer, AudioSample* outL,AudioSamp
 	default:
 	case FX_OFF:
 	{
-#if LXR_AUDIO_FLOAT32
         for(unsigned i=0;i<size;++i) {
             out[2*i] = audio_mix_add(out[2*i], fxBuffer[2*i]);
             if(channels==2) out2[2*i] = audio_mix_add(out2[2*i], fxBuffer[2*i+1]);
         }
-#else
-
-		if(channels == 2)
-		{
-			int32_t* stereoIn = (int32_t*)fxBuffer;
-			int32_t* stereoOut = (int32_t*)out;
-
-			for(uint8_t i=0;i<size;i++)
-			{
-				//add stereo samples using SIMD
-				*stereoOut = __QADD16(*stereoOut, *stereoIn);
-				stereoOut++;
-				stereoIn++;
-			}
-		}
-		else
-		{
-			int32_t* in = (int32_t*)fxBuffer;
-			for(uint8_t i=0;i<size;i++)
-			{
-				*out =  __QADD16(*out, *in);
-				out +=2;
-				in++;
-
-			}
-		}
-#endif
 	}
 	break;
 

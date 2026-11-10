@@ -1,5 +1,3 @@
-/* Legacy int16 API regression, also retained in experimental suites. */
-#undef LXR_MAIN_OUTPUT_24BIT
 /* Real DSP TU and independent full-rate double-precision reference curve. */
 #include "../Core/Src/Soundengine/DSPAudio/MainCompressor.c"
 #include <assert.h>
@@ -7,6 +5,18 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../Core/Src/Soundengine/DSPAudio/MainDjFilter.c"
+
+/* Exercise the sole packed-output API; decode in sample units for DSP oracles. */
+static void process(float *b,unsigned frames) {
+    int16_t packed[256];
+    assert(frames<=64);
+    MainDjFilter_process24(b,packed,frames);
+    for(unsigned i=0;i<frames*2;++i) {
+        uint32_t v=((uint32_t)(uint16_t)packed[2*i]<<8)|((uint16_t)packed[2*i+1]>>8);
+        int32_t signedValue=v&0x800000u?(int32_t)(v|0xff000000u):(int32_t)v;
+        b[i]=signedValue/256.f;
+    }
+}
 static double oracle(double e) {
     double d=20*log10(fmax(e,1e-20))-comp.threshold;
     double r=d<=-3?0:d>=3?comp.slope*d:comp.slope*(d+3)*(d+3)/12;
@@ -63,10 +73,10 @@ static void transitions(void) {
     /* Public filter entry must not skip the disabling compressor. */
     for(unsigned i=0;i<30000;i++){float x[2]={16000,8000};MainCompressor_processPair(x);last=x[0];}
     MainCompressor_setControls(off);
-    int16_t frame[2]={16000,8000};MainDjFilter_process(frame,1);
-    int previousOutput=last>32767.f?32767:(int)last;
-    assert(abs(frame[0]-previousOutput)<0.02f*fmaxf(fabsf(last),16000.f) && frame[0]!=16000);
-    for(unsigned i=0;i<220;i++){frame[0]=16000;frame[1]=8000;MainDjFilter_process(frame,1);}
+    float frame[2]={16000,8000};process(frame,1);
+    float previousOutput=fminf(last,8388607.f/256.f);
+    assert(fabsf(frame[0]-previousOutput)<0.02f*fmaxf(fabsf(last),16000.f) && frame[0]!=16000);
+    for(unsigned i=0;i<220;i++){frame[0]=16000;frame[1]=8000;process(frame,1);}
     assert(frame[0]==16000 && frame[1]==8000);
     assert(!MainCompressor_beginBlock() && comp.envelope==0);
     memset(&comp,0,sizeof comp);
@@ -122,19 +132,19 @@ int main(void) {
     for(unsigned i=0;i<221;i++){float x[2]={16000,8000};MainCompressor_processPair(x);}
     assert(!MainCompressor_beginBlock());
     assert(comp.gain==1 && comp.makeup==1 && comp.envelope==0);
-    int16_t samples[128], original[128];
+    float samples[128], original[128];
     for(unsigned i=0;i<128;i++) original[i]=(int16_t)(i*1103u);
     original[0]=-32768;original[1]=32767;
     memcpy(samples,original,sizeof samples);
-    MainDjFilter_process(samples,64);
+    process(samples,64);
     assert(!memcmp(samples,original,sizeof samples));
-    /* Float HP -> LP -> compressor before sole int16 conversion. Use real
+    /* Float HP -> LP -> compressor before sole 24-bit encoding. Use real
      * stages and restore their state before the public render entry. */
     MainCompressor_setParameter(303,19);MainCompressor_setParameter(302,0);
     MainCompressor_beginBlock();
     MainDjFilter_setTargets(80,95,127);
     memset(samples,0,sizeof samples);
-    for(unsigned j=0;j<8;j++)MainDjFilter_process(samples,64);
+    for(unsigned j=0;j<8;j++)process(samples,64);
     unsigned overrange=0;
     for(unsigned i=0;i<12000;i++) {
       int16_t v=(int16_t)(24000*sinf(6.28318530718f*20.f*powf(400.f,79.f/126.f)*i/44140.f));
@@ -143,10 +153,10 @@ int main(void) {
       float x[2]={v,-v};processStage(&state.hp,x,1);processStage(&state.lp,x,0);
       if(fabsf(x[0])>32768)overrange++;
       MainCompressor_processPair(x);
-      int16_t expected=x[0]>32767?32767:x[0]<-32768?-32768:(int16_t)x[0];
+      float expected=fmaxf(-32768.f,fminf(8388607.f/256.f,x[0]));
       memcpy(&state,savedFilter,sizeof state);memcpy(&comp,savedComp,sizeof comp);
-      samples[0]=v;samples[1]=-v;MainDjFilter_process(samples,1);
-      assert(abs(samples[0]-expected)<=1);
+      samples[0]=v;samples[1]=-v;process(samples,1);
+      assert(fabsf(samples[0]-expected)<=1);
     }
     assert(overrange);
     /* Times are RC 63.2% amplitude constants, logarithmic endpoints/defaults. */

@@ -21,7 +21,7 @@ for name in ('calcFmSineBlock', 'calcFmBlock', 'calcPwmFmBlock'):
     conversions = 2 if name == 'calcPwmFmBlock' else 1  # PWM offset plus FM
     assert len(re.findall(r'\bvcvt\.u32\.f32\b', text)) == conversions, text
     assert re.search(r'vmul\.f32[^\n]*\n[^\n]*vcvt\.u32\.f32', text), text
-    float_pwm = name == 'calcPwmFmBlock' and re.search(r'^LXR_AUDIO_FLOAT32:BOOL=ON$', cache, re.M)
+    float_pwm = name == 'calcPwmFmBlock'
     if float_pwm:
         # Original QSUB16 PWM waveform saturation becomes float min/max.
         # It must follow the FM conversion, never guard its negative input.

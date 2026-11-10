@@ -100,12 +100,8 @@ static void processStage(FilterStage *s, float x[2], unsigned highpass)
         x[c] += s->wet*(filtered-x[c]);
     }
 }
-#if LXR_MAIN_OUTPUT_24BIT
 #include "Soundengine/AudioOutput24.h"
 void MainDjFilter_process24(const AudioSample *buffer, int16_t *packed, unsigned frames)
-#else
-void MainDjFilter_process(int16_t *buffer, unsigned frames)
-#endif
 {
     unsigned compress=MainCompressor_beginBlock();
     uint32_t saved = lockTargets();
@@ -130,10 +126,8 @@ void MainDjFilter_process(int16_t *buffer, unsigned frames)
             if (!--state.rampK) state.k=state.goalK;
         }
         if (state.hp.wet == 0.f && state.lp.wet == 0.f && !compress) {
-#if LXR_MAIN_OUTPUT_24BIT
             audio_output24_store(packed+4*i, (float)buffer[2*i]);
             audio_output24_store(packed+4*i+2, (float)buffer[2*i+1]);
-#endif
             continue;
         }
         float x[2]={(float)buffer[2*i], (float)buffer[2*i+1]};
@@ -141,16 +135,8 @@ void MainDjFilter_process(int16_t *buffer, unsigned frames)
         processStage(&state.lp, x, 0);
         if (compress) MainCompressor_processPair(x);
         for (unsigned c=0; c<2; ++c) {
-            /* Preserve the original musical saturation after HP -> LP -> compressor. */
-#if !LXR_AUDIO_FLOAT32
-            if (x[c]>32767.f) x[c]=32767.f;
-            if (x[c]< -32768.f) x[c]= -32768.f;
-#endif
-            #if LXR_MAIN_OUTPUT_24BIT
+            /* Final 24-bit encoding bounds after HP -> LP -> compressor. */
             audio_output24_store(packed+4*i+2*c, x[c]);
-#else
-            buffer[2*i+c]=(int16_t)x[c];
-#endif
         }
     }
 }

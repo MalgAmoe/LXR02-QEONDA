@@ -19,35 +19,6 @@ cmake_minimum_required(VERSION 3.21)
 #   cmake --preset host-tests
 #   cmake --build --preset host-tests
 #   ctest --preset host-tests
-option(LXR_AUDIO_24BIT "Experimental padded 24-bit I2S transport (int16 renderer)" OFF)
-if(LXR_AUDIO_24BIT)
-    add_compile_definitions(LXR_AUDIO_24BIT=1)
-endif()
-
-option(LXR_MAIN_OUTPUT_24BIT "Experimental main float post-processing to 24-bit output" OFF)
-if(LXR_MAIN_OUTPUT_24BIT)
-    if(NOT LXR_AUDIO_24BIT)
-        message(FATAL_ERROR "LXR_MAIN_OUTPUT_24BIT requires LXR_AUDIO_24BIT")
-    endif()
-    add_compile_definitions(LXR_MAIN_OUTPUT_24BIT=1)
-endif()
-
-option(LXR_AUDIO_FLOAT32 "Experimental full active float32 audio (16-bit tables)" OFF)
-if(LXR_AUDIO_FLOAT32)
-    if(NOT LXR_AUDIO_24BIT)
-        message(FATAL_ERROR "LXR_AUDIO_FLOAT32 requires LXR_AUDIO_24BIT")
-    endif()
-    add_compile_definitions(LXR_AUDIO_FLOAT32=1 LXR_MAIN_OUTPUT_24BIT=1)
-endif()
-
-option(LXR_FLOAT_MIX_CLIP "Float32 per-operation mix clipping comparison" OFF)
-if(LXR_FLOAT_MIX_CLIP)
-    if(NOT LXR_AUDIO_FLOAT32)
-        message(FATAL_ERROR "LXR_FLOAT_MIX_CLIP requires LXR_AUDIO_FLOAT32")
-    endif()
-    add_compile_definitions(LXR_FLOAT_MIX_CLIP=1)
-endif()
-
 option(LXR_HOST_TESTS "Build the host unit tests in tests/ instead of the firmware" OFF)
 if(LXR_HOST_TESTS)
     project(LXR_V2_host_tests LANGUAGES C)

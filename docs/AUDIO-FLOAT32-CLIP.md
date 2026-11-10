@@ -1,5 +1,44 @@
 # Float32 hard-clipped mix comparison
 
+> **Historical experiment evidence.** The variant options and commands below
+> describe earlier source only and are no longer supported build modes.
+> This branch now always uses full float32 audio, 24-bit output on both pairs,
+> and per-operation mix clipping. Original int16 tables, uint32 phases and
+> deliberate nonlinear effects remain. See [BUILD](BUILD.md) for current commands.
+
+## Single-path simplification verification
+
+On `audio-float32-24bit`, uncommitted atop
+`2d62fabf4c185875dc86bb9400a1eae320986d8c`: removed all four audio options
+and their alternate engine/test paths, retaining the enabled clipped implementation.
+No waveform table, phase representation, nonlinear law or storage implementation
+change. Firmware CRLF retained. The earlier clipped IMG/BIN/ELF were copied to
+`build/audio-simplify-baseline/` before editing; all three final artifacts are
+byte-identical to those copies.
+
+Fresh native AppleClang 17 Debug host build with default ASan/UBSan:
+**52/52 passed** (`ctest --test-dir build/host-audio-simplified --output-on-failure`).
+The integration and focused clipping tests now both exercise production clipping;
+old integer fixtures use float samples and real packed output. Fractional snare
+expectations allow 2 ppm fast-math reassociation instead of integer truncation.
+
+Fresh ARM GNU 14.3.rel1 / GCC 14.3.1 Release in
+`build/release-audio-simplified`: build, `check_fm_arm_codegen.py`,
+`check_audio_float32_arm.py` and `verify_release.py` all passed.
+Payload: **295832 bytes**. SHA-256:
+
+| Artifact | SHA-256 |
+|---|---|
+| IMG | `f842bbe84dbcc1bdfe42b5b2f5a9781497a170d3ed39ff3a34379a3e5438e886` |
+| BIN | `458c6c532ebc1903ac2f0dd0449ad5783a12f7e80aa2f1ef2ea0787f1e737d90` |
+| ELF | `8fa50dba78a0d68cf86329391ad2ef9334cdea771d48d868f381ca81da0482d6` |
+
+Local logs and baseline copies: `build/audio-simplify-baseline/` (ignored build
+artifacts, not portable fixtures). No commits, new branches, card writes or
+installation. No new hardware timing, stack-margin or listening claims.
+
+## Historical record (unchanged below)
+
 This is a **listening/preference test, not a proven glitch fix**. It is an
 uncommitted comparison atop the existing float32 work based on `38cf955`.
 `LXR_FLOAT_MIX_CLIP` defaults OFF and requires `LXR_AUDIO_FLOAT32=ON` (which

@@ -206,17 +206,9 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 			if(filter->b > 1) filter->b = 1;
 			else if(filter->b < -1) filter->b = -1;
 
-			#if LXR_AUDIO_FLOAT32
             float tmp;
-#else
-            int32_t tmp;
-#endif
 			tmp = (filter->b  * FILTER_GAIN);
-			#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 		}
 
 	} else {
@@ -295,11 +287,7 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 			filter->s2 = fmaf(2*f , t1*y0, filter->s2);
 #endif
 
-			#if LXR_AUDIO_FLOAT32
             float tmp;
-#else
-            int32_t tmp;
-#endif
 			switch(type)
 			{
 			default:
@@ -311,11 +299,7 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 				buf[i] = FILTER_GAIN * fastTanh( distortion_calcSampleFloat(&filter->shaper, y1));
 	#else
 				tmp = fastTanh(y1) * 0x7fff ;//FILTER_GAIN;
-				#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 	#endif
 				break;
 
@@ -329,11 +313,7 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 
 	#else
 				tmp = h * FILTER_GAIN;
-				#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 	#endif
 			}
 				break;
@@ -344,11 +324,7 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, y0);
 	#else
 				tmp = y0 * FILTER_GAIN;
-				#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 	#endif
 				break;
 
@@ -360,11 +336,7 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, ugb);
 	#else
 				tmp = ugb * FILTER_GAIN;
-				#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 	#endif
 			}
 				break;
@@ -377,11 +349,7 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, (x-ugb));
 	#else
 				tmp = (x-ugb) * FILTER_GAIN;
-				#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 	#endif
 			}
 				break;
@@ -395,22 +363,14 @@ IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, Au
 				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, (y1-h));
 	#else
 				tmp = (y1-h) * FILTER_GAIN;
-				#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 	#endif
 			}
 			break;
 
 			}
 
-			#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(buf[i]);
-#else
-            buf[i] = __SSAT(buf[i],16);
-#endif
 		}
 	}
 }
@@ -467,17 +427,9 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 			if(filter->b > 1) filter->b = 1;
 			else if(filter->b < -1) filter->b = -1;
 
-			#if LXR_AUDIO_FLOAT32
             float tmp;
-#else
-            int32_t tmp;
-#endif
 			tmp = (filter->b  * FILTER_GAIN);
-			#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 		}
 
 	} else {
@@ -546,11 +498,7 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 			filter->s2 = fmaf(2*f , t1*y0, filter->s2);
 #endif
 
-			#if LXR_AUDIO_FLOAT32
             float tmp;
-#else
-            int32_t tmp;
-#endif
 			switch(type)
 			{
 			default:
@@ -562,11 +510,7 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 				buf[i] = FILTER_GAIN * fastTanh( distortion_calcSampleFloat(&filter->shaper, y1));
 	#else
 				tmp = fastTanh(y1) * 0x7fff ;//FILTER_GAIN;
-				#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 	#endif
 				break;
 
@@ -579,11 +523,7 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, h);
 	#else
 				tmp = h * FILTER_GAIN;
-				#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 	#endif
 			}
 				break;
@@ -594,11 +534,7 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, y0);
 	#else
 				tmp = y0 * FILTER_GAIN;
-				#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 	#endif
 				break;
 
@@ -610,11 +546,7 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, ugb);
 	#else
 				tmp = ugb * FILTER_GAIN;
-				#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 	#endif
 			}
 				break;
@@ -627,11 +559,7 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, (x-ugb));
 	#else
 				tmp = (x-ugb) * FILTER_GAIN;
-				#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 	#endif
 			}
 				break;
@@ -645,21 +573,13 @@ IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t typ
 				buf[i] = FILTER_GAIN * distortion_calcSampleFloat(&filter->shaper, (y1-h));
 	#else
 				tmp = (y1-h) * FILTER_GAIN;
-				#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(tmp);
-#else
-            buf[i] = __SSAT(tmp,16);
-#endif
 	#endif
 			}
 				break;
 
 				}
-			#if LXR_AUDIO_FLOAT32
             buf[i] = audio_sample_bound(buf[i]);
-#else
-            buf[i] = __SSAT(buf[i],16);
-#endif
 		}
 	}
 }

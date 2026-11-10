@@ -66,17 +66,21 @@ checks as well.
 
 - `cmake --preset debug`: O3 with debugging symbols, not an unoptimised audio engine.
 - `-DLXR_GENERATE_LISTING=ON`: generate a disassembly listing.
-- `-DLXR_AUDIO_24BIT=ON`: default-off padded 24-bit transport experiment; use a
-  separate build directory. See [experiment and evidence](AUDIO-24BIT.md).
-- `-DLXR_MAIN_OUTPUT_24BIT=ON`: additionally retain main stereo float HP/LP and
-  compressor output precision; requires `LXR_AUDIO_24BIT=ON`.
-- `-DLXR_AUDIO_FLOAT32=ON`: full active float32 experiment, including float delay
-  history and final encoding on both outputs; requires `LXR_AUDIO_24BIT=ON` and
-  selects the float main path. See [scope, tests and memory evidence](AUDIO-FLOAT32.md).
 
-- `-DLXR_FLOAT_MIX_CLIP=ON`: default-off per-operation float mix clipping
-  comparison; requires `LXR_AUDIO_FLOAT32=ON`. Use `build/float32-clip`; see
-  [scope and evidence](AUDIO-FLOAT32-CLIP.md). A preference test, not a proven glitch fix.
+Audio is always float32 with padded 24-bit output on both stereo pairs and
+per-operation mix clipping. Original int16 waveform tables and uint32 phases
+remain unchanged. No audio variant switches are supported; use a fresh build
+directory rather than an old variant cache.
+
+Run the float target check alongside the FM check:
+
+```sh
+python3 tests/check_audio_float32_arm.py build/release
+```
+
+Historical experiment reports: [transport](AUDIO-24BIT.md),
+[float32](AUDIO-FLOAT32.md), [mix clipping](AUDIO-FLOAT32-CLIP.md).
+Their old variant commands are not current build modes.
 
 For normal updates use only the application `.img`. These instructions do not require
 building or replacing the bootloader.

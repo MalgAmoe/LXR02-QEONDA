@@ -201,7 +201,6 @@ IN_ITCM_RAM void mixer_decimateBlock(const uint8_t voiceNr, AudioSample* buffer)
 //-----------------------------------------------------------------------
 IN_ITCM_RAM static inline void mixer_addDataToOutput(uint8_t dest, const float panL, const float panR,  AudioSample* data,AudioSample* outL,AudioSample* outR,AudioSample* outL2, AudioSample* outR2, AudioSample*fxBuffer)
 {
-#if LXR_AUDIO_FLOAT32
     dest = mixer_checkOutJackAvailable(dest);
     for(unsigned i=0;i<OUTPUT_DMA_SIZE;++i) {
         switch(dest) {
@@ -214,107 +213,6 @@ IN_ITCM_RAM static inline void mixer_addDataToOutput(uint8_t dest, const float p
         case MIXER_ROUTING_DAC2_R: outR[2*i] = audio_mix_add(outR[2*i], data[i]); break;
         }
     }
-#else
-
-	//check if a cable is in the selected out
-	dest = mixer_checkOutJackAvailable(dest);
-	//assert_param(dest <= MIXER_ROUTING_DAC2_R);
-
-	//TODO may be possible to optimize here using both halfwords of add for stereo mixing
-	uint8_t i;
-	switch(dest)
-	{
-
-	case MIXER_ROUTING_FX_BUS:
-		for(i=0;i<OUTPUT_DMA_SIZE;i++)
-		{
-			int32_t y;
-			int32_t x;
-			y = *((int32_t*)fxBuffer);
-			x = __PKHBT( (int16_t)(data[i] * panL), (int16_t)(data[i] * panR), 16);
-
-			*((int32_t*)fxBuffer) = __QADD16(x, y);
-			fxBuffer += 2;
-		}
-		break;
-
-	case MIXER_ROUTING_DAC1_STEREO:
-		for(i=0;i<OUTPUT_DMA_SIZE;i++)
-		{
-#if 1
-			int32_t y;
-			int32_t x;
-			y = *((int32_t*)outL2);
-			//x = ((int16_t)(data[i] * panL)& 0xFFFF) | (((int16_t)(data[i] * panR)& 0xFFFF)<<16);
-			x = __PKHBT( (int16_t)(data[i] * panL), (int16_t)(data[i] * panR), 16);
-			*((int32_t*)outL2) = __QADD16(x, y);
-			outL2 += 2;
-#else
-
-
-			*outL2 = __QADD16(*outL2,(int16_t)(data[i] * panL)) & 0xFFFF;
-			outL2 += 2;
-
-			*outR2 = __QADD16(*outR2,(int16_t)(data[i] * panR)) & 0xFFFF;
-			outR2 += 2;
-#endif
-		}
-		break;
-	case MIXER_ROUTING_DAC2_STEREO:
-		for(i=0;i<OUTPUT_DMA_SIZE;i++)
-		{
-#if 1
-			int32_t x,y;
-			y = *((int32_t*)outL);
-			//simdBuffer x;
-			//x = ((int16_t)(data[i] * panL)& 0xFFFF) | (((int16_t)(data[i] * panR)& 0xFFFF)<<16);
-			//*((int32_t*)outL) = __SADD16(x, y);
-			//x.word[0] = data[i] * panL;
-			//x.word[1] = data[i] * panR;
-			x = __PKHBT( (int16_t)(data[i] * panL), (int16_t)(data[i] * panR), 16);
-			//x = __PKHBT(data[i] * panL, data[i] * panR, 16);
-			*((int32_t*)outL) = __QADD16(x, y);
-			outL += 2;
-#else
-			*outL = __QADD16(*outL,(int16_t)(data[i] * panL)) & 0xFFFF;
-			outL += 2;
-
-			*outR = __QADD16(*outR,(int16_t)(data[i] * panR)) & 0xFFFF;
-			outR += 2;
-#endif
-		}
-		break;
-	case MIXER_ROUTING_DAC1_L:
-		for(i=0;i<OUTPUT_DMA_SIZE;i++)
-		{
-			*outL2 = __QADD16(*outL2,data[i]);
-			outL2 += 2;
-		}
-		break;
-	case MIXER_ROUTING_DAC1_R:
-		for(i=0;i<OUTPUT_DMA_SIZE;i++)
-		{
-			*outR2 = __QADD16(*outR2,data[i]) ;
-			outR2 += 2;
-		}
-		break;
-	case MIXER_ROUTING_DAC2_L:
-		for(i=0;i<OUTPUT_DMA_SIZE;i++)
-		{
-			*outL = __QADD16(*outL,data[i]);
-			outL += 2;
-		}
-		break;
-	case MIXER_ROUTING_DAC2_R:
-		for(i=0;i<OUTPUT_DMA_SIZE;i++)
-		{
-			*outR = __QADD16(*outR,data[i]);
-			outR += 2;
-		}
-		break;
-
-	}
-#endif
 }
 //#pragma GCC pop_options
 //-----------------------------------------------------------------------
@@ -466,9 +364,6 @@ IN_ITCM_RAM void mixer_calcNextSampleBlock(AudioSample* output,AudioSample* outp
 
 #endif
 	FxBus_process(fxBusData,  &output[pos],&output[pos+1],&output2[pos],&output2[pos+1], OUTPUT_DMA_SIZE);
-#if !LXR_MAIN_OUTPUT_24BIT
-	MainDjFilter_process(&output2[pos], OUTPUT_DMA_SIZE);
-#endif
 /*
 	if(activeParameters[UNUSED_PAR_GLO_SAT])
 	{

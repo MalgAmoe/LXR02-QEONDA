@@ -41,6 +41,7 @@ static void test_lfo(Lfo *lfo) {(void)lfo;}
 #undef lfo_dispatchNextValue
 #include <assert.h>
 
+#include <stdio.h>
 #include <math.h>
 #include <string.h>
 GPIO_TypeDef lxr_test_gpio_b;
@@ -57,7 +58,9 @@ static int32_t unpack(const int16_t *p) {
  uint32_t v=((uint32_t)(uint16_t)p[0]<<8)|((uint16_t)p[1]>>8);
  return v&0x800000u ? (int32_t)(v|0xff000000u) : (int32_t)v;
 }
-static void closef(float a,float b) {assert(fabsf(a-b)<0.02f);}
+static float bound(float x) {return fmaxf(-32768.f,fminf(32767.f,x));}
+static void close_at(float a,float b,unsigned line) {if(fabsf(a-b)>=0.02f) fprintf(stderr,"line %u: actual %.9g expected %.9g\n",line,a,b);assert(fabsf(a-b)<0.02f);}
+#define closef(a,b) close_at(a,b,__LINE__)
 
 /* Independent scalar history oracle: run more than a complete ring in 64-frame
  * calls, including both physical banks, wrap, interpolation and feedback clips. */
@@ -79,8 +82,8 @@ static void test_delay_history(void) {
     unsigned next=(rd+1)&mask;
     float l=(historyOracle[rd]*0.625f+historyOracle[next]*0.375f)*32767.f;
     float r=mode?(historyOracle[half+rd]*0.625f+historyOracle[half+next]*0.375f)*32767.f:l;
-    expected[2*i]+=in[2*i]+(l-in[2*i])*0.7f;
-    if(ch==2) expected[2*i+1]+=in[2*i+1]+(r-in[2*i+1])*0.7f;
+    expected[2*i]=bound(expected[2*i]+bound(in[2*i]+bound((l-in[2*i])*0.7f)));
+    if(ch==2) expected[2*i+1]=bound(expected[2*i+1]+bound(in[2*i+1]+bound((r-in[2*i+1])*0.7f)));
     if(mode) {
      historyOracle[half+wr]=fmaxf(-1,fminf(1,(in[2*i]+l*0.91f)/32767.f));
      historyOracle[wr]=fmaxf(-1,fminf(1,(in[2*i+1]+r*0.91f)/32767.f));
@@ -141,8 +144,8 @@ static void test_distortion_numbers(void) {
   double v=ecc83Table[cell]+(ecc83Table[cell+1]-ecc83Table[cell])*fraction;
   float wet=fmaxf(-32768,fminf(32767,(float)(v*0.06537948995454451662*2.1*0.7*32768)));
   Distortion_process(&d,in,out,out+1,1,ch,0.75f);
-  closef(out[0],40000.25f+samples[k]+(wet-samples[k])*0.75f);
-  if(ch==2) closef(out[1],-40000.25f+samples[k]+(wet-samples[k])*0.75f);
+  closef(out[0],bound(40000.25f+samples[k]+bound((wet-samples[k])*0.75f)));
+  if(ch==2) closef(out[1],bound(-40000.25f+samples[k]+bound((wet-samples[k])*0.75f)));
   else assert(out[1]==-40000.25f);
  }
  /* Fold wet expectation includes an actual triangle-fold excursion. */
@@ -153,7 +156,7 @@ static void test_distortion_numbers(void) {
   double filtered=(in[0]/32768.0*5+1)*(0.06537948995454451662+0.92410701734426630737);
   double folded=fabs(fabs(fmod(filtered-1,4))-2)-1;
   Distortion_process(&d,in,out,out+1,1,ch,1);
-  closef(out[0],(float)(folded*0.7*32768));
+  closef(out[0],bound(in[0]+bound((float)(folded*0.7*32768)-in[0])));
   if(ch==2) closef(out[1],out[0]);else assert(out[1]==0);
  }
  /* High drive reaches both diode endpoints through the actual RAT chain. */
@@ -170,7 +173,7 @@ static void test_distortion_numbers(void) {
 int main(void) {
  test_delay_history();
  test_distortion_numbers();
- _Static_assert(sizeof(AudioSample)==4,"float experiment");
+ _Static_assert(sizeof(AudioSample)==4,"production float32");
  _Static_assert(sizeof(sawTable[0][0])==2,"original tables");
  float a[128]={0},b[128]={0},mod[64]={0};
  /* Genuine interpolated fractional values, signs, table wrap and PWM bound. */
@@ -184,8 +187,8 @@ int main(void) {
   assert(a[0]>=-32768 && a[0]<=32767);
  }
  OscInfo noise={.phase=UINT32_MAX,.phaseInc=2};calcNoiseBlock(&noise,a,1,0.5f);assert(a[0]==-16383.5f);
- a[0]=30000.25f;b[0]=30000.5f;bufferTool_addBuffersSaturating(a,b,1);assert(a[0]==60000.75f);
- bufferTool_addGain(a,0.5f,1);assert(a[0]==30000.375f);
+ a[0]=30000.25f;b[0]=30000.5f;bufferTool_addBuffersSaturating(a,b,1);assert(a[0]==32767.f);
+ bufferTool_addGain(a,0.5f,1);assert(a[0]==16383.5f);
  bufferTool_clearBuffer(a,127);for(unsigned i=0;i<127;++i) assert(a[i]==0);
  /* Real transient producer retains a fractional scaled original table sample.
   * Select positive storage to avoid the unchanged legacy signed-shift UB. */
@@ -212,14 +215,14 @@ int main(void) {
   Delay d={0};Delay_init(&d);d.oldRead=d.newRead=20;d.write=100;d.feedback=0;d.tone.r=d.tone2.r=1;
   a[0]=200.25f;a[1]=-100.125f;b[0]=40000.5f;b[1]=-40000.5f;
   if(mode) Delay_processPingPong(&d,a,b,b+1,1,ch,0);else Delay_process(&d,a,b,b+1,1,ch,0);
-  assert(b[0]==40200.75f);assert(b[1]==(ch==2?-40100.625f:-40000.5f));
+  assert(b[0]==32767.f);assert(b[1]==(ch==2?-32768.f:-40000.5f));
  }
  /* All musical distortion algorithms, bypass and fractional wet path. */
  for(unsigned type=0;type<3;++type) for(unsigned ch=1;ch<=2;++ch) {
   MasterDistortion d;Distortion_init(&d);d.distortionType=type;d.p3=0.7f;
   a[0]=1000.25f;a[1]=-1000.125f;b[0]=40000.5f;b[1]=-40000.5f;
   Distortion_process(&d,a,b,b+1,1,ch,0);
-  assert(b[0]==41000.75f);assert(b[1]==(ch==2?-41000.625f:-40000.5f));
+  assert(b[0]==32767.f);assert(b[1]==(ch==2?-32768.f:-40000.5f));
   b[0]=b[1]=0;Distortion_process(&d,a,b,b+1,1,ch,1);
   assert(isfinite(b[0]) && b[0]!=truncf(b[0]));
  }
@@ -228,14 +231,14 @@ int main(void) {
   Compressor c;Compressor_init(&c);c.ratio=1;c.markupGain=2;
   a[0]=1000.25f;a[1]=-500.125f;b[0]=40000.5f;b[1]=-40000.5f;
   Compressor_process(&c,a,b,b+1,1,ch,1);
-  assert(b[0]==42001.f);assert(b[1]==(ch==2?-41000.75f:-40000.5f));
+  assert(b[0]==32767.f);assert(b[1]==(ch==2?-32768.f:-40000.5f));
  }
  /* Ring stereo divisor and historical mono destination-in-wet law. */
  for(unsigned ch=1;ch<=2;++ch) {
   Ringmod r={0};r.osc.waveform=SINE;r.osc.phase=1024u<<20;
   a[0]=1000.25f;a[1]=-500.125f;b[0]=40000.5f;b[1]=-40000.5f;
   Ringmod_process(&r,a,b,b+1,1,ch,1);
-  closef(b[0],40000.5f+1000.25f*sine_table[1024]/65536.f+(ch==1?40000.5f:0));
+  closef(b[0],bound(40000.5f+1000.25f+bound((ch==1?bound(1000.25f*sine_table[1024]/65536.f+40000.5f):1000.25f*sine_table[1024]/65536.f)-1000.25f)));
  }
  /* Actual six voice block paths, settled smoothers and no modulation offset.
   * Expected sine peak*gain retains fractions through each voice's envelopes. */
@@ -270,8 +273,8 @@ int main(void) {
   snareVoice.FaderVolumeFilter.b=1;
   Snare_calcSyncBlock(a,1);closef(a[0],(sign>0?32767.f:-32768.f)*0.25f);
  }
- /* Every mixer route: float pan, mono pan bypass, >FS accumulation and
-  * decimator held fractions. FX OFF adds its bus without clipping. */
+ /* Every mixer route: float pan, mono pan bypass, per-add clipping and
+  * decimator held fractions. FX OFF adds its bus with per-add clipping. */
  r1_Available=l1_Available=r2_Available=l2_Available=1;
  for(unsigned route=0;route<=MIXER_ROUTING_FX_BUS;++route) {
   float out1[128]={0},out2[128]={0},bus[128]={0},voice[64];
@@ -280,12 +283,12 @@ int main(void) {
   mixer_addDataToOutput(route,0.25f,0.75f,voice,out1,out1+1,out2,out2+1,bus);
   float *dest=route==MIXER_ROUTING_FX_BUS?bus:route==MIXER_ROUTING_DAC1_STEREO || route==MIXER_ROUTING_DAC1_L || route==MIXER_ROUTING_DAC1_R?out2:out1;
   if(route<2 || route==MIXER_ROUTING_FX_BUS) {
-   assert(dest[0]==20000.125f && dest[1]==60000.375f);
-  } else assert(dest[route==MIXER_ROUTING_DAC1_R || route==MIXER_ROUTING_DAC2_R]==80000.5f);
+   assert(dest[0]==20000.125f && dest[1]==32767.f);
+  } else assert(dest[route==MIXER_ROUTING_DAC1_R || route==MIXER_ROUTING_DAC2_R]==32767.f);
   if(route==MIXER_ROUTING_FX_BUS) {
    fxBus.fxType=FX_OFF;fxBus.audioRouting=MIXER_ROUTING_DAC1_STEREO;
    FxBus_process(bus,out1,out1+1,out2,out2+1,64);
-   assert(out2[1]==60000.375f);
+   assert(out2[1]==32767.f);
   }
  }
  r1_Available=l1_Available=0;

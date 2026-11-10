@@ -15,10 +15,6 @@
 
 #include "Soundengine/DSPAudio/FX/FxRamBuffer.h"
 
-#if LXR_AUDIO_FLOAT32
 INDTCMZ float fxHistoryFast[FX_FLOAT_FAST_SAMPLES];
 float fxHistoryRam[FX_BUFFER_SIZE+1-FX_FLOAT_FAST_SAMPLES];
-#else
-INDTCMZ __fp16 FX_BUFFER[FX_BUFFER_SIZE+1];
-#endif
 

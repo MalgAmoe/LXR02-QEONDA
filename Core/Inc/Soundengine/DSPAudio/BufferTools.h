@@ -33,26 +33,7 @@ static inline void bufferTool_addBuffers(AudioSample* buf1, AudioSample* buf2, c
 //---------------------------------------------------
 IN_ITCM_RAM static inline void bufferTool_addBuffersSaturating(AudioSample* buf1, AudioSample* buf2, const uint8_t size)
 {
-#if LXR_AUDIO_FLOAT32
     for(unsigned i=0;i<size;++i) buf1[i] = audio_mix_add(buf1[i], buf2[i]);
-#elif 1
-	int32_t* x = (int32_t*)buf1;
-	int32_t* y = (int32_t*)buf2;
-
-	for(uint8_t i=0;i<size/2;i++)
-	{
-		x[i] = (__QADD16(x[i],y[i]));
-	}
-
-#else
-		uint8_t i;
-		for(i=0;i<size;i++)
-
-		for(uint8_t i=0;i<size;i++)
-	 	{
-			buf1[i] = (__QADD16(buf1[i],buf2[i]));
-	 	}
-#endif
 }
 //---------------------------------------------------
 static inline void bufferTool_addBuffersSaturatingWithGain(AudioSample* buf1, AudioSample* buf2, const float gain, const uint8_t size)
@@ -60,11 +41,7 @@ static inline void bufferTool_addBuffersSaturatingWithGain(AudioSample* buf1, Au
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
-		#if LXR_AUDIO_FLOAT32 && LXR_FLOAT_MIX_CLIP
         buf1[i] = audio_mix_add(buf1[i],buf2[i]) * gain;
-#else
-        buf1[i] = (__QADD16(buf1[i],buf2[i])) * gain;
-#endif
 	}
 }
 //---------------------------------------------------
@@ -73,11 +50,7 @@ static inline void bufferTool_subBuffersSaturating(AudioSample* buf1, AudioSampl
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
-		#if LXR_AUDIO_FLOAT32 && LXR_FLOAT_MIX_CLIP
         buf1[i] = audio_mix_bound(buf1[i]-buf2[i]);
-#else
-        buf1[i] = (__QSUB16(buf1[i],buf2[i])) ;
-#endif
 	}
 }
 //---------------------------------------------------
@@ -107,11 +80,7 @@ IN_ITCM_RAM static inline void bufferTool_clearBuffer(AudioSample* buf, const ui
 		buffer[i] = 0;
 	}
 	*/
-	#if LXR_AUDIO_FLOAT32
 memset(buf, 0, size*sizeof(*buf));
-#else
-memset((int32_t*)buf, 0 ,size/2*sizeof(int32_t));
-#endif
 
 #endif
 }
@@ -130,11 +99,7 @@ static inline void bufferTool_addGainDithered(Dither* dither, AudioSample* buf, 
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
-#if LXR_AUDIO_FLOAT32
 buf[i] *= gain;
-#else
-		buf[i] = dither_process(dither,(buf[i]/32768.0f) * gain);
-#endif
 	}
 }
 //---------------------------------------------------
@@ -214,11 +179,7 @@ static inline void bufferTool_addGainInterpolatedDoubleDithered(Dither* dither, 
 		else if( in < -1.0)in=-1.0;
 		const AudioReal frac = i/(size-1.0);
 		const AudioReal currentGain = lastGain + frac*(gain - lastGain);
-#if LXR_AUDIO_FLOAT32
 buf[i] *= currentGain;
-#else
-		buf[i] = dither_process(dither,in* currentGain);
-#endif
 //		buf[i] = buf[i] * currentGain;
 	}
 
@@ -247,11 +208,7 @@ static inline void bufferTool_multiplyWithFloatBufferDithered(Dither* dither, Au
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
-#if LXR_AUDIO_FLOAT32
 buf[i] *= fltBuf[i];
-#else
-		buf[i] = dither_process(dither,(buf[i]/32768.0f) * fltBuf[i]);
-#endif
 
 	}
 }

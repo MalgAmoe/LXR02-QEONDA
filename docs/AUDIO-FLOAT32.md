@@ -1,5 +1,13 @@
 # Full active float32 audio experiment
 
+> **Historical experiment evidence.** The variant options and commands below
+> describe earlier source only and are no longer supported build modes.
+> This branch now always uses full float32 audio, 24-bit output on both pairs,
+> and per-operation mix clipping. Original int16 tables, uint32 phases and
+> deliberate nonlinear effects remain. See [BUILD](BUILD.md) for current commands.
+
+## Historical record (unchanged below)
+
 Default **OFF**. `LXR_AUDIO_FLOAT32=ON` requires `LXR_AUDIO_24BIT=ON` and
 selects the float main-output path automatically. `LXR_MAIN_OUTPUT_24BIT` may
 remain OFF in the cache: the full experiment defines its implementation on.

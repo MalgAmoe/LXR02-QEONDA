@@ -261,3 +261,12 @@ Include source/compiler/image identity for hardware results and relevant memory
 changes for firmware work. Explicitly separate host checks, static fit, measured
 timing and listening tests. Test modifier order, clock/storage traffic and save/load
 when relevant rather than treating isolated DSP math as full-system coverage.
+
+## Audio representation
+
+The production audio path is always float32, including delay history, with
+padded 24-bit encoding on both output pairs. Mix saturation is applied at each
+original saturating add/subtract, retaining fractions below the bounds.
+Original int16 waveform tables, uint32 phase arithmetic and deliberate nonlinear
+effects remain. There are no legacy16, transport-only, main-only or unclipped
+build variants. See [BUILD](BUILD.md) and [tests](../tests/README.md).

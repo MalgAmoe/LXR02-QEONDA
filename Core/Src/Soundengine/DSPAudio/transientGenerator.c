@@ -46,11 +46,7 @@ void transient_trigger(TransientGenerator* transient)
 {
 	if((transient->waveform<=1) || (transient->phase>=2311061504u)) //no sample for snap and offset, no sample data if phase >= sample length
 	{
-		#if LXR_AUDIO_FLOAT32
 memset(buf,0,size*sizeof(*buf));
-#else
-memset((int32_t*)buf,0,size/2*sizeof(int32_t));
-#endif
 		return; //snapEg and offset
 	}
 
