@@ -16,6 +16,7 @@ for name in ('calcFmSineBlock','calcFmBlock','calcPwmFmBlock'):
 adapted=functions.replace(cast,'arm_unsigned_model(modBuffer[i]*osc->fmMod)')
 code=r'''
 #include <stdint.h>
+typedef int16_t AudioSample;
 #include <assert.h>
 #include <stdio.h>
 #include <math.h>

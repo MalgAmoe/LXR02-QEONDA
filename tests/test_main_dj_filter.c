@@ -1,3 +1,5 @@
+/* Legacy int16 API regression, also retained in experimental suites. */
+#undef LXR_MAIN_OUTPUT_24BIT
 /* Actual production TU, including inspection of recursive float32 state. */
 #include "../Core/Src/Soundengine/DSPAudio/MainDjFilter.c"
 #include <assert.h>

@@ -12,12 +12,12 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
 
 #include "Soundengine/DSPAudio/FX/Delay.h"
 
 void Delay_init(Delay* d)
 {
-
 
 	d->pendingDelayTime = 0.f;
 	d->timePending = 0;
@@ -51,8 +51,8 @@ void Delay_calcBufferPingPong(Delay* d, uint8_t bufferIdx)
 		//calc with read pointer 0
 		uint32_t pos2 = d->oldRead+1;
 		pos2 = pos2 & (halfsize);
-		d->tmpBuffer[0] = interpolate_s16((float)FX_BUFFER[d->oldRead], (float)FX_BUFFER[pos2],d->fracReadOld)*32767.f ;
-		d->tmpBuffer2[0] = interpolate_s16((float)FX_BUFFER[halfsize + d->oldRead], (float)FX_BUFFER[halfsize + pos2],d->fracReadOld)*32767.f ;
+		d->tmpBuffer[0] = interpolate_s16((float)FX_HISTORY(d->oldRead), (float)FX_HISTORY(pos2),d->fracReadOld)*32767.f ;
+		d->tmpBuffer2[0] = interpolate_s16((float)FX_HISTORY(halfsize + d->oldRead), (float)FX_HISTORY(halfsize + pos2),d->fracReadOld)*32767.f ;
 		d->oldRead++;
 		d->oldRead = d->oldRead & (halfsize);
 	} else
@@ -60,8 +60,8 @@ void Delay_calcBufferPingPong(Delay* d, uint8_t bufferIdx)
 		//calc with read pointetr 2
 		uint32_t pos2 = d->newRead+1;
 		pos2 = pos2 & (halfsize);
-		d->tmpBuffer[1] = interpolate_s16((float)FX_BUFFER[d->newRead], (float)FX_BUFFER[pos2],d->fracReadNew)*32767.f;
-		d->tmpBuffer2[1] = interpolate_s16((float)FX_BUFFER[halfsize + d->newRead], (float)FX_BUFFER[halfsize + pos2],d->fracReadNew)*32767.f;
+		d->tmpBuffer[1] = interpolate_s16((float)FX_HISTORY(d->newRead), (float)FX_HISTORY(pos2),d->fracReadNew)*32767.f;
+		d->tmpBuffer2[1] = interpolate_s16((float)FX_HISTORY(halfsize + d->newRead), (float)FX_HISTORY(halfsize + pos2),d->fracReadNew)*32767.f;
 		d->newRead++;
 		d->newRead = d->newRead & (halfsize);
 	}
@@ -75,7 +75,7 @@ void Delay_calcBuffer(Delay* d, uint8_t bufferIdx)
 		//calc with read pointer 0
 		uint32_t pos2 = d->oldRead+1;
 		pos2 = pos2 & (FX_BUFFER_SIZE);
-		d->tmpBuffer[0] = interpolate_s16((float)FX_BUFFER[d->oldRead], (float)FX_BUFFER[pos2],d->fracReadOld)*32767.f ;
+		d->tmpBuffer[0] = interpolate_s16((float)FX_HISTORY(d->oldRead), (float)FX_HISTORY(pos2),d->fracReadOld)*32767.f ;
 		d->oldRead++;
 		d->oldRead = d->oldRead & (FX_BUFFER_SIZE);
 	} else
@@ -83,21 +83,106 @@ void Delay_calcBuffer(Delay* d, uint8_t bufferIdx)
 		//calc with read pointetr 2
 		uint32_t pos2 = d->newRead+1;
 		pos2 = pos2 & (FX_BUFFER_SIZE);
-		d->tmpBuffer[1] = interpolate_s16((float)FX_BUFFER[d->newRead], (float)FX_BUFFER[pos2],d->fracReadNew)*32767.f ;;
+		d->tmpBuffer[1] = interpolate_s16((float)FX_HISTORY(d->newRead), (float)FX_HISTORY(pos2),d->fracReadNew)*32767.f ;;
 		d->newRead++;
 		d->newRead = d->newRead & (FX_BUFFER_SIZE);
 	}
 }
 
+#if LXR_AUDIO_FLOAT32
+void Delay_processPingPong(Delay *d, AudioSample*fxBuffer,AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet)
+{
 
-void Delay_processPingPong(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet)
+    d->oldRead &= FX_BUFFER_SIZE >> 1;
+    d->newRead &= FX_BUFFER_SIZE >> 1;
+    d->write &= FX_BUFFER_SIZE >> 1;
+
+	float x[2];
+	AudioSample* stereoOut = outL;
+
+	for(uint8_t i=0;i<size;i++)
+	{
+
+		const uint8_t idx1 = i*2;
+		const uint8_t idx2 = i*2+1;
+
+			float outL, outR;
+
+			if(d->interpValue <= 0.f)
+			{
+				Delay_calcBufferPingPong(d, 0);
+				outL = d->tmpBuffer[0];
+				outR = d->tmpBuffer2[0];
+
+				{
+
+					if(	d->timePending )
+					{
+						d->timePending = 0;
+						Delay_setDelayTime(d, d->pendingDelayTime);
+					}
+				}
+
+			} else
+			{
+				Delay_calcBufferPingPong(d, 0);
+				Delay_calcBufferPingPong(d, 1);
+
+				outL = d->tmpBuffer[0] * d->interpValue + d->tmpBuffer[1] * (1.0f - d->interpValue);
+				outR = d->tmpBuffer2[0] * d->interpValue + d->tmpBuffer2[1] * (1.0f - d->interpValue);
+
+				d->interpValue -= d->interpStep;
+
+				if (d->interpValue <= 0.0f)
+				{
+					d->oldRead = d->newRead;
+					d->fracReadOld = d->fracReadNew;
+				}
+			}
+
+			outL = calcOnePole(&d->tone, outL);
+			outR = calcOnePole(&d->tone2, outR);
+
+			float itg = (audio_sample_bound((fxBuffer[idx1]) + ((outL*d->feedback))));
+			float val = itg/32767.f;
+			if(val > 1.f) val = 1.f;
+			else if(val < -1.f) val = -1.f;
+			FX_HISTORY((FX_BUFFER_SIZE>>1) + d->write) = val;
+
+			itg = (audio_sample_bound((fxBuffer[idx2]) + ((outR*d->feedback))));
+			val = itg/32767.f;
+			if(val > 1.f) val = 1.f;
+			else if(val < -1.f) val = -1.f;
+			FX_HISTORY(d->write++) = val;
+
+			d->write &= FX_BUFFER_SIZE>>1;
+
+			float wet =  outL;
+			float wet2 =  outR;
+
+			{ float pair[2] = {(fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet))), (fxBuffer[idx2] + (audio_mix_bound((wet2 - fxBuffer[idx2]) * dryWet)))}; x[0]=audio_mix_bound(pair[0]); x[1]=audio_mix_bound(pair[1]); }
+
+			if (channels == 2)
+      {
+        stereoOut[0] = audio_mix_add(stereoOut[0], x[0]); stereoOut[1] = audio_mix_add(stereoOut[1], x[1]);
+        stereoOut += 2;
+      }
+      else
+      {
+        stereoOut[0] = audio_mix_add(stereoOut[0], x[0]);
+        stereoOut += 2;
+      }
+
+	}
+}
+#else
+void Delay_processPingPong(Delay *d, AudioSample*fxBuffer,AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet)
 {
     // Normal delay uses the whole buffer; ping-pong uses two half-buffer lines.
     // Adapted from OpenElixir-02 796e9e216d7d.
     d->oldRead &= FX_BUFFER_SIZE >> 1;
     d->newRead &= FX_BUFFER_SIZE >> 1;
     d->write &= FX_BUFFER_SIZE >> 1;
-
 
 	int32_t x;
 	int32_t* stereoOut = (int32_t*)outL;
@@ -108,9 +193,7 @@ void Delay_processPingPong(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* o
 		const uint8_t idx1 = i*2;
 		const uint8_t idx2 = i*2+1;
 
-
 			int16_t outL, outR;
-
 
 			if(d->interpValue <= 0.f) //no parameter change in progress -> no crossfade
 			{
@@ -137,7 +220,6 @@ void Delay_processPingPong(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* o
 				//out = fourPole.process(out,sizeParameter,variationParameter*200);
 				d->interpValue -= d->interpStep; //decrement InterpFactor toward zero
 
-
 				if (d->interpValue <= 0.0)
 				{
 					d->oldRead = d->newRead; //update the OldParms after crossfade finished
@@ -155,18 +237,17 @@ void Delay_processPingPong(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* o
 			float val = itg/32767.f;
 			if(val > 1.f) val = 1.f;
 			else if(val < -1.f) val = -1.f;
-			FX_BUFFER[(FX_BUFFER_SIZE>>1) + d->write] = (__fp16)val;//(itg/32767.f);
+			FX_HISTORY((FX_BUFFER_SIZE>>1) + d->write) = (__fp16)val;//(itg/32767.f);
 
 			//right delay line
 			itg = (__QADD16(fxBuffer[idx2] , (int16_t)(outR*d->feedback)));
 			val = itg/32767.f;
 			if(val > 1.f) val = 1.f;
 			else if(val < -1.f) val = -1.f;
-			FX_BUFFER[d->write++] = (__fp16)val;//(itg/32767.f);
+			FX_HISTORY(d->write++) = (__fp16)val;//(itg/32767.f);
 			//*signalFeedback = out;
 
 			d->write &= FX_BUFFER_SIZE>>1;
-
 
 			//*fxBuffer = out;//dryWetMixer(out,*signalAudio,d->dryWet);
 			int16_t wet =  outL;
@@ -189,10 +270,85 @@ void Delay_processPingPong(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* o
 
 	}
 }
+#endif
 
-void Delay_process(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet)
+#if LXR_AUDIO_FLOAT32
+void Delay_process(Delay *d, AudioSample*fxBuffer,AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet)
 {
-	//FX_BUFFER[0] = 0;
+
+	float x[2];
+	AudioSample* stereoOut = outL;
+
+	for(uint8_t i=0;i<size;i++)
+	{
+
+		const uint8_t idx1 = i*2;
+		const uint8_t idx2 = i*2+1;
+
+    float out;
+
+    if(d->interpValue <= 0.f)
+    {
+      Delay_calcBuffer(d, 0);
+      out = d->tmpBuffer[0];
+
+      {
+
+        if(	d->timePending )
+        {
+          d->timePending = 0;
+          Delay_setDelayTime(d, d->pendingDelayTime);
+        }
+      }
+
+    } else
+    {
+      Delay_calcBuffer(d, 0);
+      Delay_calcBuffer(d, 1);
+
+      out = d->tmpBuffer[0] * d->interpValue + d->tmpBuffer[1] * (1.0f - d->interpValue);
+
+      d->interpValue -= d->interpStep;
+
+      if (d->interpValue <= 0.0f)
+      {
+        d->oldRead = d->newRead;
+        d->fracReadOld = d->fracReadNew;
+      }
+    }
+
+    out = calcOnePole(&d->tone, out);
+
+    float itg = (audio_sample_bound((audio_sample_bound((fxBuffer[idx1]) + (fxBuffer[idx2]))) + ((out*d->feedback))));
+    float val = itg/32767.f;
+    if(val > 1.f) val = 1.f;
+    else if(val < -1.f) val = -1.f;
+    FX_HISTORY(d->write++) = val;
+
+    d->write &= FX_BUFFER_SIZE;
+
+    float wet =  out;
+    float wet2 =  out;
+
+    { float pair[2] = {(fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet))), (fxBuffer[idx2] + (audio_mix_bound((wet2 - fxBuffer[idx2]) * dryWet)))}; x[0]=audio_mix_bound(pair[0]); x[1]=audio_mix_bound(pair[1]); }
+
+    if (channels == 2)
+    {
+      stereoOut[0] = audio_mix_add(stereoOut[0], x[0]); stereoOut[1] = audio_mix_add(stereoOut[1], x[1]);
+      stereoOut += 2;
+    }
+    else
+    {
+      stereoOut[0] = audio_mix_add(stereoOut[0], x[0]);
+      stereoOut += 2;
+    }
+
+	}
+}
+#else
+void Delay_process(Delay *d, AudioSample*fxBuffer,AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet)
+{
+	//FX_HISTORY(0) = 0;
 
 	int32_t x;
 	int32_t* stereoOut = (int32_t*)outL;
@@ -204,7 +360,6 @@ void Delay_process(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uin
 		const uint8_t idx2 = i*2+1;
 
     int16_t out;
-
 
     if(d->interpValue <= 0.f) //no parameter change in progress -> no crossfade
     {
@@ -229,7 +384,6 @@ void Delay_process(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uin
       //out = fourPole.process(out,sizeParameter,variationParameter*200);
       d->interpValue -= d->interpStep; //decrement InterpFactor toward zero
 
-
       if (d->interpValue <= 0.0)
       {
         d->oldRead = d->newRead; //update the OldParms after crossfade finished
@@ -242,17 +396,15 @@ void Delay_process(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uin
 
     //-------------
 
-
     //we add both stereo channels together for a mono delay
     int16_t itg = (__QADD16(__QADD16(fxBuffer[idx1], fxBuffer[idx2]) , (int16_t)(out*d->feedback)));
     float val = itg/32767.f;
     if(val > 1.f) val = 1.f;
     else if(val < -1.f) val = -1.f;
-    FX_BUFFER[d->write++] = (__fp16)val;//(itg/32767.f);
+    FX_HISTORY(d->write++) = (__fp16)val;//(itg/32767.f);
     //*signalFeedback = out;
 
     d->write &= FX_BUFFER_SIZE;
-
 
     //*fxBuffer = out;//dryWetMixer(out,*signalAudio,d->dryWet);
     int16_t wet =  out;
@@ -274,6 +426,7 @@ void Delay_process(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uin
     //*input1 = dryWet*out + (1-dryWet)* (*input1);
 	}
 }
+#endif
 
 float interpolate(float a, float b, float x)
 {
@@ -299,14 +452,10 @@ float calcDelayTime(Delay* d, float timeCv)
 void Delay_setDelayTime(Delay* d, float t)
 {
 
-
-
-
 #if 1
 	if(d->interpValue <=0)
 	{
 		d->delayTime = t;//rateFilter.process(t);
-
 
 		//uint32_t offset = medianFilter(delayTime*SRAM_SIZE*range);
 		float offset =  /*medianFilter*/(calcDelayTime(d, d->delayTime * d->range));
@@ -315,7 +464,6 @@ void Delay_setDelayTime(Delay* d, float t)
 
 		uint32_t offItg = (uint32_t)offset;
 		d->fracReadNew = offset-offItg;
-
 
 		//MainApplication::setLedTempo(offset/(float)(SAMPLE_RATE)*500.f);
 

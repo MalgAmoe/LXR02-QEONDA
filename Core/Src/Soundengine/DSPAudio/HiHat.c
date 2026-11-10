@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 
 #include "Soundengine/DSPAudio/HiHat.h"
@@ -162,10 +164,10 @@ IN_ITCM_RAM void HiHat_calcAsync( )
 
 }
 //---------------------------------------------------
-void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
+void HiHat_calcSyncBlock(AudioSample* buf, const uint8_t size)
 {
 	//2 buffers for the mod oscs
-	int16_t mod1[size],mod2[size];
+	AudioSample mod1[size],mod2[size];
 	//calc next mod osc samples, scaled with mod amount
 	calcNextOscSampleBlock(&hatVoice.modOsc,mod1,size, hatVoice.fmModAmount1, hatVoice.pwm);
 	calcNextOscSampleBlock(&hatVoice.modOsc2,mod2,size,  hatVoice.fmModAmount2, hatVoice.pwm);
@@ -200,7 +202,10 @@ void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
 		//const float vol =
 
 #if 1
-			int32_t* x = (int32_t*)buf;
+			#if LXR_AUDIO_FLOAT32
+            for(unsigned i=0;i<size;++i) buf[i] += mod1[i];
+#else
+int32_t* x = (int32_t*)buf;
 			int32_t* y = (int32_t*)mod1;
 
 			//add filter to buffer
@@ -208,6 +213,7 @@ void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
 			{
 				x[i] = __QADD16(x[i],y[i]);
 			}
+#endif
 
 			for(j=0;j<size;j++)
 			{
@@ -228,7 +234,10 @@ void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
 		hatVoice.combinedVolume = hatVoice.vol * hatVoice.egValueOscVol;
 		//const float vol = hatVoice.combinedVolume ;
 #if 1
-			int32_t* x = (int32_t*)buf;
+			#if LXR_AUDIO_FLOAT32
+            for(unsigned i=0;i<size;++i) buf[i] += mod1[i];
+#else
+int32_t* x = (int32_t*)buf;
 			int32_t* y = (int32_t*)mod1;
 
 			//add filter to buffer
@@ -236,6 +245,7 @@ void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
 			{
 				x[i] = __QADD16(x[i],y[i]);
 			}
+#endif
 
 			for(j=0;j<size;j++)
 			{

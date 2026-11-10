@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 #include "Soundengine/DSPAudio/distortion.h"
 #include "Soundengine/config.h"
 #include "math.h"
@@ -21,7 +23,7 @@ IN_ITCM_RAM __inline void setDistortionShape(Distortion *dist, float shape)
 	dist->shape = 2*(shape)/(1-(shape));
 }
 //--------------------------------------------------
-IN_ITCM_RAM void calcDistBlock(const Distortion *dist, int16_t* buf, const uint8_t size)
+IN_ITCM_RAM void calcDistBlock(const Distortion *dist, AudioSample* buf, const uint8_t size)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
@@ -33,7 +35,7 @@ IN_ITCM_RAM void calcDistBlock(const Distortion *dist, int16_t* buf, const uint8
 	}
 }
 //--------------------------------------------------
-void calcDistBlockFiltered(Distortion *dist, int16_t* buf, const uint8_t size)
+void calcDistBlockFiltered(Distortion *dist, AudioSample* buf, const uint8_t size)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)

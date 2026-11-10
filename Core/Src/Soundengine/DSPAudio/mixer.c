@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 #include "Soundengine/DSPAudio/mixer.h"
 #include "Soundengine/config.h"
 #include "Soundengine/AudioCodecManager.h"
@@ -38,7 +40,7 @@ INDTCMZ uint8_t mixer_audioRouting[6];
 #if USE_DECIMATOR
 INDTCMZ float mixer_decimation_rate[7];		/**<sets the sample rate decimation. 0..1 = full rate*/
 INDTCMZ float mixer_decimation_cnt[6];		/**<s'n'h counter for decimator*/
-INDTCMZ int16_t mixer_voice_samples[6];		/**< stores the last outputted sample of the 6 voices*/
+INDTCMZ AudioSample mixer_voice_samples[6];		/**< stores the last outputted sample of the 6 voices*/
 #endif
 //-----------------------------------------------------------------------
 void mixer_init()
@@ -58,7 +60,7 @@ void mixer_init()
 	FxBus_init();
 }
 //-----------------------------------------------------------------------
-IN_ITCM_RAM void mixer_decimateBlock(const uint8_t voiceNr, int16_t* buffer)
+IN_ITCM_RAM void mixer_decimateBlock(const uint8_t voiceNr, AudioSample* buffer)
 {
 	uint8_t i;
 	float phaseInc = mixer_decimation_rate[voiceNr]*mixer_decimation_rate[6];
@@ -197,8 +199,23 @@ IN_ITCM_RAM void mixer_decimateBlock(const uint8_t voiceNr, int16_t* buffer)
 //-----------------------------------------------------------------------
 //-----------------------------------------------------------------------
 //-----------------------------------------------------------------------
-IN_ITCM_RAM static inline void mixer_addDataToOutput(uint8_t dest, const float panL, const float panR,  int16_t* data,int16_t* outL,int16_t* outR,int16_t* outL2, int16_t* outR2, int16_t *fxBuffer)
+IN_ITCM_RAM static inline void mixer_addDataToOutput(uint8_t dest, const float panL, const float panR,  AudioSample* data,AudioSample* outL,AudioSample* outR,AudioSample* outL2, AudioSample* outR2, AudioSample*fxBuffer)
 {
+#if LXR_AUDIO_FLOAT32
+    dest = mixer_checkOutJackAvailable(dest);
+    for(unsigned i=0;i<OUTPUT_DMA_SIZE;++i) {
+        switch(dest) {
+        case MIXER_ROUTING_FX_BUS: fxBuffer[2*i] = audio_mix_add(fxBuffer[2*i], data[i]*panL); fxBuffer[2*i+1] = audio_mix_add(fxBuffer[2*i+1], data[i]*panR); break;
+        case MIXER_ROUTING_DAC1_STEREO: outL2[2*i] = audio_mix_add(outL2[2*i], data[i]*panL); outR2[2*i] = audio_mix_add(outR2[2*i], data[i]*panR); break;
+        case MIXER_ROUTING_DAC2_STEREO: outL[2*i] = audio_mix_add(outL[2*i], data[i]*panL); outR[2*i] = audio_mix_add(outR[2*i], data[i]*panR); break;
+        case MIXER_ROUTING_DAC1_L: outL2[2*i] = audio_mix_add(outL2[2*i], data[i]); break;
+        case MIXER_ROUTING_DAC1_R: outR2[2*i] = audio_mix_add(outR2[2*i], data[i]); break;
+        case MIXER_ROUTING_DAC2_L: outL[2*i] = audio_mix_add(outL[2*i], data[i]); break;
+        case MIXER_ROUTING_DAC2_R: outR[2*i] = audio_mix_add(outR[2*i], data[i]); break;
+        }
+    }
+#else
+
 	//check if a cable is in the selected out
 	dest = mixer_checkOutJackAvailable(dest);
 	//assert_param(dest <= MIXER_ROUTING_DAC2_R);
@@ -297,10 +314,11 @@ IN_ITCM_RAM static inline void mixer_addDataToOutput(uint8_t dest, const float p
 		break;
 
 	}
+#endif
 }
 //#pragma GCC pop_options
 //-----------------------------------------------------------------------
-IN_ITCM_RAM void mixer_calcNextSampleBlock(int16_t* output,int16_t* output2)
+IN_ITCM_RAM void mixer_calcNextSampleBlock(AudioSample* output,AudioSample* output2)
 {
 
 	r2_Available = (switch_r2_GPIO_Port->IDR & switch_r2_Pin)>0;
@@ -342,8 +360,8 @@ IN_ITCM_RAM void mixer_calcNextSampleBlock(int16_t* output,int16_t* output2)
 
 	//an array to store intermediate voice samples
 	//befor output distribution
-	int16_t sampleData[OUTPUT_DMA_SIZE];
-	int16_t fxBusData[OUTPUT_DMA_SIZE*2];
+	AudioSample sampleData[OUTPUT_DMA_SIZE];
+	AudioSample fxBusData[OUTPUT_DMA_SIZE*2];
 
 	const uint8_t pos = 0;
 
@@ -448,7 +466,9 @@ IN_ITCM_RAM void mixer_calcNextSampleBlock(int16_t* output,int16_t* output2)
 
 #endif
 	FxBus_process(fxBusData,  &output[pos],&output[pos+1],&output2[pos],&output2[pos+1], OUTPUT_DMA_SIZE);
+#if !LXR_MAIN_OUTPUT_24BIT
 	MainDjFilter_process(&output2[pos], OUTPUT_DMA_SIZE);
+#endif
 /*
 	if(activeParameters[UNUSED_PAR_GLO_SAT])
 	{

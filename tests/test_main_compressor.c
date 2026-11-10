@@ -1,3 +1,5 @@
+/* Legacy int16 API regression, also retained in experimental suites. */
+#undef LXR_MAIN_OUTPUT_24BIT
 /* Real DSP TU and independent full-rate double-precision reference curve. */
 #include "../Core/Src/Soundengine/DSPAudio/MainCompressor.c"
 #include <assert.h>

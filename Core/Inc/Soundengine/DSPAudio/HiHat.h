@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 #ifndef HIHAT_H_
 #define HIHAT_H_
@@ -82,7 +84,7 @@ void HiHat_init();
 
 void HiHat_trigger(uint8_t vel, uint8_t isOpen, const uint8_t note);
 void HiHat_updatePan();
-void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size);
+void HiHat_calcSyncBlock(AudioSample* buf, const uint8_t size);
 
 /** calculate envelopes etc (all 16 samples */
 void HiHat_calcAsync();

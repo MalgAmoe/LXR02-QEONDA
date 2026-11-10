@@ -12,6 +12,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 #include "Soundengine/FxBus.h"
 #include "Soundengine/DSPAudio/BufferTools.h"
@@ -38,10 +40,10 @@ void FxBus_init()
 #endif
 }
 
-IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,int16_t* outL2, int16_t* outR2, uint32_t size)
+IN_ITCM_RAM void FxBus_process(AudioSample*fxBuffer, AudioSample* outL,AudioSample* outR,AudioSample* outL2, AudioSample* outR2, uint32_t size)
 {
-	int16_t* out;
-	int16_t* out2 = NULL;
+	AudioSample* out;
+	AudioSample* out2 = NULL;
 	// < MIXER_ROUTING_DAC1_L -> stereo 1 or 2
 	const uint8_t channels = fxBus.audioRouting < MIXER_ROUTING_DAC1_L ? 2 : 1;
 	switch(fxBus.audioRouting)
@@ -75,6 +77,13 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 	default:
 	case FX_OFF:
 	{
+#if LXR_AUDIO_FLOAT32
+        for(unsigned i=0;i<size;++i) {
+            out[2*i] = audio_mix_add(out[2*i], fxBuffer[2*i]);
+            if(channels==2) out2[2*i] = audio_mix_add(out2[2*i], fxBuffer[2*i+1]);
+        }
+#else
+
 		if(channels == 2)
 		{
 			int32_t* stereoIn = (int32_t*)fxBuffer;
@@ -99,6 +108,7 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 
 			}
 		}
+#endif
 	}
 	break;
 

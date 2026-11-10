@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 #ifndef ONE_POLELP_H_
 #define ONE_POLELP_H_
@@ -21,17 +23,17 @@
 
 typedef struct OnePoleStruct
 {
-	double r;
-	double b;
+	AudioReal r;
+	AudioReal b;
 } OnePoleFilter;
 //-------------------------------------------------------------
 void initOnePole(OnePoleFilter* filter);
-float calcOnePole(OnePoleFilter* filter, double input);
-float calcOnePoleAdaptiveVolume(OnePoleFilter* filter, double input);
-void calcOnePoleBlock(OnePoleFilter* filter, int16_t* buf, const uint8_t size);
+float calcOnePole(OnePoleFilter* filter, AudioReal input);
+float calcOnePoleAdaptiveVolume(OnePoleFilter* filter, AudioReal input);
+void calcOnePoleBlock(OnePoleFilter* filter, AudioSample* buf, const uint8_t size);
 void calcOnePoleBlockFixedInput(OnePoleFilter* filter, float input,float* output, const uint8_t size);
-void setOnePoleCoef(OnePoleFilter* filter,double val);
-void setOnePoleValue(OnePoleFilter* filter,double val);
-void setOnePoleFreq(OnePoleFilter* filter,double f);
+void setOnePoleCoef(OnePoleFilter* filter,AudioReal val);
+void setOnePoleValue(OnePoleFilter* filter,AudioReal val);
+void setOnePoleFreq(OnePoleFilter* filter,AudioReal f);
 
 #endif /* ONE_POLELP_H_ */

@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 #ifndef OSCILLATOR_H_
 #define OSCILLATOR_H_
@@ -41,7 +43,7 @@ enum OscWaveforms
 
 typedef struct OscStruct
 {
-	int16_t 	output;
+	AudioSample 	output;
 	uint32_t	phaseInc;
 	uint32_t	phase;		// the current phase of the osc 8bit indexing 24 interpolation
 	float	 	freq;		// frequency in [Hz]
@@ -69,44 +71,44 @@ void initOsc();
 //-----------------------------------------------------------
 
 //-----------------------------------------------------------
-void calcSineBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain);
+void calcSineBlock(OscInfo* osc, AudioSample* buf, const uint8_t size ,const float gain);
 //-----------------------------------------------------------
 //-----------------------------------------------------------
-void calcFmSineBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain);
+void calcFmSineBlock(OscInfo* osc, AudioSample* modBuffer, AudioSample* buf, uint8_t size ,const float gain);
 //-----------------------------------------------------------
 //-----------------------------------------------------------
-void calcFmBlock(OscInfo* osc, const int16_t table[][1024], int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain);
+void calcFmBlock(OscInfo* osc, const int16_t table[][1024], AudioSample* modBuffer, AudioSample* buf, uint8_t size ,const float gain);
 //-----------------------------------------------------------
 //-----------------------------------------------------------
-void calcWavetableOscBlock(OscInfo* osc, const int16_t table[][1024], int16_t* buf, const uint8_t size ,const float gain);
+void calcWavetableOscBlock(OscInfo* osc, const int16_t table[][1024], AudioSample* buf, const uint8_t size ,const float gain);
 //-----------------------------------------------------------
 //-----------------------------------------------------------
-void calcNoiseBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain);
+void calcNoiseBlock(OscInfo* osc, AudioSample* buf, const uint8_t size ,const float gain);
 //-----------------------------------------------------------
 //-----------------------------------------------------------
 //int16_t calcSampleOscFm(OscInfo* osc, OscInfo* modOsc);
 //-----------------------------------------------------------
 //used to play back the crash cymbal sample
-//void calcSampleOscFmBlock(OscInfo* osc,int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain);
+//void calcSampleOscFmBlock(OscInfo* osc,AudioSample* modBuffer, AudioSample* buf, uint8_t size ,const float gain);
 //-----------------------------------------------------------
-void calcNextOscSampleBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain, const float pwm);
+void calcNextOscSampleBlock(OscInfo* osc, AudioSample* buf, const uint8_t size ,const float gain, const float pwm);
 //-----------------------------------------------------------
 // calculate an oscillator
 //int16_t calcNextOscSample(OscInfo* osc);
  //-----------------------------------------------------------
 void osc_setFreq(OscInfo* osc);
 //-----------------------------------------------------------
-void calcNextOscSampleFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain, const float pwm);
+void calcNextOscSampleFmBlock(OscInfo* osc, AudioSample* modBuffer, AudioSample* buf, uint8_t size ,const float gain, const float pwm);
  //-----------------------------------------------------------
 // calculate an fm oscillator
 //int16_t calcNextOscSampleFm(OscInfo* osc, OscInfo* modOsc);
-void calcPwmBlock(OscInfo* osc, int16_t* buf, uint8_t size ,const float gain, const float pwm);
+void calcPwmBlock(OscInfo* osc, AudioSample* buf, uint8_t size ,const float gain, const float pwm);
 //-----------------------------------------------------------
-//void calcSampleOscBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain);
+//void calcSampleOscBlock(OscInfo* osc, AudioSample* buf, const uint8_t size ,const float gain);
 //-----------------------------------------------------------
-void calcUserSampleOscFmBlock(OscInfo* osc,int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain);
+void calcUserSampleOscFmBlock(OscInfo* osc,AudioSample* modBuffer, AudioSample* buf, uint8_t size ,const float gain);
 //-----------------------------------------------------------
-void calcUserSampleOscBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain);
+void calcUserSampleOscBlock(OscInfo* osc, AudioSample* buf, const uint8_t size ,const float gain);
 //-----------------------------------------------------------
 //int16_t calcSampleOsc(OscInfo* osc);
 //-----------------------------------------------------------

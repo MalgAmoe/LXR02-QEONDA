@@ -145,3 +145,32 @@ See [runtime format and limits](../docs/PROJECT-STORAGE.md).
 ProjectMeasure and its two measurement-only tests have been removed. Historical
 coverage and evidence remain in [PROJECT-MEASUREMENT](../docs/PROJECT-MEASUREMENT.md);
 that diagnostic is no longer a build option or part of this suite.
+
+## Full-float audio experiment
+
+`test_audio_float32` compiles production oscillator, voice, filter, mixer helpers,
+FX and main-output paths with float32 enabled even in the normal host suite.
+Legacy C tests explicitly keep the legacy sample type; scheduling runs the selected
+configuration. Hardware/RNG/fader endpoints remain substitutes.
+See [AUDIO-FLOAT32](../docs/AUDIO-FLOAT32.md) for exact coverage, build commands,
+ARM codegen checks and static-memory/stack limitations. No hardware timing or
+negative-FM host conversion claim follows from these tests.
+
+### Float handoff coverage
+
+`test_audio_float32` checks multi-block normal/ping-pong delay against a scalar
+history oracle beyond full-ring wrap (both banks), feedback bounds, wet output,
+crossfade/pending transitions, and numerical tube/fold/RAT wet fixtures. It also
+runs complete production mixer routing and an automatically extracted production
+renderer body through the real main DSP and both encoders, checking both DMA
+halves. Control-rate async/modulation/LFO calls, GPIO, RNG, faders and IRQ state
+are substitutes; held fractional decimator samples make routing deterministic.
+This does not establish hardware timing or real control-rate integration. See
+[float experiment](../docs/AUDIO-FLOAT32.md) for precise coverage and gaps.
+
+### Float mix clipping comparison
+
+`test_float_mix_clip` shares production float sources with the unclipped
+`test_audio_float32` target. Both run in the full host suite; the latter explicitly
+deselects clipping even in a clip configuration. See
+[operation audit, build commands and evidence](../docs/AUDIO-FLOAT32-CLIP.md).

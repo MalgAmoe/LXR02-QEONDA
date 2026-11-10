@@ -18,6 +18,8 @@ if os.environ.get('LXR_BASE_REV'):
     source = subprocess.check_output(['git', '-C', str(root), 'show', os.environ['LXR_BASE_REV']+':Core/Src/Soundengine/DSPAudio/Snare.c'], text=True)
 pre = r'''
 #include <stdint.h>
+typedef int16_t AudioSample;
+typedef double AudioReal;
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>

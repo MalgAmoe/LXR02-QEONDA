@@ -14,6 +14,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 #ifndef TRANSIENTGENERATOR_H_
 #define TRANSIENTGENERATOR_H_
@@ -25,7 +27,7 @@
 
 typedef struct TransientGeneratorStruct
 {
-	int16_t 	output;
+	AudioSample 	output;
 	uint32_t	phase;		// the current phase of the osc
 	float	 	pitch;		// we need no accurate tuning for a transient, so we use a pitch factor [0.25f:1.75f]
 	uint8_t		waveform;	// the selected transient table of the osc
@@ -41,7 +43,7 @@ void transient_init(TransientGenerator* transient);
 void transient_trigger(TransientGenerator* transient);
 
 void transient_calc(TransientGenerator* transient);
-void transient_calcBlock(TransientGenerator* transient, int16_t* buf, const uint8_t size);
+void transient_calcBlock(TransientGenerator* transient, AudioSample* buf, const uint8_t size);
 
 void transient_setWaveform(TransientGenerator* transient, const uint8_t waveform);
 #endif /* TRANSIENTGENERATOR_H_ */

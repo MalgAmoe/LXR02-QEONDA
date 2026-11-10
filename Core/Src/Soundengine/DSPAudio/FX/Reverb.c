@@ -18,6 +18,9 @@
 
 
 
+/* Reverb is disabled in the active instrument; its half-float implementation
+ * is not part of the full-float experiment. */
+#if !LXR_AUDIO_FLOAT32
 static const float earlyTaps[] =
 {
 		12,
@@ -724,5 +727,7 @@ void AllpassLoopVerb::process(int16_t* input1, int16_t* input2)
 //	   return  dryWet*out + (1-dryWet)*input;
 
 }
+
+#endif
 
 #endif

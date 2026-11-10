@@ -12,6 +12,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 #include "Soundengine/DSPAudio/FX/Ringmod.h"
 
@@ -28,7 +30,23 @@ void Ringmod_init(Ringmod *rm)
 	rm->osc.pitchMod = 1.0f;
 	osc_setFreq(&rm->osc);
 }
-void Ringmod_process(Ringmod *rm, int16_t *fxBuffer, int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet)
+#if LXR_AUDIO_FLOAT32
+void Ringmod_process(Ringmod *rm, AudioSample*fxBuffer, AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet)
+{
+    AudioSample mod[size];
+    calcNextOscSampleBlock(&rm->osc, mod, size, 1.f, 0.3f);
+    for(unsigned i=0;i<size;++i) {
+        float wet = fxBuffer[2*i]*mod[i]/65536.f;
+        if(channels==1) wet = audio_mix_add(wet, outL[2*i]);
+        outL[2*i] = audio_mix_add(outL[2*i], fxBuffer[2*i] + audio_mix_bound((wet-fxBuffer[2*i])*dryWet));
+        if(channels==2) {
+            wet = fxBuffer[2*i+1]*mod[i]/65536.f;
+            outR[2*i] = audio_mix_add(outR[2*i], fxBuffer[2*i+1] + audio_mix_bound((wet-fxBuffer[2*i+1])*dryWet));
+        }
+    }
+}
+#else
+void Ringmod_process(Ringmod *rm, AudioSample*fxBuffer, AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet)
 {
 	int16_t buf[size];
 	int32_t x;
@@ -76,6 +94,7 @@ void Ringmod_process(Ringmod *rm, int16_t *fxBuffer, int16_t* outL, int16_t* out
 		}
 	}
 }
+#endif
 void Ringmod_setFreq(Ringmod *rm, float f)
 {
 	rm->osc.freq = f*880.f;

@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 
 #include "Soundengine/DSPAudio/Snare.h"
@@ -145,10 +147,10 @@ IN_ITCM_RAM void Snare_calcAsync()
 
 }
 //---------------------------------------------------
-void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
+void Snare_calcSyncBlock(AudioSample* buf, const uint8_t size)
 {
-	int16_t transBuf[size];
-	int16_t oscBuf[size];
+	AudioSample transBuf[size];
+	AudioSample oscBuf[size];
 
 	calcNoiseBlock(&snareVoice.noiseOsc,buf,size,0.9f);
 #if USE_REVERB
@@ -200,7 +202,7 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 			float output = snareVoice.combinedVolume  * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, faderTarget);
 			// Defensive conversion: signed envelope undershoot or extended gains.
 			output = output > 32767.f ? 32767.f : (output < -32768.f ? -32768.f : output);
-			buf[j] = (int16_t)output;
+			buf[j] = (AudioSample)output;
 
 #else
 
@@ -230,7 +232,7 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 			float output = snareVoice.combinedVolume * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, faderTarget);
 			// Defensive conversion: signed envelope undershoot or extended gains.
 			output = output > 32767.f ? 32767.f : (output < -32768.f ? -32768.f : output);
-			buf[j] = (int16_t)output;
+			buf[j] = (AudioSample)output;
 #else
 			//add filter to buffer
 			buf[j] *= snareVoice.mix;

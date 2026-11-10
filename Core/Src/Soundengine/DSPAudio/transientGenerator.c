@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 
 #include "Soundengine/DSPAudio/transientGenerator.h"
@@ -40,11 +42,15 @@ void transient_trigger(TransientGenerator* transient)
 	transient->phase	= 0;
 }
 //---------------------------------------------------------------
-/*IN_ITCM_RAM*/ void transient_calcBlock(TransientGenerator* transient, int16_t* buf, const uint8_t size)
+/*IN_ITCM_RAM*/ void transient_calcBlock(TransientGenerator* transient, AudioSample* buf, const uint8_t size)
 {
 	if((transient->waveform<=1) || (transient->phase>=2311061504u)) //no sample for snap and offset, no sample data if phase >= sample length
 	{
-		memset((int32_t*)buf,0,size/2*sizeof(int32_t));
+		#if LXR_AUDIO_FLOAT32
+memset(buf,0,size*sizeof(*buf));
+#else
+memset((int32_t*)buf,0,size/2*sizeof(int32_t));
+#endif
 		return; //snapEg and offset
 	}
 

@@ -21,8 +21,18 @@ for name in ('calcFmSineBlock', 'calcFmBlock', 'calcPwmFmBlock'):
     conversions = 2 if name == 'calcPwmFmBlock' else 1  # PWM offset plus FM
     assert len(re.findall(r'\bvcvt\.u32\.f32\b', text)) == conversions, text
     assert re.search(r'vmul\.f32[^\n]*\n[^\n]*vcvt\.u32\.f32', text), text
-    assert not re.search(r'\bvmax(?:nm)?\.f32\b', text), text
-    print(f'{name}: {conversions} vcvt.u32.f32; FM multiply directly followed by conversion; no vmax/vmaxnm.f32')
+    float_pwm = name == 'calcPwmFmBlock' and re.search(r'^LXR_AUDIO_FLOAT32:BOOL=ON$', cache, re.M)
+    if float_pwm:
+        # Original QSUB16 PWM waveform saturation becomes float min/max.
+        # It must follow the FM conversion, never guard its negative input.
+        last_conversion = list(re.finditer(r'\bvcvt\.u32\.f32\b', text))[-1].end()
+        assert not re.search(r'\bvmax(?:nm)?\.f32\b', text[:last_conversion]), text
+        assert len(re.findall(r'\bvmaxnm\.f32\b', text)) == 1, text
+        assert len(re.findall(r'\bvminnm\.f32\b', text)) == 1, text
+    else:
+        assert not re.search(r'\bvmax(?:nm)?\.f32\b', text), text
+    print(f'{name}: {conversions} vcvt.u32.f32; direct FM multiply/conversion; '
+          + ('one downstream PWM waveform bound' if float_pwm else 'no vmax/vmaxnm.f32'))
     if args.baseline:
         old = subprocess.check_output([objdump, '-d', '--disassemble='+name, str(args.baseline)], text=True)
         assert len(re.findall(r'\bvmaxnm\.f32\b', old)) == 1, old

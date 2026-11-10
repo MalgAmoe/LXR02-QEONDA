@@ -161,12 +161,12 @@ void codec_serviceDmaRecovery(void)
 		 !(hi2s3.ErrorCode & HAL_I2S_ERROR_TIMEOUT));
 	if(ready2 && ready3)
 	{
-		for(unsigned i = 0; i < OUTPUT_DMA_SIZE*4; ++i)
+		for(unsigned i = 0; i < AUDIO_DMA_HALFWORDS; ++i)
 			dma_buffer[i] = dma_buffer2[i] = 0;
 		bCurrentSampleValid = SAMPLE_VALID;
 		codec_requestGeneration++;
-		HAL_StatusTypeDef start2 = HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)dma_buffer2, OUTPUT_DMA_SIZE*4);
-		HAL_StatusTypeDef start3 = HAL_I2S_Transmit_DMA(&hi2s3, (uint16_t*)dma_buffer, OUTPUT_DMA_SIZE*4);
+		HAL_StatusTypeDef start2 = HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)dma_buffer2, AUDIO_HAL_CHANNEL_SAMPLES);
+		HAL_StatusTypeDef start3 = HAL_I2S_Transmit_DMA(&hi2s3, (uint16_t*)dma_buffer, AUDIO_HAL_CHANNEL_SAMPLES);
 		if(start2 != HAL_OK || start3 != HAL_OK)
 		{
 			HAL_I2S_DMAStop(&hi2s2);

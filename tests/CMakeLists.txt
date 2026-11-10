@@ -52,6 +52,7 @@ function(lxr_add_host_test name)
     list(TRANSFORM arg_FIRMWARE_SOURCES PREPEND "${LXR_SOURCE_DIR}/")
     add_executable(${name} ${arg_SOURCES} ${arg_FIRMWARE_SOURCES})
     target_link_libraries(${name} PRIVATE lxr_test_common)
+    target_compile_options(${name} PRIVATE -ULXR_AUDIO_FLOAT32 -ULXR_FLOAT_MIX_CLIP)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
@@ -74,6 +75,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME test_audio_scheduling
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_audio_scheduling.py)
+set_tests_properties(test_audio_scheduling PROPERTIES ENVIRONMENT "LXR_AUDIO_24BIT=$<BOOL:${LXR_AUDIO_24BIT}>;LXR_MAIN_OUTPUT_24BIT=$<OR:$<BOOL:${LXR_MAIN_OUTPUT_24BIT}>,$<BOOL:${LXR_AUDIO_FLOAT32}>>;LXR_AUDIO_FLOAT32=$<BOOL:${LXR_AUDIO_FLOAT32}>")
 
 lxr_add_host_test(test_play_debounce
     SOURCES test_play_debounce.c
@@ -260,3 +262,62 @@ lxr_add_host_test(test_project_codec
 add_test(NAME test_project_callsites
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_project_callsites.py)
+
+lxr_add_host_test(test_main_output24 SOURCES test_main_output24.c)
+target_link_libraries(test_main_output24 PRIVATE m)
+
+add_executable(test_audio_float32 test_audio_float32.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/FxBus.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/DrumVoice.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/Snare.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/HiHat.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/CymbalVoice.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/ResonantFilter.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/distortion.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/transientGenerator.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/transientTables.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/Oscillator.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/wavetable.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/1PoleLp.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/FX/FxRamBuffer.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/FX/Delay.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/FX/Distortion.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/FX/Compressor.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/FX/Ringmod.c
+)
+target_link_libraries(test_audio_float32 PRIVATE lxr_test_common m)
+target_compile_definitions(test_audio_float32 PRIVATE LXR_AUDIO_FLOAT32=1 LXR_MAIN_OUTPUT_24BIT=1 LXR_AUDIO_24BIT=1)
+# Exercise the actual renderer body without unrelated engine init/background I/O.
+# Reconfigure when its owner changes; no copied implementation fixture to drift.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${LXR_SOURCE_DIR}/Core/Src/Soundengine/Soundengine.c")
+file(READ "${LXR_SOURCE_DIR}/Core/Src/Soundengine/Soundengine.c" engine_source)
+string(FIND "${engine_source}" "uint8_t soundengine_calcNextSampleBlock()" renderer_start)
+string(FIND "${engine_source}" "void soundengine_init()" renderer_end)
+math(EXPR renderer_length "${renderer_end} - ${renderer_start}")
+string(SUBSTRING "${engine_source}" ${renderer_start} ${renderer_length} renderer_body)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/float_renderer.h" "${renderer_body}")
+target_include_directories(test_audio_float32 PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_options(test_audio_float32 PRIVATE -ffunction-sections -fdata-sections)
+if(APPLE)
+    target_link_options(test_audio_float32 PRIVATE -Wl,-dead_strip)
+else()
+    target_link_options(test_audio_float32 PRIVATE -Wl,--gc-sections)
+endif()
+add_test(NAME test_audio_float32 COMMAND test_audio_float32)
+
+# Both comparison configurations are always exercised by the host suite.
+target_compile_options(test_audio_float32 PRIVATE -ULXR_FLOAT_MIX_CLIP)
+get_target_property(float_sources test_audio_float32 SOURCES)
+list(REMOVE_ITEM float_sources test_audio_float32.c)
+add_executable(test_float_mix_clip test_float_mix_clip.c ${float_sources})
+target_link_libraries(test_float_mix_clip PRIVATE lxr_test_common m)
+target_compile_definitions(test_float_mix_clip PRIVATE LXR_AUDIO_FLOAT32=1 LXR_MAIN_OUTPUT_24BIT=1 LXR_AUDIO_24BIT=1 LXR_FLOAT_MIX_CLIP=1)
+target_include_directories(test_float_mix_clip PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_options(test_float_mix_clip PRIVATE -ffunction-sections -fdata-sections)
+if(APPLE)
+    target_link_options(test_float_mix_clip PRIVATE -Wl,-dead_strip)
+else()
+    target_link_options(test_float_mix_clip PRIVATE -Wl,--gc-sections)
+endif()
+add_test(NAME test_float_mix_clip COMMAND test_float_mix_clip)
