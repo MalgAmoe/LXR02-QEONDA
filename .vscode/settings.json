@@ -18,5 +18,6 @@
     "soundengine.h": "c",
     "random.h": "c",
     "presetmanager.h": "c"
-  }
+  },
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/release/compile_commands.json"
 }
