@@ -640,15 +640,41 @@ static void names_and_confirmation(void){
  buttonHandler_stateMemory.seqRunning=buttonHandler_stateMemory.seqRecording=0;
 }
 static void retained_controls(void){
- /* Standalone FX routing is unchanged. */
- for(int mode=0;mode<1;mode++)for(int kind=0;kind<2;kind++){
-  reset(mode?PATTERN_SAVE_PAGE:FX_MODE_PAGE,12);
-  buttonHandler_setMode(mode?SELECT_MODE_PATTERN:SELECT_MODE_FX);
-  unsigned oldMode=buttonHandler_getMode();
-  if(kind)buttonHandler_voiceButtonPressed(3);else buttonHandler_selectButtonPressed(3);
-  if(!mode && !kind)assert(buttonHandler_getMode()==SELECT_MODE_VOICE && menu_activePage==2 && menuIndex==28);
-  else assert(buttonHandler_getMode()==oldMode && menu_activePage==(mode?PATTERN_SAVE_PAGE:FX_MODE_PAGE));
+ /* Actual Shift+FX entry: voice exit starts at OSC, not the FX type/index.
+    Edit-section FX navigation retains its existing index behavior. */
+ for(int type=0;type<6;type++)for(int index=0;index<64;index++)
+ for(int kind=0;kind<2;kind++)for(int target=0;target<(kind?8:7);target++){
+  reset(2,12);fxBus.fxType=type;
+  shift=1;buttonHandler_seqButtonPressed(SEQ_FX);shift=0;
+  assert(buttonHandler_getMode()==SELECT_MODE_FX && menu_activePage==FX_MODE_PAGE);
+  assert(menu_getSubPage()==type && fxBus.fxType==type);
+  menuIndex=index;
+  if(kind)buttonHandler_selectButtonPressed(target);else buttonHandler_voiceButtonPressed(target);
+  assert(buttonHandler_getMode()==SELECT_MODE_VOICE && menu_activePage==(kind?2:target));
+  if(kind){
+   assert(menu_getSubPage()==target && (menuIndex&3)==0);
+   if(index==12 && target==3)assert(menuIndex==28);
+  }else assert(menuIndex==0);
+  assert(fxBus.fxType==type && !changes && !loads && !saves);
+  if(!kind)assert(!editModeActive && !menu_muteModeActive && selectedSection==0 && !led_blinkingLeds);
+  buttonHandler_seqButtonReleased(SEQ_FX);
+  if(!kind)assert(!stepWrites && !heldSeqButtons && !consumedSeqReleases);
  }
+ /* Every ordinary-voice exclusion still owns its original FX route. */
+ for(int mod=0;mod<3+MODE_COPY_TRACK;mod++){
+  reset(2,12);shifted_pad(SEQ_FX);
+  shift=mod==0;copy=mod==1;buttonHandler_stateMemory.seqErasing=mod==2;
+  if(mod>=3)copyClear_Mode=mod-2;
+  buttonHandler_voiceButtonPressed(3);
+  assert(buttonHandler_getMode()==SELECT_MODE_FX && menu_activePage==FX_MODE_PAGE);
+ }
+ /* Both halves of the standalone eligibility pair are required. */
+ reset(FX_MODE_PAGE,29);buttonHandler_setMode(SELECT_MODE_PATTERN);
+ buttonHandler_voiceButtonPressed(3);
+ assert(buttonHandler_getMode()==SELECT_MODE_PATTERN && menu_activePage==FX_MODE_PAGE);
+ reset(2,29);buttonHandler_setMode(SELECT_MODE_FX);
+ buttonHandler_voiceButtonPressed(3);
+ assert(buttonHandler_getMode()==SELECT_MODE_FX && menu_activePage==2 && menuIndex==29);
  reset(1,11);enter(0);shift=1;buttonHandler_handleModeButtons(0);shift=0;
  assert(buttonHandler_getMode()==SELECT_MODE_STEP && enteredStep==1);
  /* Old held step, old held roll, and new pattern-pad release after exit. */

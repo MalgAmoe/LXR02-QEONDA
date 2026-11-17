@@ -1573,9 +1573,10 @@ static void buttonHandler_partButtonReleased(uint8_t partNr)
 // one of the 7 voice buttons pressed
 static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 {
-	// Identify Config and load/save dialogs by page, not their mode aliases.
-	// Their menu indices are not voice edit sections: start at OSC.
-	if ((menu_activePage == MENU_MIDI_PAGE || buttonHandler_isLoadSavePage()) &&
+	// Config/load-save indices and standalone FX types are not voice edit sections.
+	// Start at OSC; live-pattern FX retains its section through the branch below.
+	if ((menu_activePage == MENU_MIDI_PAGE || buttonHandler_isLoadSavePage() ||
+		 (buttonHandler_getMode() == SELECT_MODE_FX && menu_activePage == FX_MODE_PAGE)) &&
 		!buttonHandler_getShift() && !buttonHandler_getCopy() &&
 		copyClear_Mode == MODE_NONE && !buttonHandler_stateMemory.seqErasing) {
 		buttonHandler_leaveDialogForVoice();

@@ -82,6 +82,11 @@ edit-section button exits on the current voice at the requested section’s firs
 screen. The same modifier exclusions apply; Voice/Edit also retains its existing
 exit behavior.
 
+From standalone Shift+FX, an ordinary voice button exits to the selected voice
+at OSC’s first screen, consuming a held FX shortcut release. The same modifier
+exclusions apply. Edit-section buttons and live-pattern FX keep their existing
+navigation; effect type and parameters are unchanged.
+
 ## Leaving load/save dialogs
 
 In Kit, Morph, Song and Project load/save dialogs (including name editing and
