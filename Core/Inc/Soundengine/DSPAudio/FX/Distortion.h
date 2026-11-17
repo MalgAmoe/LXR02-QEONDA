@@ -12,6 +12,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 #ifndef SRC_SOUNDENGINE_DSPAUDIO_FX_DISTORTION_H_
 #define SRC_SOUNDENGINE_DSPAUDIO_FX_DISTORTION_H_
 
@@ -36,23 +38,23 @@ typedef struct DistortionStruct
 	float p3;		//parameter 3
 
 	//some filter states used in rat
-	double hp1_state[2];
-	double hp2_state[2];
-	double hp3_state[2];
-	double lp1_state[2];
-	double lp2_state[2];
-	double lp3_state[2];
-	double slewState[2];
+	AudioReal hp1_state[2];
+	AudioReal hp2_state[2];
+	AudioReal hp3_state[2];
+	AudioReal lp1_state[2];
+	AudioReal lp2_state[2];
+	AudioReal lp3_state[2];
+	AudioReal slewState[2];
 
-	double lastOut[2];
+	AudioReal lastOut[2];
 
 
 } MasterDistortion;
 
 
 
-void Distortion_init();
-void Distortion_process(MasterDistortion *dist, int16_t *fxBuffer, int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet);
+void Distortion_init(MasterDistortion *dist);
+void Distortion_process(MasterDistortion *dist, AudioSample*fxBuffer, AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet);
 void Distortion_setDrive(MasterDistortion *dist, float d);
 void Distortion_setParam1(MasterDistortion *dist, float p);
 void Distortion_setParam2(MasterDistortion *dist, float p);

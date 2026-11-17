@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 
 #include "Soundengine/DSPAudio/transientGenerator.h"
@@ -40,11 +42,11 @@ void transient_trigger(TransientGenerator* transient)
 	transient->phase	= 0;
 }
 //---------------------------------------------------------------
-/*IN_ITCM_RAM*/ void transient_calcBlock(TransientGenerator* transient, int16_t* buf, const uint8_t size)
+/*IN_ITCM_RAM*/ void transient_calcBlock(TransientGenerator* transient, AudioSample* buf, const uint8_t size)
 {
 	if((transient->waveform<=1) || (transient->phase>=2311061504u)) //no sample for snap and offset, no sample data if phase >= sample length
 	{
-		memset((int32_t*)buf,0,size/2*sizeof(int32_t));
+memset(buf,0,size*sizeof(*buf));
 		return; //snapEg and offset
 	}
 
@@ -57,7 +59,7 @@ void transient_trigger(TransientGenerator* transient)
 		{
 			uint32_t phase = transient->phase;
 			phase = phase >> 20;
-			buf[i] = transient->volume*(transientData[transient->waveform-2][phase]<<8) * (phase < TRANSIENT_SAMPLE_LENGTH);//* transientVolumeTable[phase>>5];
+			buf[i] = transient->volume*(transientData[transient->waveform-2][phase] * (1.f/128.f)) * (phase < TRANSIENT_SAMPLE_LENGTH);//* transientVolumeTable[phase>>5];
 			transient->phase +=  (transient->pitch*(1<<20)); //2311061504 => 2204<<20
 		}
 		else
@@ -78,12 +80,12 @@ void transient_calc(TransientGenerator* transient)
 	if(transient->waveform==0)
 	{
 		//click
-		transient->output = transient->volume * 32512 * transientVolumeTable[phase>>5];
+		transient->output = transient->volume * (127.f/128.f) * transientVolumeTable[phase>>5];
 
 	}
 	else
 	{
-		transient->output = transient->volume*(transientData[transient->waveform-1][phase]<<8) * transientVolumeTable[phase>>5];
+		transient->output = transient->volume*(transientData[transient->waveform-1][phase] * (1.f/128.f)) * transientVolumeTable[phase>>5];
 	}
 
 };

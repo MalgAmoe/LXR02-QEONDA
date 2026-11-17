@@ -72,6 +72,8 @@ void screensaver_touch()
 	if(screensaver_Active)
 	{
 		//while(sendDisplayBuffer() != 0); //wrong! we wan't to clean the screensaver pipeline, noit the normal menu one!
+		// Skip the animation pause, but finish any in-flight LCD transaction.
+		screensaver_processTime = HAL_GetTick();
 		while(screensaver_process() != 0) soundengine_process();
 		//lcd_turnOn(1,0);
 		screensaver_Active = 0;

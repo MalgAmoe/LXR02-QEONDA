@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 #ifndef RESONANTFILTER_H_
 #define RESONANTFILTER_H_
@@ -77,9 +79,9 @@ void SVF_setDrive(ResonantFilter* filter, float drive);
 //------------------------------------------------------------------------------------
 void SVF_directSetFilterValue(ResonantFilter* filter, float val);
 //------------------------------------------------------------------------------------
-IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, int16_t* buf, const uint8_t size);
+IN_ITCM_RAM void SVF_calcBlockZDF(ResonantFilter* filter, const uint8_t type, AudioSample* buf, const uint8_t size);
 //------------------------------------------------------------------------------------
-IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t type, int16_t* buf, const uint8_t size);
+IN_ITCM_RAM void SVF_calcBlockCheapZDF(ResonantFilter* filter, const uint8_t type, AudioSample* buf, const uint8_t size);
 //------------------------------------------------------------------------------------
 IN_ITCM_RAM void SVF_recalcFreq(ResonantFilter* filter);
 //------------------------------------------------------------------------------------

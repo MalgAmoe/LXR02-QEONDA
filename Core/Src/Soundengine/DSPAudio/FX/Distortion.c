@@ -12,6 +12,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 #include "Soundengine/DSPAudio/FX/Distortion.h"
 #include <math.h>
 
@@ -71,7 +73,6 @@ INDTCM const float table_1n914[257] = {
 		0.647042
 		};
 
-
 INDTCM const double ecc83Table[129] = {
 -0.993818651334, -0.993773150866, -0.993727650399, -0.993682149931,
 -0.993636649463, -0.993591148995, -0.993545648528, -0.99350014806,
@@ -113,7 +114,6 @@ float clamp(float d, float min, float max) {
   return t > max ? max : t;
 }
 
-
 static float fnms(float a, float b, float c)
 {
 	return c - a*b;
@@ -123,7 +123,7 @@ static float lerp(float a, float b, float t) {
   //return a + t * (b - a);
 	//fma(a, b, c) = a*b + c
 	//fnms(a, b, c) = -(a*b - c) = c - a*b
-	return fma(t, b, fnms(t, a, a));
+    return fmaf(t, b, fnms(t, a, a));
 
 }
 
@@ -140,7 +140,8 @@ float diode(float in)
 
 	uint16_t itg = (int16_t) index;
 	float frac = index - itg;
-	return lerp(table_1n914[itg], table_1n914[itg+1], frac);
+    /* Clamped +1 is the final table entry, not entry 257. */
+    return lerp(table_1n914[itg], table_1n914[itg < 256 ? itg+1 : itg], frac);
 
 }
 
@@ -200,25 +201,25 @@ float foldback(float in, float threshold)
 {
   if (in>threshold || in<-threshold)
   {
-    in= fabs(fabs(fmod(in - threshold, threshold*4)) - threshold*2) - threshold;
+    in= fabsf(fabsf(fmodf(in - threshold, threshold*4)) - threshold*2) - threshold;
   }
   return in;
 }
 
-void Distortion_process(MasterDistortion *dist, int16_t *fxBuffer, int16_t* outL, int16_t* outR, uint16_t size, uint8_t channels, float dryWet)
+/* Same tube/fold/RAT laws and route-specific gains. Wet source clips
+ * remain musical; wet deltas and each destination add retain their bounds.
+ * Tube cell selection is bounded, but its overload fraction is not.
+ * Tube overload uses frac(normalizedInput * 64), including beyond full scale. */
+void Distortion_process(MasterDistortion *dist, AudioSample*fxBuffer, AudioSample* outL, AudioSample* outR, uint16_t size, uint8_t channels, float dryWet)
 {
 	if(dist->distortionType == DISTORTION_TUBE)
 	{
-		//--- Tone Control ---
-		const double coff = 0.06537948995454451662 + dist->p2 * 0.92410701734426630737;
-		//--------------------
 
-		const float outputModifier = (1.0+0.55*dist->p1) +0.55*dist->p1;
+		const float coff = 0.06537948995454451662f + dist->p2 * 0.92410701734426630737f;
 
-		//outL and outR are in the same array as interleaved stereo samples.
-		//therefore the *out += 2 to increment it
-		//we can use an int32_t instead of int_16_t to use SIMD instructions on both stereo channels
-		int32_t* stereoOut = (int32_t*)outL;
+		const float outputModifier = (1.0f+0.55f*dist->p1) +0.55f*dist->p1;
+
+		AudioSample* stereoOut = outL;
 
 		if(channels==2)
 		{
@@ -227,41 +228,34 @@ void Distortion_process(MasterDistortion *dist, int16_t *fxBuffer, int16_t* outL
 				const uint8_t idx1 = i*2;
 				const uint8_t idx2 = i*2+1;
 
-				int32_t input1 = ((int32_t)((fxBuffer[idx1]) * (1.f + dist->drive*4)));
-				int32_t input2 = ((int32_t)((fxBuffer[idx2]) * (1.f + dist->drive*4)));
+				float input1 = (fxBuffer[idx1]) * (1.f + dist->drive*4);
+				float input2 = (fxBuffer[idx2]) * (1.f + dist->drive*4);
 
-				uint8_t itg1 = (__SSAT(input1,16)>>9)+64;
-				uint8_t itg2 = (__SSAT(input2,16)>>9)+64;
+				float index1 = (audio_sample_bound(input1)+1.f)*64.f;
+                unsigned itg1 = (unsigned)index1;
+				float index2 = (audio_sample_bound(input2)+1.f)*64.f;
+                unsigned itg2 = (unsigned)index2;
 
-				float frac1 = (input1&0b0000000111111111) / 512.f;
-				float frac2 = (input2&0b0000000111111111) / 512.f;
+				float frac1 = input1*64.f - floorf(input1*64.f);
+				float frac2 = input2*64.f - floorf(input2*64.f);
 
-				double val1 = ecc83Table[itg1] + (ecc83Table[itg1+1]-ecc83Table[itg1]) * frac1;
-				double val2 = ecc83Table[itg2] + (ecc83Table[itg2+1]-ecc83Table[itg2]) * frac2;
+				float val1 = (float)ecc83Table[itg1] + ((float)ecc83Table[itg1+1]-(float)ecc83Table[itg1]) * frac1;
+				float val2 = (float)ecc83Table[itg2] + ((float)ecc83Table[itg2+1]-(float)ecc83Table[itg2]) * frac2;
 
-
-
-				//--- tone control ---
 				dist->lp3_state[0] += coff * (val1 - dist->lp3_state[0]);
 				dist->lp3_state[1] += coff * (val2 - dist->lp3_state[1]);
-				//---
 
 				val1 = dist->lp3_state[0] * outputModifier * dist->p3;
 				val2 = dist->lp3_state[1] * outputModifier * dist->p3;
 
+				const float wet = audio_sample_bound((val1));
 
+				const float wet2 = audio_sample_bound((val2));
 
-				const int16_t wet = __SSAT((int32_t)(val1 * 32768.0f), 16);
-				//simd.word[0] = fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16);
+				float x[2] = {fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet)), fxBuffer[idx2] + (audio_mix_bound((wet2 - fxBuffer[idx2]) * dryWet))};
 
-				const int16_t wet2 = __SSAT((int32_t)(val2 * 32768.0f), 16);
-				//simd.word[1] = fxBuffer[idx2] + __SSAT((wet2 - fxBuffer[idx2]) * dryWet,16);
-
-				const int32_t x = __PKHBT( fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16), fxBuffer[idx2] + __SSAT((wet2 - fxBuffer[idx2]) * dryWet,16), 16);
-
-				//add stereo samples using SIMD
-				*stereoOut = __QADD16(*stereoOut, x);
-				stereoOut++;
+				stereoOut[0] = audio_mix_add(stereoOut[0], x[0]); stereoOut[1] = audio_mix_add(stereoOut[1], x[1]);
+				stereoOut += 2;
 			}
 		}
 		else
@@ -269,58 +263,47 @@ void Distortion_process(MasterDistortion *dist, int16_t *fxBuffer, int16_t* outL
 			for(uint32_t i=0;i<size;i++)
 			{
 				const uint8_t idx1 = i*2;
-				int32_t input1 = ((int32_t)((fxBuffer[idx1]) * (1.f + dist->drive)));
-				uint8_t itg1 = (__SSAT(input1,16)>>9)+64;
-				float frac1 = (input1&0b0000000111111111) / 512.f;
-				double val1 = ecc83Table[itg1] + (ecc83Table[itg1+1]-ecc83Table[itg1]) * frac1;
+				float input1 = (fxBuffer[idx1]) * (1.f + dist->drive);
+				float index1 = (audio_sample_bound(input1)+1.f)*64.f;
+                unsigned itg1 = (unsigned)index1;
+				float frac1 = input1*64.f - floorf(input1*64.f);
+				float val1 = (float)ecc83Table[itg1] + ((float)ecc83Table[itg1+1]-(float)ecc83Table[itg1]) * frac1;
 
-
-				//--- tone control ---
 				dist->lp3_state[0] += coff * (val1 - dist->lp3_state[0]);
 				val1 = dist->lp3_state[0] * outputModifier * dist->p3;
-				//val1 = dist->lp3_state[0] * dist->p3;
-				//---
 
-				int16_t wet = __SSAT((int32_t)(val1 * 32768.0f), 16);
-				int16_t dw = fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16);
-				*outL = __QADD16(*outL, dw);
-				//*outL =  __SSAT((int32_t)(val1 * 32768.0f), 16);
+				float wet = audio_sample_bound((val1));
+				float dw = fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet));
+				*outL = audio_mix_add(*outL, dw);
+
 				outL += 2;
 			}
 		}
 	}
 	else if(dist->distortionType == DISTORTION_FOLD)
 	{
-		//p1 => offset
-		//x*(2-abs(x))
 
-		//--- Tone Control ---
-		const double coff = 0.06537948995454451662 + dist->p2 * 0.92410701734426630737;
-		//--------------------
+		const float coff = 0.06537948995454451662f + dist->p2 * 0.92410701734426630737f;
 
 		if(channels==2)
 		{
-			int32_t* stereoOut = (int32_t*)outL;
-			//simdBuffer simd;
+			AudioSample* stereoOut = outL;
 
 			for(uint32_t i=0;i<size;i++)
 			{
 				const uint8_t idx1 = i*2;
 				const uint8_t idx2 = i*2+1;
 
-				float input1 = ( (fxBuffer[idx1])  ) / 32768.f;
-				float input2 = ( (fxBuffer[idx2]) ) / 32768.f ;
+				float input1 = ( (fxBuffer[idx1])  );
+				float input2 = ( (fxBuffer[idx2]) ) ;
 
 				float val1 = input1  * (1.f + dist->drive*4.f)  + dist->p1;
 				float val2 = input2  * (1.f + dist->drive*4.f)  + dist->p1;
 
 	#if 1
 
-				//--- tone control ---
 				dist->lp3_state[0] += coff * (val1 - dist->lp3_state[0]);
 				dist->lp3_state[1] += coff * (val2 - dist->lp3_state[1]);
-				//---
-
 
 				val1 = foldback(dist->lp3_state[0], 1.f) * dist->p3;
 				val2 = foldback(dist->lp3_state[1], 1.f) * dist->p3;
@@ -333,30 +316,15 @@ void Distortion_process(MasterDistortion *dist, int16_t *fxBuffer, int16_t* outL
 
 	#endif
 
+				float x[2];
+				const float wet = audio_sample_bound((val1));
 
-				/*
-				int16_t wet = __SSAT((int32_t)(val1 * 32768.0f), 16);
-				int16_t dw = fxBuffer[i] + __SSAT((wet - fxBuffer[i]) * dryWet,16);
-				*outL = __QADD16(*outL, dw);
-				outL += 2;
+				const float wet2 = audio_sample_bound((val2));
 
-				wet = __SSAT((int32_t)(val2 * 32768.0f), 16);
-				dw = fxBuffer[i] + __SSAT((wet - fxBuffer[i]) * dryWet,16);
-				*outR = __QADD16(*outR, dw);
-				outR += 2;
-				*/
-				int32_t x;
-				const int16_t wet = __SSAT((int32_t)(val1 * 32768.0f), 16);
-				//simd.word[0] = fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16);
+				{ float pair[2] = {fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet)), fxBuffer[idx2] + (audio_mix_bound((wet2 - fxBuffer[idx2]) * dryWet))}; x[0]=pair[0]; x[1]=pair[1]; }
 
-				const int16_t wet2 = __SSAT((int32_t)(val2 * 32768.0f), 16);
-				//simd.word[1] = fxBuffer[idx2] + __SSAT((wet2 - fxBuffer[idx2]) * dryWet,16);
-
-				x = __PKHBT( fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16), fxBuffer[idx2] + __SSAT((wet2 - fxBuffer[idx2]) * dryWet,16), 16);
-
-				//add stereo samples using SIMD
-				*stereoOut = __QADD16(*stereoOut, x);
-				stereoOut++;
+				stereoOut[0] = audio_mix_add(stereoOut[0], x[0]); stereoOut[1] = audio_mix_add(stereoOut[1], x[1]);
+				stereoOut += 2;
 
 			}
 		}
@@ -366,40 +334,36 @@ void Distortion_process(MasterDistortion *dist, int16_t *fxBuffer, int16_t* outL
 			{
 				const uint8_t idx1 = i*2;
 
-				float input1 = ( (fxBuffer[idx1])  ) / 32768.f;
+				float input1 = ( (fxBuffer[idx1])  );
 				float val1 = input1  * (1.f + dist->drive*4.f)  + dist->p1;
 
-
-				//--- tone control ---
 				dist->lp3_state[0] += coff * (val1 - dist->lp3_state[0]);
-				//---
 
 				val1 = foldback(dist->lp3_state[0], 1.f) * dist->p3;
 
-				int16_t wet = __SSAT((int32_t)(val1 * 32768.0f), 16);
-				int16_t dw = fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16);
+				float wet = audio_sample_bound((val1));
+				float dw = fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet));
 
-				*outL = __QADD16(*outL, dw);
+				*outL = audio_mix_add(*outL, dw);
 				outL += 2;
 
 			}
 		}
 
-
 	}
-	else //DISTORTION_RAT
+	else
 	{
-		int32_t* stereoOut = (int32_t*)outL;
-		int32_t x;
-		//simdBuffer simd;
+		AudioSample* stereoOut = outL;
+		float x[2];
+
 #if 0
-		double tone =  475 + dist->p1*(32000-475);
-		const double coff = 1. - expf(-2*M_PI*tone/44140);
+		float tone =  475 + dist->p1*(32000-475);
+		const float coff = 1.f - expf(-2*M_PI*tone/44140);
 #else
-		//Tone control 475 to 32000 Hz
-		const double coff = 0.06537948995454451662 + dist->p2 * 0.92410701734426630737;
+
+		const float coff = 0.06537948995454451662f + dist->p2 * 0.92410701734426630737f;
 #endif
-		const double gain = 1 + dist->drive*2304;
+		const float gain = 1 + dist->drive*2304;
 
 		if(channels==2)
 		{
@@ -408,126 +372,55 @@ void Distortion_process(MasterDistortion *dist, int16_t *fxBuffer, int16_t* outL
 
 				const uint8_t idx1 = i*2;
 				const uint8_t idx2 = i*2+1;
-				//power supply 0-9V with 4.5V center => +/- 4.5V
 
-				double signal1 = ( (fxBuffer[idx1])  ) / 32768.;
-				double signal2 = ( (fxBuffer[idx2])  ) / 32768.;  //[-1:1]
+				float signal1 = ( (fxBuffer[idx1])  );
+				float signal2 = ( (fxBuffer[idx2])  );
 
-				//feedback thru hp
-				//dist->hp1_state[0] += 0.64116641920131193922 * ( dist->p2 * 0.125 - dist->hp1_state[0]);
-				//dist->hp1_state[1] += 0.64116641920131193922 * ( dist->p2 * 0.125 - dist->hp1_state[1]);
+				signal1 += dist->lastOut[0] * dist->p1 * 0.125f;
+				signal2 += dist->lastOut[1] * dist->p1 * 0.125f;
 
-				signal1 += dist->lastOut[0] * dist->p1 * 0.125;
-				signal2 += dist->lastOut[1] * dist->p1 * 0.125;
+				dist->hp1_state[0] += 0.64116641920131193922f * (signal1 - dist->hp1_state[0]);
+				dist->hp1_state[1] += 0.64116641920131193922f * (signal2 - dist->hp1_state[1]);
 
-				//guitar levels are normally in mv range!
-				//seems like generally we think of a 100-300mv signal in designing distortions etc, but a big E chord can get near 1V!
-				//signal1 *= 0.3;
-				//signal2 *= 0.3;
-
-				//--- Clipper Amplifier
-				//input HP 7.2Hz
-
-				/*
-				Coefficient calculation:
-				x = exp(-2.0*pi*freq/samplerate);
-				a0 = 1.0-x;
-				b1 = -x;
-
-				for 7.2Hz
-				x = 0,35883358079868806078
-				a0 = 0,64116641920131193922
-				b1 = -0,35883358079868806078
-				 */
-
-				//const double a0 = 0.64116641920131193922;
-				//const double b1 = -0.35883358079868806078;
-				dist->hp1_state[0] += 0.64116641920131193922 * (signal1 - dist->hp1_state[0]);
-				dist->hp1_state[1] += 0.64116641920131193922 * (signal2 - dist->hp1_state[1]);
-
-				//we now have lowpass, substract from input for HP
 				signal1 = signal1 - dist->hp1_state[0];
 				signal2 = signal2 - dist->hp1_state[1];
 
-
-
-
-				//LP/HP around opAmp
-				//1 pole LP   1/(2*pi*R_dist*0.0000001)  min = 16kHz = 0.1025353241628911807
-				dist->lp1_state[0] += (1. - 0.1025353241628911807) * (signal1 - dist->lp1_state[0]);
-				dist->lp1_state[1] += (1. - 0.1025353241628911807) * (signal2 - dist->lp1_state[1]);
+				dist->lp1_state[0] += (1.f - 0.1025353241628911807f) * (signal1 - dist->lp1_state[0]);
+				dist->lp1_state[1] += (1.f - 0.1025353241628911807f) * (signal2 - dist->lp1_state[1]);
 				signal1 = dist->lp1_state[0];
 				signal2 = dist->lp1_state[1];
 
-				// 1 HP poles 1539Hz -> 0.80326417028080632238
-				/*
-				dist->hp2_state[0] += (1. - 0.80326417028080632238) * (signal1 - dist->hp2_state[0]);
-				dist->hp2_state[1] += (1. - 0.80326417028080632238) * (signal2 - dist->hp2_state[1]);
-				signal1 = dist->lp1_state[0] - dist->hp2_state[0];
-				signal2 = dist->lp1_state[1] - dist->hp2_state[1];
-				*/
-				// 1 HP poles 60Hz -> 0.99149556438154282898
-				dist->hp3_state[0] += (1. - 0.99149556438154282898) * (signal1 - dist->hp3_state[0]);
-				dist->hp3_state[1] += (1. - 0.99149556438154282898) * (signal2 - dist->hp3_state[1]);
+				dist->hp3_state[0] += (1.f - 0.99149556438154282898f) * (signal1 - dist->hp3_state[0]);
+				dist->hp3_state[1] += (1.f - 0.99149556438154282898f) * (signal2 - dist->hp3_state[1]);
 				signal1 = signal1 - dist->hp3_state[0];
 				signal2 = signal2 - dist->hp3_state[1];
 
-				//gain bw
-				// 67dB up to 500Hz
-				// 50dB @ 1k
-				// ~33 @ 10k
-				// ~15 @ 100k
-				// -> lp @ 500Hz -> 0.93130041642945205043
-				dist->lp2_state[0] += (1. - 0.93130041642945205043) * (signal1 - dist->lp2_state[0]);
-				dist->lp2_state[1] += (1. -0.93130041642945205043) * (signal2 - dist->lp2_state[1]);
+				dist->lp2_state[0] += (1.f - 0.93130041642945205043f) * (signal1 - dist->lp2_state[0]);
+				dist->lp2_state[1] += (1.f -0.93130041642945205043f) * (signal2 - dist->lp2_state[1]);
 				signal1 = dist->lp2_state[0];
 				signal2 = dist->lp2_state[1];
 
-
-				//--- opamp section ---
-
-				//voltage gain [1:2305]
 				signal1 *= gain;
 				signal2 *= gain;
 
-
-
-				//slew limit 0.3V/us 0-9V  =>  ~5.3khz
-				//SR = 44140Hz = 1 sample duration of 22,655... us
-				// slew limit = 22.655*0.3V = 6.79655641141821477118 V/sample
-				double diff = signal1 - dist->slewState[0];
-				double sign = diff > 0 ? 1. : -1.;
-				if(fabs(diff) > 6.79655641141821477118) diff = 6.79655641141821477118 * sign;
+				float diff = signal1 - dist->slewState[0];
+				float sign = diff > 0 ? 1.f : -1.f;
+				if(fabsf(diff) > 6.79655641141821477118f) diff = 6.79655641141821477118f * sign;
 				dist->slewState[0] += diff;
 
 				diff = signal2 - dist->slewState[1];
 				sign = diff > 0 ? 1 : -1;
-				if(fabs(diff) > 6.79655641141821477118) diff = 6.79655641141821477118 * sign;
+				if(fabsf(diff) > 6.79655641141821477118f) diff = 6.79655641141821477118f * sign;
 				dist->slewState[1] += diff;
 
-				//we hard clip here to the opamp rails, even if soft clipping would be more appropriate
-				if(dist->slewState[0] > 4.2) dist->slewState[0]=4.2;
-				else if(dist->slewState[0] < -4.2) dist->slewState[0] = -4.2;
+				if(dist->slewState[0] > 4.2f) dist->slewState[0]=4.2f;
+				else if(dist->slewState[0] < -4.2f) dist->slewState[0] = -4.2f;
 
-				if(dist->slewState[1] > 4.2) dist->slewState[1]=4.2;
-				else if(dist->slewState[1] < -4.2) dist->slewState[1] = -4.2;
+				if(dist->slewState[1] > 4.2f) dist->slewState[1]=4.2f;
+				else if(dist->slewState[1] < -4.2f) dist->slewState[1] = -4.2f;
 
-
-				//diode clipping +/- 0.7V 1n914 use table_1n914
 				signal1 = diode(dist->slewState[0]);
 				signal2 = diode(dist->slewState[1]);
-
-				//max range now [-0.647479:0.647042]
-				//we ommit thios cause rat is too loud!
-				//signal1 *= 1.54;
-				//signal2 *= 1.54;
-
-				//range ~ [-1:1]
-
-				//--- Tone Control ---
-				//simple lowpass
-				//fMin = 475Hz
-				//fMax = 32kHz
 
 				dist->lp3_state[0] += coff * (signal1 - dist->lp3_state[0]);
 				dist->lp3_state[1] += coff * (signal2 - dist->lp3_state[1]);
@@ -535,16 +428,14 @@ void Distortion_process(MasterDistortion *dist, int16_t *fxBuffer, int16_t* outL
 				dist->lastOut[0] = dist->lp3_state[0] * dist->p3;
 				dist->lastOut[1] = dist->lp3_state[1] * dist->p3;
 
+				float wet = audio_sample_bound((dist->lastOut[0]));
 
-				int16_t wet = __SSAT((int32_t)(dist->lastOut[0] * 32768.0f), 16);
-				//simd.word[0] = fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16);
-				int16_t wet2 = __SSAT((int32_t)(dist->lastOut[1] * 32768.0f), 16);
-				//simd.word[1] = fxBuffer[idx2] + __SSAT((wet2 - fxBuffer[idx2]) * dryWet,16);
+				float wet2 = audio_sample_bound((dist->lastOut[1]));
 
-				x = __PKHBT(fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16), fxBuffer[idx2] + __SSAT((wet2 - fxBuffer[idx2]) * dryWet,16), 16);
-				//add stereo samples using SIMD
-				*stereoOut = __QADD16(*stereoOut, x);
-				stereoOut++;
+				{ float pair[2] = {fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet)), fxBuffer[idx2] + (audio_mix_bound((wet2 - fxBuffer[idx2]) * dryWet))}; x[0]=pair[0]; x[1]=pair[1]; }
+
+				stereoOut[0] = audio_mix_add(stereoOut[0], x[0]); stereoOut[1] = audio_mix_add(stereoOut[1], x[1]);
+				stereoOut += 2;
 			}
 		}
 		else
@@ -553,51 +444,41 @@ void Distortion_process(MasterDistortion *dist, int16_t *fxBuffer, int16_t* outL
 			{
 
 				const uint8_t idx1 = i*2;
-				double signal1 = ( (fxBuffer[idx1])  ) / 32768.f;
+				float signal1 = ( (fxBuffer[idx1])  );
 
-				signal1 += dist->lastOut[0] * dist->p1 * 0.125;
+				signal1 += dist->lastOut[0] * dist->p1 * 0.125f;
 
-				dist->hp1_state[0] += 0.64116641920131193922 * (signal1 - dist->hp1_state[0]);
+				dist->hp1_state[0] += 0.64116641920131193922f * (signal1 - dist->hp1_state[0]);
 				signal1 = signal1 - dist->hp1_state[0];
 
-				//LP/HP around opAmp
-				//1 pole LP   1/(2*pi*R_dist*0.0000001)  min = 16kHz = 0.1025353241628911807
-				dist->lp1_state[0] += (1. - 0.1025353241628911807) * (signal1 - dist->lp1_state[0]);
+				dist->lp1_state[0] += (1.f - 0.1025353241628911807f) * (signal1 - dist->lp1_state[0]);
 				signal1 = dist->lp1_state[0];
 
-				// 1 HP poles 60Hz -> 0.99149556438154282898
-				dist->hp3_state[0] += (1. - 0.99149556438154282898) * (signal1 - dist->hp3_state[0]);
+				dist->hp3_state[0] += (1.f - 0.99149556438154282898f) * (signal1 - dist->hp3_state[0]);
 				signal1 = signal1 - dist->hp3_state[0];
 
-				dist->lp2_state[0] += (1. - 0.93130041642945205043) * (signal1 - dist->lp2_state[0]);
+				dist->lp2_state[0] += (1.f - 0.93130041642945205043f) * (signal1 - dist->lp2_state[0]);
 				signal1 = dist->lp2_state[0];
 
-				//voltage gain [1:2305]
 				signal1 *= gain;
 
-				//slew limit 0.3V/us 0-9V  =>  ~5.3khz
-				//SR = 44140Hz = 1 sample duration of 22,655... us
-				// slew limit = 22.655*0.3V = 6.79655641141821477118 V/sample
-				double diff = signal1 - dist->slewState[0];
-				double sign = diff > 0 ? 1. : -1.;
-				if(fabs(diff) > 6.79655641141821477118) diff = 6.79655641141821477118 * sign;
+				float diff = signal1 - dist->slewState[0];
+				float sign = diff > 0 ? 1.f : -1.f;
+				if(fabsf(diff) > 6.79655641141821477118f) diff = 6.79655641141821477118f * sign;
 				dist->slewState[0] += diff;
 
-				//we hard clip here to the opamp rails, even if soft clipping would be more appropriate
-				if(dist->slewState[0] > 4.2) dist->slewState[0]=4.2;
-				else if(dist->slewState[0] < -4.2) dist->slewState[0] = -4.2;
+				if(dist->slewState[0] > 4.2f) dist->slewState[0]=4.2f;
+				else if(dist->slewState[0] < -4.2f) dist->slewState[0] = -4.2f;
 
-				//diode clipping +/- 0.7V 1n914 use table_1n914
 				signal1 = diode(dist->slewState[0]);
 
 				dist->lp3_state[0] += coff * (signal1 - dist->lp3_state[0]);
 
 				dist->lastOut[0] = dist->lp3_state[0] * dist->p3;
 
-
-				int16_t wet = __SSAT((int32_t)(dist->lastOut[0] * 32768.0f), 16);
-				int16_t dw = fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16);
-				*outL = __QADD16(*outL, dw);
+				float wet = audio_sample_bound((dist->lastOut[0]));
+				float dw = fxBuffer[idx1] + (audio_mix_bound((wet - fxBuffer[idx1]) * dryWet));
+				*outL = audio_mix_add(*outL, dw);
 				outL += 2;
 			}
 		}

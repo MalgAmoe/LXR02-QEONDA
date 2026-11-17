@@ -115,7 +115,7 @@ void frontPanel_ccHandler()
 		if(kitNr >= NUM_KIT_SLOTS) return;
 		preset_loadDrumsetRam(kitNr, 0, 0);
 		menu_kitLoaded(kitNr);
-		preset_touchTimer(PRESET_KIT_TIMER);
+
 		menu_repaint();
 		return;
 	} else if(parNr == NRPN_DATA_ENTRY_COARSE-1) {

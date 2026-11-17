@@ -12,6 +12,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 #ifndef INC_SOUNDENGINE_DSPAUDIO_FX_RINGMOD_H_
 #define INC_SOUNDENGINE_DSPAUDIO_FX_RINGMOD_H_
 
@@ -32,7 +34,7 @@ typedef struct RingmodStruct
 
 
 void Ringmod_init(Ringmod *rm);
-void Ringmod_process(Ringmod *rm, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet);
+void Ringmod_process(Ringmod *rm, AudioSample*fxBuffer,AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet);
 void Ringmod_setFreq(Ringmod *rm, float f);
 void Ringmod_setWave(Ringmod *rm, uint8_t w);
 void Ringmod_resetPhase(Ringmod* rm);

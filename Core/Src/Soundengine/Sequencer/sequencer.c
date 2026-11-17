@@ -238,6 +238,23 @@ static void seq_activateTmpPattern()
 */
 //------------------------------------------------------------------------------
 
+// Only empty slots need inspection: 4 bars x 7 hit words, early exit.
+// Occupancy is history, not a current-silence test. Observe before removing hits.
+// Keep this scan out of line instead of duplicating it at every edit boundary.
+__attribute__((noinline))
+uint8_t seq_patternIsUsed(uint8_t pattern)
+{
+    if(!seq_patternSet.used[pattern])
+        for(uint8_t bar = 0; bar < NUM_BARS; bar++)
+            for(uint8_t track = 0; track < NUM_TRACKS; track++)
+                if(seq_patternSet.seq_mainSteps[bar][pattern][track])
+                {
+                    seq_patternSet.used[pattern] = 1;
+                    return 1;
+                }
+    return seq_patternSet.used[pattern];
+}
+
 void seq_copyPatternToBackupBuffer(uint8_t patternNr)
 {
 	memcpy(&patternBackupBuffer.seq_subStepPattern, &seq_patternSet.seq_subStepPattern[patternNr],  sizeof(Step)*NUM_TRACKS*NUM_STEPS);
@@ -252,6 +269,7 @@ void seq_copyPatternToBackupBuffer(uint8_t patternNr)
 
 	patternBackupBuffer.shuffle = seq_patternSet.shuffle[patternNr];;
 	patternBackupBuffer.kitNr = seq_patternSet.kitNr[patternNr];
+	patternBackupBuffer.used = seq_patternIsUsed(patternNr);
 
 }
 //------------------------------------------------------------------------------
@@ -267,6 +285,7 @@ void seq_copyBackupBufferToPattern(uint8_t patternNr)
 
 	seq_patternSet.shuffle[patternNr] = patternBackupBuffer.shuffle;
 	seq_patternSet.kitNr[patternNr] = patternBackupBuffer.kitNr;
+	seq_patternSet.used[patternNr] = patternBackupBuffer.used;
 }
 /*
 //------------------------------------------------------------------------------
@@ -690,9 +709,11 @@ IN_ITCM_RAM void seq_setPendingPatternActive()
 			seq_activateTmpPattern();
 		}
 		*/
-		//copy current backup to current slot (discarding unsaved changes)
-		seq_copyBackupBufferToPattern(seq_activePattern);
-		//copy pending pattern to backup buffer
+		//Observe occupancy before snapshotting; activation preserves the destination kit link.
+        seq_patternIsUsed(seq_activePattern);
+        seq_patternIsUsed(seq_pendingPattern);
+
+		// Snapshot the incoming pattern.
 		seq_copyPatternToBackupBuffer(seq_pendingPattern);
 
 		seq_activePattern = seq_pendingPattern;
@@ -712,7 +733,7 @@ IN_ITCM_RAM void seq_setPendingPatternActive()
 			preset_loadDrumsetRam(seq_patternSet.kitNr[seq_activePattern], 0, 1);
 			menu_selectedPresetNr[SAVE_TYPE_KIT] = seq_patternSet.kitNr[seq_activePattern];
 			menu_loadedPresetNr[CURRENT_KIT] = seq_patternSet.kitNr[seq_activePattern];
-			preset_touchTimer(PRESET_KIT_TIMER);
+
 		}
 
 		//use shuffle value from pattern
@@ -2026,14 +2047,17 @@ void seq_toggleStep(uint8_t voice, uint8_t stepNr, uint8_t patternNr)
 //------------------------------------------------------------------------------
 void seq_toggleMainStep(uint8_t voice, uint8_t stepNr, uint8_t patternNr)
 {
+    seq_patternIsUsed(patternNr);
 	const uint8_t bar 	= stepNr / 16;
 	const uint8_t shift = stepNr - bar*16;
 	seq_patternSet.seq_mainSteps[bar][patternNr][voice] ^= (1<<shift);
+    seq_patternIsUsed(patternNr);
     seq_slipStepWritten(patternNr, voice, stepNr);
 }
 //------------------------------------------------------------------------------
 void seq_setMainStep(uint8_t patternNr, uint8_t voice, uint8_t stepNr, uint8_t onOff)
 {
+    seq_patternIsUsed(patternNr);
 	const uint8_t bar 	= stepNr / 16;
 	const uint8_t shift = stepNr - bar*16;
 
@@ -2045,6 +2069,7 @@ void seq_setMainStep(uint8_t patternNr, uint8_t voice, uint8_t stepNr, uint8_t o
 	{
 		seq_patternSet.seq_mainSteps[bar][patternNr][voice] &= ~(1<<shift);
 	}
+    seq_patternIsUsed(patternNr);
     seq_slipStepWritten(patternNr, voice, stepNr);
 }
 //------------------------------------------------------------------------------
@@ -2136,7 +2161,7 @@ void seq_midiRunCleanup(uint8_t run)
         trigger_reset(0);
         midiParser_checkMtc();
     }
-    preset_touchTimer(run ? PRESET_STOP_PAT_TIMER : PRESET_PAT_TIMER);
+
 }
 
 void seq_midiClockAnchor(void)
@@ -2154,14 +2179,9 @@ void seq_setRunning(uint8_t isRunning)
 	seq_running = isRunning;
     sync_cancelPending();
     __set_PRIMASK(mask);
-	//jump to 1st step if sequencer is stopped
-	if(!seq_running)
+	// Position reset remains in seq_resetPosition().
+	if(seq_running)
 	{
-		preset_touchTimer(PRESET_PAT_TIMER);
-		//moved to seq_resetPosition()
-	} else {
-		//abort pattern save timer, since seq is running again...
-		preset_touchTimer(PRESET_STOP_PAT_TIMER);
 
 		trigger_clockReceived = 0;
 		seq_prescaleCounter = 0;
@@ -2735,6 +2755,7 @@ static void seq_resetNote(Step *step)
 //------------------------------------------------------------------------------
 void seq_clearTrack(uint8_t trackNr, uint8_t pattern)
 {
+    seq_patternIsUsed(pattern);
 	int k;
 	for(k=0;k<NUM_STEPS;k++)
 	{
@@ -2761,6 +2782,7 @@ void seq_clearPattern(uint8_t pattern)
 	int i;
 	for(i=0;i<NUM_TRACKS;i++)
 		seq_clearTrack(i, pattern);
+    seq_patternSet.used[pattern] = 0;
 }
 
 //------------------------------------------------------------------------------
@@ -2786,6 +2808,7 @@ void seq_clearAutomation(uint8_t trackNr, uint8_t pattern, uint8_t automTrack)
 //------------------------------------------------------------------------------
 void seq_copyTrack(uint8_t srcNr, uint8_t dstNr, uint8_t pattern)
 {
+    seq_patternIsUsed(pattern);
 	// todo this fn and the next are very similar. Add a new fn that takes src, dest track and src, dest pat
 	// and then have these two fn's call it instead.
 	int k;
@@ -2810,12 +2833,14 @@ void seq_copyTrack(uint8_t srcNr, uint8_t dstNr, uint8_t pattern)
 
 	// copy length and rotation offset from source track
 	seq_patternSet.length[pattern][dstNr] = seq_patternSet.length[pattern][srcNr];
+    seq_patternIsUsed(pattern);
 
 
 }
 //------------------------------------------------------------------------------
 void seq_copyPattern(uint8_t src, uint8_t dst)
 {
+    const uint8_t used = seq_patternIsUsed(src);
 	int k,j;
 	Step *psrc, *pdst;
 	for(j=0;j<NUM_TRACKS;j++)
@@ -2846,6 +2871,7 @@ void seq_copyPattern(uint8_t src, uint8_t dst)
 		seq_patternSet.shuffle[dst] = seq_patternSet.shuffle[src];
 		seq_patternSet.kitNr[dst] = seq_patternSet.kitNr[src];
 	}
+    seq_patternSet.used[dst] = used;
 }
 //------------------------------------------------------------------------------
 void seq_setActiveAutomationTrack(uint8_t trackNr)

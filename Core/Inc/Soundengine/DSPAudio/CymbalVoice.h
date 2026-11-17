@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 #ifndef CYMBALVOICE_H_
 #define CYMBALVOICE_H_
@@ -78,7 +80,7 @@ void Cymbal_init();
 
 void Cymbal_trigger( const uint8_t vel, const uint8_t note);
 void Cymbal_updatePan();
-void Cymbal_calcSyncBlock(int16_t* buf, const uint8_t size);
+void Cymbal_calcSyncBlock(AudioSample* buf, const uint8_t size);
 
 /** calculate envelopes etc (all 16 samples */
 void Cymbal_calcAsync();

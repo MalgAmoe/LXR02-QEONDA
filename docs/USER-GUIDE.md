@@ -1,4 +1,10 @@
-# QEONDA 0.1 — controls and compatibility
+# QEONDA 0.2 controls and compatibility
+
+Version **0.2** identifies the current local build, not a published release.
+This guide includes
+pending development navigation for Last Step, Config and load/save dialogs; those
+latest changes are not yet hardware-accepted. Audio uses normalized float32 with
+clipped, padded 24-bit output.
 
 A supplement to the stock desktop LXR manual. For downloads and installation, see
 [the README](../README.md#download-and-install).
@@ -54,11 +60,45 @@ patterns and the bar buttons select pattern banks; LEDs show playing/pending sel
 Voice or PERF exits selection without an extra step-edit toggle or PERF bank change
 when returning to the same control page. The current page and selected parameter are
 retained; knobs and encoder continue editing those controls. Copy does not exit this
-view, and subpage buttons are inactive while selecting patterns. Step buttons select
+view. An ordinary voice-button press from voice or FX controls exits to Voice,
+selects that voice and opens the current edit section's first screen. From PERF,
+voice buttons still mute and remain in selection. An ordinary edit-section button
+(OSC, AEG, etc.) from voice, FX or PERF exits to Voice on the current voice and
+opens that section's first screen; subsequent presses cycle normally. These shortcuts
+exclude Shift, held Copy, active copy/clear and erase. Step buttons select
 patterns rather than playing PERF rolls or momentarily muting programmed hits.
 Pattern saving remains a separate operation.
 Kit autoload still replaces sound settings, including the displayed FX type. Ordinary
 knob recording still targets the playing pattern, not a pending selection.
+
+In either Last Step mode (track or all tracks), an ordinary edit-section button
+exits to Voice on the current voice and opens that section's first screen. The
+same modifier exclusions apply. Voice buttons still select the track whose length
+you are editing.
+
+From Config, an ordinary voice button exits to Voice on the selected voice at
+OSC’s first screen (the Config index is not an edit section). An ordinary
+edit-section button exits on the current voice at the requested section’s first
+screen. The same modifier exclusions apply; Voice/Edit also retains its existing
+exit behavior.
+
+## Leaving load/save dialogs
+
+In Kit, Morph, Song and Project load/save dialogs (including name editing and
+confirmation), an ordinary voice button leaves for that voice at OSC’s first
+screen. An ordinary edit-section button leaves for the current voice at that
+section’s first screen. This also works in Save+Pattern slot selection and on
+the Kit/Pattern saved messages. Shift, physical Copy, active copy/clear and erase
+keep their existing routes rather than taking these exits.
+
+Leaving does not confirm a save/load, and does not undo an operation already
+completed. A held slot/shortcut pad is consumed on exit: releasing it does not
+write a step. Saved messages cannot later time out back over your chosen page.
+This is cancellation of the dialog, not rollback of UI edits: browsed slot
+selections remain selected, and existing eager in-memory name changes (such as
+initializing an empty name to “Unnamed”) are not restored. Unconfirmed name-buffer
+edits are not committed by this exit. Use Save Project for disk persistence of
+completed RAM saves as usual.
 
 ## Selected-track rotation
 
@@ -73,7 +113,7 @@ unchanged. Playback continues. Rotation is not available in pattern selection/li
 other modes, dialogs or Copy/Clear; their encoder behavior is unchanged. Encoder
 click is unchanged. Recording continues at the current playhead. Already-issued triggers are not
 retracted; subsequent sequencer reads use the rotated data. Save the pattern normally
-to keep the edit. This does not change the saved pattern format.
+to commit it to a RAM slot; save the project to keep it across power-off.
 
 ## Master filters
 
@@ -109,26 +149,81 @@ record step locks or automatically save the kit. Save the project explicitly.
 | Startup | Reset to bypass | Defaults to bypass before project settings load |
 | Kit/pattern load or ordinary Reload | Retained | Retained |
 | Shift+Reload | Reset to bypass | Retained |
-| Project load | Retained | Loaded from project, or bypass defaults for older files |
+| Project load | Retained | Loaded from the saved project |
 | Project save | Not stored | Stored |
 
-### Project compatibility
+### Saving and restart
 
-Compressor settings use an eight-byte extension after the legacy 30-byte globals
-file. Older firmware ignores the extension; saving globals with older firmware
-removes it. Loading that rewritten project in QEONDA restores compressor defaults
-with ratio1 bypass. Missing or invalid extensions also use bypass defaults.
+Kit, Pattern and Song Save store/copy slots **in RAM only**. Global changes also
+remain in RAM. **Save Project** is the disk-save action: it includes the current
+edited kit, every RAM kit/pattern/song slot, names and project/global controls.
+Kit Save selects the saved slot as the loaded kit and assigns it to the currently
+active pattern; other patterns are unchanged. Save Morph does not change these
+assignments. Save Project is required to retain the assignment across restart.
+Song Save As copies the current song into the chosen RAM slot and selects it.
+
+Boot restores the last explicitly saved project, not the last project you merely
+loaded. A missing project starts initialized RAM without automatically saving it.
+There is no temporary-file recovery or background autosave: power-off discards
+changes since Project Save. Reload is unchanged and is not a disk-project reload.
+
+**Compatibility warning:** projects use a new single-file format
+(`/projNN/project.qpr`). There is no old multi-file project importer or converter;
+legacy projects and tmp/global files are not imported or recovered. A legacy slot
+folder without `project.qpr` appears **Empty** and loading it initializes defaults,
+not the old project. QEONDA projects cannot be loaded by stock/older multi-file
+firmware: there is no reverse compatibility.
+
+**Before using QEONDA, retain your original card/backups untouched and use a
+separate FAT32 card. Do not save on your only legacy card.** Save Project stages a
+new directory and replaces the selected slot directory; cleanup can delete the
+legacy files in that slot. An Empty label is not permission to overwrite an old
+folder safely. There is no automatic migration or recovery of that work.
+See [storage rationale and measured tradeoffs](PROJECT-STORAGE.md#why-change-the-format).
+Staged saves are not a guarantee against power loss or card failure.
+
+Save/load do not automatically stop playback. **Saving Project** remains displayed until completion; a post-save warning
+can mean cleanup or the boot-selection index could not be updated even though
+the project file was published.
 
 A failed project load is not an all-or-nothing rollback: depending on where it fails,
 previous or target compressor settings may remain. Reload the intended project
 successfully, or select ratio1 to bypass compression. Do not assume temporary files
 provide automatic recovery of unsaved settings.
 
+## Empty and used patterns
+
+In live pattern selection (Shift+Pattern or Load+Pattern), used slots are
+steadily lit and empty slots are dark. The current pattern flashes fast; a
+queued, different pattern flashes at half that rate. These markers override
+occupancy even for empty slots, and only appear in the displayed bank. Flashing
+follows the existing sequencer LED clock. Bank changes redraw the slots; leaving
+selection restores the normal step LEDs/chase. Save+Pattern LEDs are unchanged.
+
+New pattern slots are empty. Selecting any slot preserves its stored kit link.
+Empty and used slots follow the same pattern kit mode: auto loads the linked RAM
+kit; manual/off keeps current sounds. Skip-next suppresses one kit autoload, then
+returns to auto. Enabling its first step makes a slot **used**. Removing the last
+hit individually, clearing tracks, or replacing generated hits does not
+make a used pattern empty: silent used patterns keep ordinary kit-change behavior.
+Only an explicit whole-pattern erase resets a slot to empty.
+
+Whole-pattern copy and pattern Save As carry the source's kit link unchanged and
+its empty/used status, including a silent used source. Track/bar copies and
+recording/generation that add hits make an empty pattern used. Automation alone does not mark a pattern used.
+
+Project saving retains this status, including silent-used history.
+Unsaved sound edits need **Save Project** for disk persistence.
+
 ## Shift+Reload
 
-Clears morph, requests current-pattern reload, resets filters, and reloads the selected
-kit from **RAM, not disk**. Pattern activation follows existing running/stopped timing;
-a linked pattern kit may subsequently replace the selected kit. PERF is refreshed.
+Clears morph, resets filters, cancels Looping, and reloads the selected kit from
+**RAM, not disk**. Pattern data, sequencer position and any queued pattern are unchanged.
+PERF is refreshed. A queued pattern still activates normally: used patterns follow
+their kit link; empty patterns retain the sounds present at activation.
+
+Pattern edits remain in RAM across pattern switches. Save-as copies edits to the new
+slot and retains them in the source slot. Save the project to retain edits on disk.
 This is not an atomic reset of every setting; compressor controls are retained.
 
 ## Shift+knob change-all
@@ -159,3 +254,15 @@ is not implemented.
 
 Play and both bar/bank buttons respond immediately. Each rearms independently
 after 20 ms of stable release, suppressing contact-bounce repeats in all modes.
+
+## Screensaver
+
+When enabled, the screensaver starts after **120 seconds** without qualifying
+control activity. It is enabled by default; the Global menu's screensaver on/off
+control enables or disables it. Save Project to retain that setting.
+
+Control buttons, data-encoder turns/clicks and parameter knobs wake the display
+and reset the inactivity timer. The waking action continues through its normal
+control handler; it is not generally swallowed. A waking encoder click does not
+toggle ordinary parameter edit mode, though context-specific click actions still
+apply. Faders are not claimed as wake controls.

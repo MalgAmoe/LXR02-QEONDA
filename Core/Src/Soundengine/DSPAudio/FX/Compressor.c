@@ -12,10 +12,11 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 #include "Soundengine/DSPAudio/FX/Compressor.h"
 #include "math.h"
 #include "main.h"
-
 
 enum
 {
@@ -27,7 +28,7 @@ enum
 	RATIO_8
 };
 
-static const double DC_OFFSET = 1.0E-25;
+static const AudioReal DC_OFFSET = 1.0E-25;
 
 void Compressor_init(Compressor *c)
 {
@@ -42,14 +43,14 @@ void Compressor_init(Compressor *c)
 }
 
 // linear -> dB conversion
-static double lin2dB( double lin ) {
-	static const double LOG_2_DB = 8.6858896380650365530225783783321;	// 20 / ln( 10 )
+static AudioReal lin2dB( AudioReal lin ) {
+	static const AudioReal LOG_2_DB = 8.6858896380650365530225783783321;	// 20 / ln( 10 )
 	return logf( lin ) * LOG_2_DB;
 }
 
 // dB -> linear conversion
-static double dB2lin( double dB ) {
-	static const double DB_2_LOG = 0.11512925464970228420089957273422;	// ln( 10 ) / 20
+static AudioReal dB2lin( AudioReal dB ) {
+	static const AudioReal DB_2_LOG = 0.11512925464970228420089957273422;	// ln( 10 ) / 20
 	return expf( dB * DB_2_LOG );
 }
 
@@ -101,55 +102,46 @@ void Compressor_setRatio(Compressor *c, uint8_t r)
 	}
 }
 
-void Compressor_process(Compressor *c, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet)
+void Compressor_process(Compressor *c, AudioSample*fxBuffer,AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet)
 {
 
+	float x[2];
+	AudioSample* stereoOut = outL;
 
-	int32_t x;
-	int32_t* stereoOut = (int32_t*)outL;
-
-	int16_t left[size];
-	int16_t right[size];
+	float left[size];
+	float right[size];
 
 	if(channels==2)
 	{
 
 		for(uint8_t i=0; i<size;i++)
 		{
-			//--- Compressor ---
-			float in = 0.5 * (fxBuffer[i*2]/32768.f) + 0.5 * (fxBuffer[i*2+1]/32768.f);
-			double peak = fabs(in);
 
-			//value over thresh
+			float in = 0.5f * (fxBuffer[i*2]) + 0.5f * (fxBuffer[i*2+1]);
+			AudioReal peak = fabs(in);
+
 			peak += DC_OFFSET;
-			double peakdB = lin2dB(peak);
-			double overdB = peakdB - c->tresh;
-			if ( overdB < 0.0 )
-				overdB = 0.0;
+			AudioReal peakdB = lin2dB(peak);
+			AudioReal overdB = peakdB - c->tresh;
+			if ( overdB < 0.0f )
+				overdB = 0.0f;
 
-			// dynamic selection: attack or release?
-			double  coeff = overdB > c->env ? c->attack : c->release;
+			AudioReal  coeff = overdB > c->env ? c->attack : c->release;
 			c->env = overdB + coeff * (c->env - overdB);
-			//c->env = c->env + (1-coeff) * (overdB -c->env); //should be the same as above, without 1-
 
-			double gr = c->env * (c->ratio - 1.0);
+			AudioReal gr = c->env * (c->ratio - 1.0f);
 			gr = dB2lin(gr);
-			//debugWatch = gr;
 
-			left[i]  = __SSAT(fxBuffer[i*2] * gr * c->markupGain, 16);//gain;
-			right[i] = __SSAT(fxBuffer[i*2+1] * gr * c->markupGain, 16);//gain;
+			left[i]  = audio_sample_bound(fxBuffer[i*2] * gr * c->markupGain);
+			right[i] = audio_sample_bound(fxBuffer[i*2+1] * gr * c->markupGain);
 
-
-			//--- Output transfer ---
-			//TODO can be optimized quite a bit with SIMD
 			const uint8_t idx1 = i*2;
 			const uint8_t idx2 = i*2+1;
-			//int16_t wet = __SSAT((int32_t)(left[i] * 32768.0f), 16);
-			//int16_t wet2 = __SSAT((int32_t)(right[i] * 32768.0f), 16);
-			x = __PKHBT(fxBuffer[idx1] + __SSAT((left[i] - fxBuffer[idx1]) * dryWet,16), fxBuffer[idx2] + __SSAT((right[i] - fxBuffer[idx2]) * dryWet,16), 16);
-			//int16_t dw = fxBuffer[i] + __SSAT((wet - fxBuffer[i]) * dryWet,16);
-			*stereoOut = __QADD16(*stereoOut, x);
-			stereoOut++;
+
+			{ float pair[2] = {fxBuffer[idx1] + (audio_mix_bound((left[i] - fxBuffer[idx1]) * dryWet)), fxBuffer[idx2] + (audio_mix_bound((right[i] - fxBuffer[idx2]) * dryWet))}; x[0]=pair[0]; x[1]=pair[1]; }
+
+			stereoOut[0] = audio_mix_add(stereoOut[0], x[0]); stereoOut[1] = audio_mix_add(stereoOut[1], x[1]);
+			stereoOut += 2;
 		}
 	}
 	else
@@ -157,32 +149,26 @@ void Compressor_process(Compressor *c, int16_t *fxBuffer,int16_t* outL, int16_t*
 		for(uint8_t i=0; i<size;i++)
 		{
 			const uint8_t idx1 = i*2;
-			//--- Compressor ---
-			float in = fxBuffer[idx1]/32768.f;
-			double peak = fabs(in);
 
-			//value over thresh
+			float in = fxBuffer[idx1];
+			AudioReal peak = fabs(in);
+
 			peak += DC_OFFSET;
-			double peakdB = lin2dB(peak);
-			double overdB = peakdB - c->tresh;
-			if ( overdB < 0.0 )
-				overdB = 0.0;
+			AudioReal peakdB = lin2dB(peak);
+			AudioReal overdB = peakdB - c->tresh;
+			if ( overdB < 0.0f )
+				overdB = 0.0f;
 
-			// dynamic selection: attack or release?
-			double  coeff = overdB > c->env ? c->attack : c->release;
+			AudioReal  coeff = overdB > c->env ? c->attack : c->release;
 			c->env = overdB + coeff * (c->env - overdB);
-			//c->env = c->env + (1-coeff) * (overdB -c->env); //should be the same as above, without 1-
 
-			double gr = c->env * (c->ratio - 1.0);
+			AudioReal gr = c->env * (c->ratio - 1.0f);
 			gr = dB2lin(gr);
-			//debugWatch = gr;
 
-			left[i]  = __SSAT(fxBuffer[idx1] * gr * c->markupGain, 16);//gain;
+			left[i]  = audio_sample_bound(fxBuffer[idx1] * gr * c->markupGain);
 
-
-			//--- Output transfer ---
-			const int16_t dw = fxBuffer[idx1] + __SSAT((left[i] - fxBuffer[idx1]) * dryWet,16);
-			*outL = __QADD16(*outL, dw);
+			const float dw = fxBuffer[idx1] + (audio_mix_bound((left[i] - fxBuffer[idx1]) * dryWet));
+			*outL = audio_mix_add(*outL, dw);
 			outL += 2;
 		}
 	}

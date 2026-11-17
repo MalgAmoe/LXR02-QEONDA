@@ -1,4 +1,5 @@
 #include "Soundengine/DSPAudio/MainDjFilter.h"
+#include "Soundengine/AudioSample.h"
 #include <math.h>
 #include "Soundengine/DSPAudio/MainCompressor.h"
 #ifndef LXR_HOST_TEST
@@ -99,7 +100,8 @@ static void processStage(FilterStage *s, float x[2], unsigned highpass)
         x[c] += s->wet*(filtered-x[c]);
     }
 }
-void MainDjFilter_process(int16_t *buffer, unsigned frames)
+#include "Soundengine/AudioOutput24.h"
+void MainDjFilter_process24(const AudioSample *buffer, int16_t *packed, unsigned frames)
 {
     unsigned compress=MainCompressor_beginBlock();
     uint32_t saved = lockTargets();
@@ -123,16 +125,18 @@ void MainDjFilter_process(int16_t *buffer, unsigned frames)
             state.k += state.dk;
             if (!--state.rampK) state.k=state.goalK;
         }
-        if (state.hp.wet == 0.f && state.lp.wet == 0.f && !compress) continue;
+        if (state.hp.wet == 0.f && state.lp.wet == 0.f && !compress) {
+            audio_output24_store(packed+4*i, (float)buffer[2*i]);
+            audio_output24_store(packed+4*i+2, (float)buffer[2*i+1]);
+            continue;
+        }
         float x[2]={(float)buffer[2*i], (float)buffer[2*i+1]};
         processStage(&state.hp, x, 1);
         processStage(&state.lp, x, 0);
         if (compress) MainCompressor_processPair(x);
         for (unsigned c=0; c<2; ++c) {
-            /* The sole conversion/clamp is after the float HP -> LP chain. */
-            if (x[c]>32767.f) x[c]=32767.f;
-            if (x[c]< -32768.f) x[c]= -32768.f;
-            buffer[2*i+c]=(int16_t)x[c];
+            /* Final 24-bit encoding bounds after HP -> LP -> compressor. */
+            audio_output24_store(packed+4*i+2*c, x[c]);
         }
     }
 }

@@ -12,6 +12,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 #ifndef INC_SOUNDENGINE_DSPAUDIO_FX_COMPRESSOR_H_
 #define INC_SOUNDENGINE_DSPAUDIO_FX_COMPRESSOR_H_
 #include "Soundengine/globals.h"
@@ -28,10 +30,10 @@ typedef struct CompressorStruct
 	float ratio;
 	float markupGain;
 
-	//double filter;
+	//AudioReal filter;
 	// envelope
-	double  env;
-	//double rms;
+	AudioReal  env;
+	//AudioReal rms;
 
 
 } Compressor;
@@ -39,7 +41,7 @@ typedef struct CompressorStruct
 
 
 void Compressor_init(Compressor *c);
-void Compressor_process(Compressor *c, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet);
+void Compressor_process(Compressor *c, AudioSample*fxBuffer,AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet);
 void Compressor_setAttack(Compressor *c, float a);
 void Compressor_setTreshold(Compressor *c, float t);
 void Compressor_setRelease(Compressor *c, float t);

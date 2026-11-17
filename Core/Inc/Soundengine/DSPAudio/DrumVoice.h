@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 #ifndef DRUMVOICE_H_
 #define DRUMVOICE_H_
@@ -47,7 +49,7 @@ typedef struct VoiceStruct
 	float 	triggeredPanR;
 	//float 		panModifier;
 
-	int16_t 	oscSample;
+	AudioSample 	oscSample;
 
 	DecayEg		oscPitchEg;
 	float		egPitchModAmount;
@@ -70,8 +72,8 @@ typedef struct VoiceStruct
 #endif
 
 #if (AMP_EG_SYNC==0)
-	double ampFilterInput;
-	double lastGain;
+	AudioReal ampFilterInput;
+	AudioReal lastGain;
 #endif
 
 #if ENABLE_MIX_OSC
@@ -108,7 +110,7 @@ void Drum_trigger(const uint8_t voiceNr, const uint8_t vol, const uint8_t note);
 void Drum_updatePan(const uint8_t voiceNr);
 
 /** block based calculation*/
-void calcDrumVoiceSyncBlock(const uint8_t voiceNr, int16_t* buf, const uint8_t size);
+void calcDrumVoiceSyncBlock(const uint8_t voiceNr, AudioSample* buf, const uint8_t size);
 
 /** calculate envelopes etc (all 16 samples */
 void calcDrumVoiceAsync(const uint8_t voiceNr);

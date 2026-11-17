@@ -12,6 +12,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 #ifndef INC_SOUNDENGINE_FXBUS_H_
 #define INC_SOUNDENGINE_FXBUS_H_
 
@@ -63,7 +65,7 @@ typedef struct FxStruct
 extern INDTCMZ FxBus fxBus;
 
 void FxBus_init();
-void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,int16_t* outL2, int16_t* outR2, uint32_t size);
+void FxBus_process(AudioSample*fxBuffer, AudioSample* outL,AudioSample* outR,AudioSample* outL2, AudioSample* outR2, uint32_t size);
 void FxBus_setParameter(uint8_t idx, float value);
 void FxBus_updateParameter();
 //to prevent NaN pollution from delay

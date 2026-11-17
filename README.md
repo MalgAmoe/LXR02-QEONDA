@@ -1,4 +1,4 @@
-# LXR QEONDA 0.1
+# LXR QEONDA 0.2
 
 Custom firmware for the Erica Synths LXR-02 desktop drum machine, based on the
 [open-source LXR V2 firmware by Erica Synths](https://github.com/erica-synths/lxr-desktop-app).
@@ -6,10 +6,31 @@ Custom firmware for the Erica Synths LXR-02 desktop drum machine, based on the
 **LXR QEONDA is unofficial firmware. It is not affiliated with, endorsed by or
 approved by Erica Synths. Installation and use are at your own risk.**
 
-**Version 0.1 is feature-frozen.** Further work focuses on documentation and fixes
-for confirmed bugs rather than new features.
+**Version 0.2 is the current local development build, not a published release.**
+
+## Project compatibility — read before installing
+
+**QEONDA uses `/projNN/project.qpr`, a new, incompatible project format.**
+There is no old multi-file project importer or converter, and QEONDA projects
+cannot be loaded by stock/older multi-file firmware. A legacy folder without
+`project.qpr` appears **Empty** and loads defaults, not your old work.
+
+**Do not use your only legacy card: Save Project may replace that slot's entire
+legacy directory and delete its files.** Retain your original card/backups untouched
+and use a separate FAT32 card for QEONDA. Kit/Pattern/Song/Globals Save are RAM-only;
+**Save Project** is required for SD durability. See [storage and restart](docs/USER-GUIDE.md#saving-and-restart)
+for practical guidance and [format rationale and measurements](docs/PROJECT-STORAGE.md#why-change-the-format)
+for the tradeoff.
 
 ## Features
+
+Version 0.2 brings together single-file project storage (see the
+compatibility warning above), normalized float32 audio with clipped, padded 24-bit
+output, Save Kit linking to the active pattern, improved pattern/edit navigation
+and responsive screensaver wake. Current development also includes pending Last
+Step, Config and load/save dialog exits with held-pad release handling; these
+latest navigation changes still need hardware acceptance. See the
+[current controls](docs/USER-GUIDE.md).
 
 - Momentary pattern mute: hold button 8 in PERF mode to mute programmed hits while keeping rolls available. Release to bring the pattern back in, still in time.
 - Looping: in PERF buttons 9–12 for 2/4/6/8-step loop while the real playhead keeps advancing. First-held FIFO ownership; see the [control guide](docs/USER-GUIDE.md).
@@ -23,8 +44,8 @@ for confirmed bugs rather than new features.
 
 ## Download and install
 
-Published firmware builds are available under [GitHub Releases](https://github.com/MalgAmoe/LXR02-QEONDA/releases).
-Download **`LXR_QEONDA_V0.1.img`** and **`SHA256SUMS`** from the same release—not the
+Version 0.2 is local and not published. Published builds, when available, are under [GitHub Releases](https://github.com/MalgAmoe/LXR02-QEONDA/releases).
+Download **`LXR_QEONDA_V0.2.img`** and **`SHA256SUMS`** from the same release—not the
 GitHub source-code ZIP. If no release has been published yet, build from source below.
 You do not need to compile a published image.
 
@@ -71,8 +92,8 @@ three banks; the four knobs control the following, left to right:
   older projects without compressor settings default to bypass. Kit/pattern loads and
   Shift+Reload do not reset compression. Save the project explicitly to retain edits.
 - **Shift+Reload:** clears morph, resets the master filters and reloads the selected kit
-  from **RAM—not from disk**. Existing pattern/kit-link behavior still applies; this is
-  not a reset of every setting.
+  from **RAM—not from disk** and cancels Looping. Pattern edits, position and queued
+  selection are unchanged. Pattern edits survive switching; save the project for disk persistence.
 - **Shift+knob change-all:** on ordinary voice pages, changes the same knob slot across
   the seven tracks, relative to each parameter's own original kit value and limits.
   Different engines can have different functions in that slot—this is intentional.
@@ -101,7 +122,7 @@ cmake --build --preset release
 ```
 
 If needed, configure with `-DARM_TOOLCHAIN_DIR=/path/to/arm-none-eabi/bin`.
-The resulting image is `build/release/LXR_QEONDA_V0.1.img`; install it using the steps above.
+The resulting image is `build/release/LXR_QEONDA_V0.2.img`; install it using the steps above.
 
 ## Documentation
 

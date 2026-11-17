@@ -209,15 +209,17 @@ add_test(NAME test_main_dj_filter_ui
 lxr_add_host_test(test_main_compressor SOURCES test_main_compressor.c)
 target_link_libraries(test_main_compressor PRIVATE m)
 
-add_test(NAME test_master_comp_persistence
-    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
-            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_master_comp_persistence.py)
+foreach(case persistence save)
+    add_test(NAME test_project_${case}
+        COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+                ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_project_runtime.py ${case})
+endforeach()
 
 add_test(NAME test_master_compressor_ui
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_master_compressor_ui.py)
 
-foreach(case master_comp_save master_comp_publication)
+foreach(case master_comp_publication)
     add_test(NAME test_${case}
         COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
                 ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_${case}.py)
@@ -231,9 +233,9 @@ add_test(NAME test_change_all
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
             ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_change_all.py)
 
-add_test(NAME test_pattern_select
+add_test(NAME test_panel_navigation
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
-            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pattern_select.py)
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_panel_navigation.py)
 
 add_test(NAME test_track_rotation
     COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
@@ -242,3 +244,93 @@ add_test(NAME test_track_rotation
 add_test(NAME test_slip_core COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}" ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_slip_core.py)
 
 add_test(NAME test_slip_led COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}" ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/check_slip_led.py)
+
+add_test(NAME test_pattern_occupancy
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pattern_occupancy.py)
+
+lxr_add_host_test(test_project_stream
+    SOURCES test_project_stream.c
+    FIRMWARE_SOURCES Core/Src/Preset/ProjectStream.c
+)
+
+lxr_add_host_test(test_project_codec
+    SOURCES test_project_codec.c
+    FIRMWARE_SOURCES Core/Src/Preset/ProjectStream.c Core/Src/Preset/ProjectCodec.c
+)
+
+add_test(NAME test_project_callsites
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_project_callsites.py)
+
+lxr_add_host_test(test_main_output24 SOURCES test_main_output24.c)
+target_link_libraries(test_main_output24 PRIVATE m)
+
+add_executable(test_audio_float32 test_audio_float32.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/FxBus.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/DrumVoice.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/Snare.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/HiHat.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/CymbalVoice.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/ResonantFilter.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/distortion.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/transientGenerator.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/transientTables.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/Oscillator.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/wavetable.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/1PoleLp.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/FX/FxRamBuffer.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/FX/Delay.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/FX/Distortion.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/FX/Compressor.c
+    ${LXR_SOURCE_DIR}/Core/Src/Soundengine/DSPAudio/FX/Ringmod.c
+)
+target_link_libraries(test_audio_float32 PRIVATE lxr_test_common m)
+# Exercise the actual renderer body without unrelated engine init/background I/O.
+# Reconfigure when its owner changes; no copied implementation fixture to drift.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${LXR_SOURCE_DIR}/Core/Src/Soundengine/Soundengine.c")
+file(READ "${LXR_SOURCE_DIR}/Core/Src/Soundengine/Soundengine.c" engine_source)
+string(FIND "${engine_source}" "uint8_t soundengine_calcNextSampleBlock()" renderer_start)
+string(FIND "${engine_source}" "void soundengine_init()" renderer_end)
+math(EXPR renderer_length "${renderer_end} - ${renderer_start}")
+string(SUBSTRING "${engine_source}" ${renderer_start} ${renderer_length} renderer_body)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/float_renderer.h" "${renderer_body}")
+target_include_directories(test_audio_float32 PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_options(test_audio_float32 PRIVATE -ffunction-sections -fdata-sections)
+if(APPLE)
+    target_link_options(test_audio_float32 PRIVATE -Wl,-dead_strip)
+else()
+    target_link_options(test_audio_float32 PRIVATE -Wl,--gc-sections)
+endif()
+add_test(NAME test_audio_float32 COMMAND test_audio_float32)
+
+# Focused clipping regressions share the same production path.
+get_target_property(float_sources test_audio_float32 SOURCES)
+list(REMOVE_ITEM float_sources test_audio_float32.c)
+add_executable(test_float_mix_clip test_float_mix_clip.c ${float_sources})
+target_link_libraries(test_float_mix_clip PRIVATE lxr_test_common m)
+target_include_directories(test_float_mix_clip PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_options(test_float_mix_clip PRIVATE -ffunction-sections -fdata-sections)
+if(APPLE)
+    target_link_options(test_float_mix_clip PRIVATE -Wl,-dead_strip)
+else()
+    target_link_options(test_float_mix_clip PRIVATE -Wl,--gc-sections)
+endif()
+add_test(NAME test_float_mix_clip COMMAND test_float_mix_clip)
+
+# Frozen baseline observations; no Git-history dependency for ordinary runs.
+add_test(NAME test_audio_normalized
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_audio_normalized.py)
+
+add_test(NAME test_save_kit
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_save_kit.py)
+
+add_test(NAME test_screensaver_wake
+    COMMAND ${CMAKE_COMMAND} -E env "CC=${CMAKE_C_COMPILER}"
+            ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_screensaver_wake.py)
+
+add_test(NAME test_release_metadata
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_release_metadata.py)

@@ -47,39 +47,9 @@ void preset_init(uint8_t presetNr);
 
 #define SKIP_NEXT_KIT_AUTOLOAD 2
 
-//-----------------------------------------------------------------
-// autosave timer
-// after a kit/pat is changed, wait a while, then autosave
-typedef enum
-{
-	PRESET_KIT_TIMER,
-	PRESET_PAT_TIMER,
-	PRESET_STOP_PAT_TIMER
-} PresetTimer;
-
-
-FRESULT preset_LoadTmpKit();
-FRESULT preset_LoadTmpPat();
-FRESULT preset_initTmpFolder(void);
-void preset_touchTimer(PresetTimer type);
-void preset_processTimer();
-FRESULT preset_clearTmpFolder();
-void preset_resetAllSaveTimers();
-//load all manually saved kits and patterns found in the tmp folder
-FRESULT loadTmpFolderFiles();
-
-
-
+// Historical SD-named save entry points now commit RAM only.
 FRESULT preset_savePatternSD(uint8_t presetNr);
-FRESULT preset_loadPatternSD(uint8_t presetNr);
-
-/** save the parameters of all 6 voices + LFO settings to a file on the SD card 
-if isMorph==1 the sound will be loaded into the morph buffer
-*/
-
-//load/save drumset from/to SD card
 FRESULT preset_saveDrumsetSD(uint8_t presetNr, uint8_t isMorph);
-FRESULT preset_loadDrumsetSD(uint8_t presetNr, uint8_t isMorph);
 //copy drumset to/from edit buffer
 void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmediate);
 void preset_saveDrumsetRam(uint8_t presetNr, uint8_t isMorph);
@@ -97,9 +67,10 @@ void preset_loadDefaultGlobals();
 FRESULT preset_saveProject(uint8_t presetNr);
 FRESULT preset_loadProject(uint8_t presetNr, uint8_t clearTmp);
 FRESULT preset_createProject(uint8_t presetNr);
+// Boot last explicitly saved selection; missing storage initializes RAM only.
+FRESULT preset_bootProject(uint8_t *project);
 void preset_loadProjectNames(uint8_t projectNr);
 
-FRESULT preset_loadSongSD(uint8_t songNr);
 FRESULT preset_saveSongSD(uint8_t songNr);
 
 //char* preset_loadName(uint8_t presetNr, uint8_t nameBufferIdx, uint8_t what);

@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 #include "Soundengine/DSPAudio/Oscillator.h"
 #include "Soundengine/DSPAudio/random.h"
@@ -52,28 +54,28 @@ static __inline uint32_t freq2PhaseIncr32767(const float f)
 	return (((1024*f)/REAL_FS))*131072 ; //(<<17)
 }
 //-----------------------------------------------------------
-IN_ITCM_RAM void calcSineBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain)
+IN_ITCM_RAM void calcSineBlock(OscInfo* osc, AudioSample* buf, const uint8_t size ,const float gain)
 {
 	//tablesize 4096 => 0b111111111111 -> 12 bits
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
 		const uint32_t oscPhase = osc->phase;
-		int16_t oscOut;
+		AudioSample oscOut;
 
 		const uint32_t index =  oscPhase;
 		uint32_t  itg	= index>>20; // 12 msb as itg index
 
 		#if INTERPOLATE_OSC
-			oscOut = sine_table[itg++];
+			oscOut = (sine_table[itg++] * (1.f/32768.f));
 
 			//const float frac = (index&0x7ffff)*0.0000019073486328125f;  // 1/0x7ffff = 0.0000019073486328125f
 			//oscOut += frac*(sine_table[itg] - oscOut);
 			//a + t * (b - a);
 			uint32_t frac = index&0xFFFFF;
-			oscOut = oscOut + (int16_t)(((int64_t)(sine_table[itg] - oscOut) * frac)   >>20);
+oscOut = oscOut + ((sine_table[itg] * (1.f/32768.f)) - oscOut) * ((float)frac / 1048576.f);
 		#else
-			oscOut = sine_table[itg];
+			oscOut = (sine_table[itg] * (1.f/32768.f));
 		#endif
 
 		osc->phase = oscPhase + osc->phaseInc;
@@ -87,25 +89,27 @@ IN_ITCM_RAM void calcSineBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,c
 // These three FM blocks intentionally depend on the production ARM compiler
 // emitting vcvt.u32.f32 (bounded negative products map to zero on target).
 // Negative float-to-unsigned conversion is not portable C; verify ARM codegen.
-IN_ITCM_RAM void calcFmSineBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size,const float gain)
+// Restore the old modulation scale BEFORE multiply/uint32 quantization, not
+// after conversion. Waveform reads (both endpoints) stay normalized.
+IN_ITCM_RAM void calcFmSineBlock(OscInfo* osc, AudioSample* modBuffer, AudioSample* buf, uint8_t size,const float gain)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
 		const uint32_t oscPhase = osc->phase;
-		int16_t oscOut ;
+		AudioSample oscOut ;
 
-		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<17);
+		const uint32_t index =  oscPhase + (((uint32_t)((modBuffer[i]*32768.f)*osc->fmMod))<<17);
 		uint32_t  itg	= index>>20;
 
 	#if INTERPOLATE_FM_OSC
-		oscOut = sine_table[itg++];
+		oscOut = (sine_table[itg++] * (1.f/32768.f));
 		//const float frac	= (index&0x7ffff)*0.0000019073486328125f;
 		//oscOut += frac*(sine_table[itg] - oscOut);
 		uint32_t frac = index&0xFFFFF;
-		oscOut = oscOut + (int16_t)(((int64_t)(sine_table[itg] - oscOut) * frac)   >>20);
+oscOut = oscOut + ((sine_table[itg] * (1.f/32768.f)) - oscOut) * ((float)frac / 1048576.f);
 	#else
-		oscOut = sine_table[itg];
+		oscOut = (sine_table[itg] * (1.f/32768.f));
 	#endif
 
 		osc->phase = oscPhase + osc->phaseInc;
@@ -114,26 +118,26 @@ IN_ITCM_RAM void calcFmSineBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf,
 }
 //-----------------------------------------------------------
 //---------------------------------------------------------------
-IN_ITCM_RAM void calcFmBlock(OscInfo* osc, const int16_t table[][1024], int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain)
+IN_ITCM_RAM void calcFmBlock(OscInfo* osc, const int16_t table[][1024], AudioSample* modBuffer, AudioSample* buf, uint8_t size ,const float gain)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
 		const uint32_t oscPhase = osc->phase;
-		int16_t oscOut ;
-		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<19);
+		AudioSample oscOut ;
+		const uint32_t index =  oscPhase + (((uint32_t)((modBuffer[i]*32768.f)*osc->fmMod))<<19);
 
 		uint32_t  itg	= index>>22; //10 bit index, 22 bit fractional part
 
 	#if INTERPOLATE_FM_OSC
-		oscOut = table[osc->tableOffset][itg++];
+		oscOut = (table[osc->tableOffset][itg++] * (1.f/32768.f));
 		//const float frac	= (index&0x003FFFFF)*2.38418579101562e-07f;
 		//oscOut += frac*(table[osc->tableOffset][itg] - oscOut);
 		uint32_t frac = index & 0x3FFFFF;
-		oscOut = oscOut + (int16_t)(((int64_t)(table[osc->tableOffset][itg & 1023u] - oscOut) * frac)   >>22);
+oscOut = oscOut + ((table[osc->tableOffset][itg & 1023u] * (1.f/32768.f)) - oscOut) * ((float)frac / 4194304.f);
 
 	#else
-		oscOut = table[overtoneIndex][itg];
+		oscOut = (table[overtoneIndex][itg] * (1.f/32768.f));
 	#endif
 
 		osc->phase = oscPhase + osc->phaseInc;
@@ -142,7 +146,7 @@ IN_ITCM_RAM void calcFmBlock(OscInfo* osc, const int16_t table[][1024], int16_t*
 	}
 }
 //-----------------------------------------------------------
-void calcPwmFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain, const float pwm)
+void calcPwmFmBlock(OscInfo* osc, AudioSample* modBuffer, AudioSample* buf, uint8_t size ,const float gain, const float pwm)
 {
 	// PWM is normalized to [0,1] by normal control paths. Convert only the
 	// offset, then use unsigned addition for defined modulo-2^32 phase wrap.
@@ -151,31 +155,31 @@ void calcPwmFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size
 	for(i=0;i<size;i++)
 	{
 		const uint32_t oscPhase = osc->phase;
-		int16_t oscOut ;
-		const uint32_t index =  oscPhase + (((uint32_t)(modBuffer[i]*osc->fmMod))<<19);
+		AudioSample oscOut ;
+		const uint32_t index =  oscPhase + (((uint32_t)((modBuffer[i]*32768.f)*osc->fmMod))<<19);
 		const uint32_t index2 = index + pwmOffset;
 
 		 uint32_t  itg	 = index>>22;
 		 uint32_t  itg2 = index2>>22;
 
 	#if INTERPOLATE_FM_OSC
-		oscOut = sawTable[osc->tableOffset][itg++];
+		oscOut = (sawTable[osc->tableOffset][itg++] * (1.f/32768.f));
 		//const float frac	= (index&0x003FFFFF)*2.38418579101562e-07f;
 		//oscOut += frac*(sawTable[osc->tableOffset][itg] - oscOut);
 		uint32_t frac = index & 0x3FFFFF;
-		oscOut = oscOut + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg & 1023u] - oscOut) * frac)   >>22);
+oscOut = oscOut + ((sawTable[osc->tableOffset][itg & 1023u] * (1.f/32768.f)) - oscOut) * ((float)frac / 4194304.f);
 
-		int16_t osc2Out = sawTable[osc->tableOffset][itg2++];// * -1;
+		AudioSample osc2Out = (sawTable[osc->tableOffset][itg2++] * (1.f/32768.f));// * -1;
 		//const float frac	= (index&0x003FFFFF)*2.38418579101562e-07f;
 		frac = index2 & 0x3FFFFF;
 		//osc2Out += frac*(sawTable[osc->tableOffset][itg2] * -1 - osc2Out);
-		osc2Out = osc2Out + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg2 & 1023u] - osc2Out) * frac)   >>22);
+osc2Out = osc2Out + ((sawTable[osc->tableOffset][itg2 & 1023u] * (1.f/32768.f)) - osc2Out) * ((float)frac / 4194304.f);
 
-		oscOut =  __QSUB16(oscOut,osc2Out);
+        oscOut = audio_sample_bound(oscOut-osc2Out); /* PWM waveform saturation */
 
 
 	#else
-		oscOut = sawTable[overtoneIndex][itg];
+		oscOut = (sawTable[overtoneIndex][itg] * (1.f/32768.f));
 	#endif
 
 		osc->phase = oscPhase + osc->phaseInc;
@@ -185,7 +189,7 @@ void calcPwmFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size
 }
 //-----------------------------------------------------------
 //-----------------------------------------------------------
-IN_ITCM_RAM void calcNextOscSampleFmBlock(OscInfo* osc, int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain, const float pwm)
+IN_ITCM_RAM void calcNextOscSampleFmBlock(OscInfo* osc, AudioSample* modBuffer, AudioSample* buf, uint8_t size ,const float gain, const float pwm)
 {
 	switch(osc->waveform)
 		{
@@ -223,7 +227,7 @@ IN_ITCM_RAM void calcNextOscSampleFmBlock(OscInfo* osc, int16_t* modBuffer, int1
 //-----------------------------------------------------------
 
 //-----------------------------------------------------------
-IN_ITCM_RAM void calcNoiseBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain)
+IN_ITCM_RAM void calcNoiseBlock(OscInfo* osc, AudioSample* buf, const uint8_t size ,const float gain)
 {
 	int i;
 	for(i=0;i<size;i++)
@@ -234,7 +238,7 @@ IN_ITCM_RAM void calcNoiseBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,
 		if(lastPhase > osc->phase)
 		{
 			//overflow happened -> phaseWrapped
-			osc->output = GetRngValue(); //normal pitched white noise
+			osc->output = (int16_t)GetRngValue() * (1.f/32768.f); //normal pitched white noise
 		}
 
 		buf[i] = osc->output * gain;
@@ -242,7 +246,7 @@ IN_ITCM_RAM void calcNoiseBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,
 }
 //-----------------------------------------------------------
 //-----------------------------------------------------------
-IN_ITCM_RAM void calcNextOscSampleBlock(OscInfo* osc, int16_t* buf, const uint8_t size, const float gain, const float pwm)
+IN_ITCM_RAM void calcNextOscSampleBlock(OscInfo* osc, AudioSample* buf, const uint8_t size, const float gain, const float pwm)
 {
 	switch(osc->waveform)
 		{
@@ -280,23 +284,23 @@ IN_ITCM_RAM void calcNextOscSampleBlock(OscInfo* osc, int16_t* buf, const uint8_
 //-----------------------------------------------------------
 
 //---------------------------------------------------------------
-IN_ITCM_RAM void calcWavetableOscBlock(OscInfo* osc, const int16_t table[][1024], int16_t* buf, const uint8_t size ,const float gain)
+IN_ITCM_RAM void calcWavetableOscBlock(OscInfo* osc, const int16_t table[][1024], AudioSample* buf, const uint8_t size ,const float gain)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
 		const uint32_t oscPhase = osc->phase;
-			int16_t oscOut ;
+			AudioSample oscOut ;
 			uint32_t  itg	= oscPhase>>22;
 		#if INTERPOLATE_OSC
 			//todo use ldm instead of ldr to load multiple values from memory
-			oscOut = table[osc->tableOffset][itg++];
+			oscOut = (table[osc->tableOffset][itg++] * (1.f/32768.f));
 			//const float frac = (itg&0x003FFFFF)*2.38418579101562e-07f; //2.38... => 1.f/0x3fffff
 			//oscOut += frac*(table[osc->tableOffset][itg] - oscOut);
 			uint32_t frac = oscPhase & 0x3FFFFF;
-			oscOut = oscOut + (int16_t)(((int64_t)(table[osc->tableOffset][itg & 1023u] - oscOut) * frac)   >>22);
+oscOut = oscOut + ((table[osc->tableOffset][itg & 1023u] * (1.f/32768.f)) - oscOut) * ((float)frac / 4194304.f);
 		#else
-			oscOut = table[osc->tableOffset][itg];
+			oscOut = (table[osc->tableOffset][itg] * (1.f/32768.f));
 		#endif
 
 			osc->phase = oscPhase + osc->phaseInc;
@@ -311,17 +315,17 @@ IN_ITCM_RAM void calcWavetableOscBlock(OscInfo* osc, const int16_t table[][1024]
 //------------------------------------------------------------------
 
 //------------------------------------------------------------------
-void calcUserSampleOscFmBlock(OscInfo* osc,int16_t* modBuffer, int16_t* buf, uint8_t size ,const float gain)
+void calcUserSampleOscFmBlock(OscInfo* osc,AudioSample* modBuffer, AudioSample* buf, uint8_t size ,const float gain)
 {
 }
 //---------------------------------------------------------------
-void calcUserSampleOscBlock(OscInfo* osc, int16_t* buf, const uint8_t size ,const float gain)
+void calcUserSampleOscBlock(OscInfo* osc, AudioSample* buf, const uint8_t size ,const float gain)
 {
 }
 //---------------------------------------------------------------
 
 //-----------------------------------------------------------
-IN_ITCM_RAM void calcPwmBlock(OscInfo* osc, int16_t* buf, uint8_t size ,const float gain, const float pwm)
+IN_ITCM_RAM void calcPwmBlock(OscInfo* osc, AudioSample* buf, uint8_t size ,const float gain, const float pwm)
 {
 	// PWM is normalized to [0,1] by normal control paths. Convert only the
 	// offset, then use unsigned addition for defined modulo-2^32 phase wrap.
@@ -334,29 +338,29 @@ IN_ITCM_RAM void calcPwmBlock(OscInfo* osc, int16_t* buf, uint8_t size ,const fl
 	{
 		const uint32_t oscPhase = osc->phase;
 		const uint32_t oscPhase2 = oscPhase + pwmOffset;
-		int16_t oscOut ;
+		AudioSample oscOut ;
 		uint32_t  itg	= oscPhase>>22;
 		uint32_t  itg2	= oscPhase2>>22;
 
 
 		#if INTERPOLATE_FM_OSC
-			oscOut = sawTable[osc->tableOffset][itg++];
+			oscOut = (sawTable[osc->tableOffset][itg++] * (1.f/32768.f));
 			//const float frac	= (oscPhase&0x003FFFFF)*2.38418579101562e-07f;
 			//const float frac = (itg&0x003FFFFF)*2.38418579101562e-07f;
 			//oscOut += frac*(sawTable[osc->tableOffset][itg] - oscOut);
 			uint32_t frac = oscPhase & 0x3FFFFF;
-			oscOut = oscOut + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg & 1023u] - oscOut) * frac)   >>22);
+oscOut = oscOut + ((sawTable[osc->tableOffset][itg & 1023u] * (1.f/32768.f)) - oscOut) * ((float)frac / 4194304.f);
 
-			int16_t osc2Out = sawTable[osc->tableOffset][itg2++] ;//* -1;
+			AudioSample osc2Out = (sawTable[osc->tableOffset][itg2++] * (1.f/32768.f)) ;//* -1;
 			//const float frac	= (index&0x003FFFFF)*2.38418579101562e-07f;
 			//osc2Out += frac*(sawTable[osc->tableOffset][itg2] * -1 - osc2Out);
 			frac = oscPhase2 & 0x3FFFFF;
-			osc2Out = osc2Out + (int16_t)(((int64_t)(sawTable[osc->tableOffset][itg2 & 1023u] - osc2Out) * frac)   >>22);
+osc2Out = osc2Out + ((sawTable[osc->tableOffset][itg2 & 1023u] * (1.f/32768.f)) - osc2Out) * ((float)frac / 4194304.f);
 
-			oscOut =  __QSUB16(oscOut,osc2Out);
+        oscOut = audio_sample_bound(oscOut-osc2Out); /* PWM waveform saturation */
 
 		#else
-			oscOut = sawTable[overtoneIndex][itg];
+			oscOut = (sawTable[overtoneIndex][itg] * (1.f/32768.f));
 		#endif
 
 			osc->phase = oscPhase + osc->phaseInc;

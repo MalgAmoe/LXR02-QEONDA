@@ -15,6 +15,8 @@
 
 // Defined in sequencer.c, which isn't part of this test.
 PatternSet seq_patternSet;
+// Occupancy seam; production occupancy + generator integration is tested separately.
+uint8_t seq_patternIsUsed(uint8_t pattern) { return seq_patternSet.used[pattern]; }
 
 enum { TRACK = 2, PATTERN = 5 };
 

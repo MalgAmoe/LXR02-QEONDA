@@ -152,7 +152,7 @@ void MainCompressor_processPair(float x[2])
         comp.curveRamp=0;
         return;
     }
-    float peak=fmaxf(fabsf(x[0]),fabsf(x[1]))*(1.f/32768.f);
+    float peak=fmaxf(fabsf(x[0]),fabsf(x[1]));
     float a=peak>comp.envelope?comp.attack:comp.release;
     comp.envelope=peak+a*(comp.envelope-peak);
     comp.gain=attenuation(reduction(envelopeDb(comp.envelope)));

@@ -110,6 +110,7 @@ typedef struct PatternSetStruct
 	uint8_t length[NUM_PATTERN][NUM_TRACKS];	//only used in euklid generator?
 	uint8_t shuffle[NUM_PATTERN];
 	uint8_t kitNr[NUM_PATTERN];
+	uint8_t used[NUM_PATTERN]; // sticky until explicit whole-pattern erase
 }PatternSet;
 
 typedef struct PatternBackupBufferStruct
@@ -121,6 +122,7 @@ typedef struct PatternBackupBufferStruct
 	uint8_t length[NUM_TRACKS];	//only used in euklid generator?
 	uint8_t shuffle;
 	uint8_t kitNr;
+	uint8_t used;
 }PatternBackupBuffer;
 
 /*
@@ -287,6 +289,8 @@ void seq_clearTrack(uint8_t trackNr, uint8_t pattern);
 //------------------------------------------------------------------------------
 void seq_clearAutomation(uint8_t trackNr, uint8_t pattern, uint8_t automTrack);
 //------------------------------------------------------------------------------
+// Latches used on the first hit; only scans slots still marked empty.
+uint8_t seq_patternIsUsed(uint8_t pattern);
 void seq_clearPattern(uint8_t pattern);
 //------------------------------------------------------------------------------
 void seq_copyTrack(uint8_t srcNr, uint8_t dstNr, uint8_t pattern);

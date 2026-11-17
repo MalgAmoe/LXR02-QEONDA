@@ -11,6 +11,8 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
+#include "Soundengine/AudioSample.h"
+
 
 #ifndef DISTORTION_H_
 #define DISTORTION_H_
@@ -31,9 +33,9 @@ typedef struct DistStruct
 //--------------------------------------------------
 void setDistortionShape(Distortion *dist, float shape);
 //--------------------------------------------------
-void calcDistBlock(const Distortion *dist, int16_t* buf, const uint8_t size);
+void calcDistBlock(const Distortion *dist, AudioSample* buf, const uint8_t size);
 //--------------------------------------------------
-void calcDistBlockFiltered(Distortion *dist, int16_t* buf, const uint8_t size);
+void calcDistBlockFiltered(Distortion *dist, AudioSample* buf, const uint8_t size);
 //--------------------------------------------------
 float distortion_calcSampleFloat(const Distortion *dist, float x);
 //--------------------------------------------------
