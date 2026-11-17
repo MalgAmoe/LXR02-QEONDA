@@ -27,7 +27,6 @@
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Preset/PresetManager.h"
 #include "Soundengine/FxBus.h"
-#include "Soundengine/Soundengine.h"
 
 //used to remember the last active page when entering the sequencer mode
 //needed to return to the previously shown page when seq mode button is released
@@ -838,7 +837,7 @@ static void buttonHandler_setRemoveStep(uint8_t ledNr, uint8_t seqButtonPressed)
 	}
 #endif
 	//autosave changes
-
+	preset_touchTimer(PRESET_PAT_TIMER);
 
 }
 
@@ -891,7 +890,7 @@ static void buttonHandler_selectLivePattern(uint8_t pad)
 	// A same-slot reload is pending too, until activation acknowledges it.
 	if(menu_getViewedPattern() == menu_playedPattern)
 		led_setBlinkLed(led_idx2StepLed(pad), 1);
-
+	preset_touchTimer(PRESET_PAT_TIMER);
 	frontPanel_sendData(SEQ_CC, SEQ_CHANGE_PAT, pad + 16 * menu_activePatternBank);
 }
 
@@ -956,25 +955,33 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 		case SEQ_RELOAD:
 		{
             seq_slipClear();
-			activeParameters[PAR_MORPH] = 0;
-			menu_resetPerformanceFilter();
+			//if in LAST STEP mode, reload pattern to reset pattern and track lengths
+		//	uint8_t mode = buttonHandler_getMode();
 
-			//Service before selecting the kit: a queued pattern may load its linked kit.
-			//Copy before servicing again so that a later activation wins as well.
-			soundengine_process();
-			memcpy(activeParameters, mainParameters[menu_selectedPresetNr[SAVE_TYPE_KIT]],
-					sizeof(uint8_t) * END_OF_SOUND_PARAMETERS);
-			soundengine_process();
-			preset_sendDrumsetParameters();
+			//if((mode == SELECT_MODE_LAST_STEP_TRACK) || (mode == SELECT_MODE_LAST_STEP_ALL))
+			//{
 
-			if (menu_getActivePage() == PERF_PAGE) {
-				menu_repaint();
-			}
+				activeParameters[PAR_MORPH] = 0;
+				menu_resetPerformanceFilter();
+
+				//tell sequencer to change/reload current pattern
+				frontPanel_sendData(SEQ_CC, SEQ_CHANGE_PAT, seq_activePattern);
+
+			//}
+			//else
+			//{
+				//reload kit to edit buffer
+				preset_loadDrumsetRam(menu_selectedPresetNr[SAVE_TYPE_KIT],0, 0);
+				preset_touchTimer(PRESET_KIT_TIMER);
+				if (menu_getActivePage() == PERF_PAGE) {
+					menu_repaint();
+				}
+			//}
 		}
 			break;
 
 		case SEQ_CONFIG: //config
-			buttonHandler_setMode(SELECT_MODE_MENU);
+			buttonHandler_setMode(SEQ_CONFIG);
 			led_clearAllBlinkLeds();
 			led_setBlinkLed(LED_STEP12,1);
 			menu_switchPage(MENU_MIDI_PAGE);
@@ -1055,8 +1062,18 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 
 			case SEQ_PATTERN: //Pattern
 
+#if 1
 				//--> pattern select mode
 				buttonHandler_enterLivePatternSelect();
+#else
+				//update the status LED
+				led_setMode2(2);
+				led_clearAllBlinkLeds();
+				led_setBlinkLed(LED_STEP16,1);
+				buttonHandler_setMode(SELECT_MODE_LOAD);
+				menu_switchPage(LOAD_PAGE);
+				menu_setLoadSaveCategory(SAVE_TYPE_PATTERN);
+#endif
 				break;
 
 			case SEQ_SONG:
@@ -1221,6 +1238,20 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 
 				preset_savePatternRAM(seqButtonPressed + 16 * menu_activePatternBank);
 
+				//save to tmp folder
+				#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+					HAL_TIM_Base_Start_IT(&htim2);	//calc sample interrupt - prio 1
+				#else
+
+				#endif
+					FRESULT saveResult = preset_savePatternSD(seqButtonPressed + 16 * menu_activePatternBank);
+				#if USE_INTERRUPT_ONLY_DURING_SAVE_PROJ
+							HAL_TIM_Base_Stop_IT(&htim2);	//calc sample interrupt - prio 1
+				#else
+
+				#endif
+                if(saveResult != FR_OK) { menu_showSdError(saveResult); return; }
+                if(preset_fileCleanupWarning) menu_showSaveCleanupWarning();
 
 
 
@@ -1251,7 +1282,7 @@ static void buttonHandler_seqButtonPressed(uint8_t seqButtonPressed)
 				frontPanel_sendData(SEQ_CC, SEQ_REQUEST_EUKLID_PARAMS,
 						menu_activePage/*menu_getActiveVoice()*/);
 				//update autosave pattern on manual pattern change
-
+				preset_touchTimer(PRESET_PAT_TIMER);
 
 	//-----------------------------------------------------------------
 
@@ -1466,45 +1497,9 @@ static void buttonHandler_seqButtonReleased(uint8_t seqButtonPressed)
 }
 
 //--------------------------------------------------------
-// These pages are dialogs regardless of category or name/confirmation state.
-static uint8_t buttonHandler_isLoadSavePage(void)
-{
-	return menu_activePage == LOAD_PAGE || menu_activePage == SAVE_PAGE ||
-		menu_activePage == PATTERN_SAVE_PAGE ||
-		menu_activePage == KIT_SAVE_PAGE_OK || menu_activePage == PATTERN_SAVE_PAGE_OK;
-}
-
-static void buttonHandler_leaveDialogForVoice(void)
-{
-	// Held dialog/shortcut pads must not become step releases in Voice mode.
-	consumedSeqReleases |= heldSeqButtons;
-	if(buttonHandler_armedAutomationStep != NO_STEP_SELECTED)
-		buttonHandler_disarmTimerActionStep();
-	buttonHandler_buttonTimerStepNr = NO_STEP_SELECTED;
-	buttonHandler_handleModeButtons(SELECT_MODE_VOICE);
-	menu_muteModeActive = 0;
-	led_setActiveVoiceLeds((uint8_t)(1u << menu_getActiveVoice()));
-}
-
 // one of the 8 part buttons is pressed
 static void buttonHandler_selectButtonPressed(uint8_t partNr)
 {
-	if (((buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE &&
-		  (menu_activePage < NUM_TRACKS || menu_activePage == FX_MODE_PAGE || menu_activePage == PERF_PAGE)) ||
-		 (menu_activePage == MENU_MIDI_PAGE) || buttonHandler_isLoadSavePage() ||
-		 ((buttonHandler_getMode() == SELECT_MODE_LAST_STEP_TRACK ||
-		   buttonHandler_getMode() == SELECT_MODE_LAST_STEP_ALL) && menu_activePage == MENU_LAST_STEP_PAGE)) &&
-		!buttonHandler_getShift() && !buttonHandler_getCopy() &&
-		copyClear_Mode == MODE_NONE && !buttonHandler_stateMemory.seqErasing) {
-		if(buttonHandler_isLoadSavePage() || menu_activePage == MENU_MIDI_PAGE ||
-		   menu_activePage == MENU_LAST_STEP_PAGE) buttonHandler_leaveDialogForVoice();
-		else buttonHandler_handleModeButtons(SELECT_MODE_VOICE);
-		menu_switchSubPageFirstScreen(partNr);
-		led_setActiveSelectButton(partNr);
-		menu_repaintAll();
-		return;
-	}
-
 	//if in step mode, return to voice/edit mode
 	if(buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_STEP)
 	{
@@ -1573,25 +1568,6 @@ static void buttonHandler_partButtonReleased(uint8_t partNr)
 // one of the 7 voice buttons pressed
 static void buttonHandler_voiceButtonPressed(uint8_t voiceNr)
 {
-	// Identify Config and load/save dialogs by page, not their mode aliases.
-	// Their menu indices are not voice edit sections: start at OSC.
-	if ((menu_activePage == MENU_MIDI_PAGE || buttonHandler_isLoadSavePage()) &&
-		!buttonHandler_getShift() && !buttonHandler_getCopy() &&
-		copyClear_Mode == MODE_NONE && !buttonHandler_stateMemory.seqErasing) {
-		buttonHandler_leaveDialogForVoice();
-		menu_switchSubPageFirstScreen(0);
-		led_setActiveSelectButton(0);
-	}
-	else if (buttonHandler_getMode() == SELECT_MODE_PATTERN_LIVE &&
-		!buttonHandler_getShift() && !buttonHandler_getCopy() &&
-		copyClear_Mode == MODE_NONE && !buttonHandler_stateMemory.seqErasing &&
-		(menu_activePage < NUM_TRACKS || menu_activePage == FX_MODE_PAGE)) {
-		const uint8_t section = menu_getSubPage();
-		buttonHandler_handleModeButtons(SELECT_MODE_VOICE);
-		menu_switchSubPageFirstScreen(section);
-		// Continue through ordinary voice selection (track requests and LEDs).
-	}
-
 
 	//if in step mode, return to voice/edit mode
 	if(buttonHandler_stateMemory.selectButtonMode == SELECT_MODE_STEP)
@@ -1787,9 +1763,7 @@ void buttonHandler_buttonPressed(uint8_t buttonNr) {
 					 */
 					//for(int i=0;i<NUM_TRACKS;i++)
 					//{
-						seq_patternIsUsed(seq_activePattern);
 						seq_patternSet.seq_mainSteps[menu_activeBar][seq_activePattern][menu_getActiveVoice()] = seq_patternSet.seq_mainSteps[menu_activeBar - 1][seq_activePattern][menu_getActiveVoice()];
-						seq_patternIsUsed(seq_activePattern);
 					//}
 				}
 

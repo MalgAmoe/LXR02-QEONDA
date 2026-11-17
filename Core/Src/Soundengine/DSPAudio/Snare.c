@@ -11,8 +11,6 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
-#include "Soundengine/AudioSample.h"
-
 
 
 #include "Soundengine/DSPAudio/Snare.h"
@@ -147,10 +145,10 @@ IN_ITCM_RAM void Snare_calcAsync()
 
 }
 //---------------------------------------------------
-void Snare_calcSyncBlock(AudioSample* buf, const uint8_t size)
+void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 {
-	AudioSample transBuf[size];
-	AudioSample oscBuf[size];
+	int16_t transBuf[size];
+	int16_t oscBuf[size];
 
 	calcNoiseBlock(&snareVoice.noiseOsc,buf,size,0.9f);
 #if USE_REVERB
@@ -198,11 +196,11 @@ void Snare_calcSyncBlock(AudioSample* buf, const uint8_t size)
 			//tmp	= __QADD16(transBuf[j],(int16_t)tmp);
 			tmp	+= transBuf[j];
 			// Clip the source mix before envelope, velocity and fader attenuation.
-			tmp = audio_sample_bound(tmp);
+			tmp = tmp > 32767.f ? 32767.f : (tmp < -32768.f ? -32768.f : tmp);
 			float output = snareVoice.combinedVolume  * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, faderTarget);
-			// Retain the exceptional-range output bound after signed EG/extended gains.
-			output = audio_sample_bound(output);
-			buf[j] = (AudioSample)output;
+			// Defensive conversion: signed envelope undershoot or extended gains.
+			output = output > 32767.f ? 32767.f : (output < -32768.f ? -32768.f : output);
+			buf[j] = (int16_t)output;
 
 #else
 
@@ -228,11 +226,11 @@ void Snare_calcSyncBlock(AudioSample* buf, const uint8_t size)
 			//tmp	= __QADD16(transBuf[j],(int16_t)tmp);
 			tmp	+= transBuf[j];
 			// Clip the source mix before envelope, velocity and fader attenuation.
-			tmp = audio_sample_bound(tmp);
+			tmp = tmp > 32767.f ? 32767.f : (tmp < -32768.f ? -32768.f : tmp);
 			float output = snareVoice.combinedVolume * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, faderTarget);
-			// Retain the exceptional-range output bound after signed EG/extended gains.
-			output = audio_sample_bound(output);
-			buf[j] = (AudioSample)output;
+			// Defensive conversion: signed envelope undershoot or extended gains.
+			output = output > 32767.f ? 32767.f : (output < -32768.f ? -32768.f : output);
+			buf[j] = (int16_t)output;
 #else
 			//add filter to buffer
 			buf[j] *= snareVoice.mix;

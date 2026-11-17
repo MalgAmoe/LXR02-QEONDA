@@ -11,8 +11,6 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
-#include "Soundengine/AudioSample.h"
-
 
 #ifndef SNARE_H_
 #define SNARE_H_
@@ -50,7 +48,7 @@ typedef struct SnareStruct
 	float   	mix;		// defines the mix between osc and noise [0 = 100% osc: 1 = 100% noise]
 	float 		velo;
 
-	AudioSample		oscSample;
+	int16_t		oscSample;
 	int32_t		noiseSample;
 
 #if USE_PEAK
@@ -89,7 +87,7 @@ void Snare_init();
 void Snare_trigger(const uint8_t vel, const uint8_t note);
 void Snare_updatePan();
 /** claculate the oscillators and sample based stuff*/
-void Snare_calcSyncBlock(AudioSample* buf, const uint8_t size);
+void Snare_calcSyncBlock(int16_t* buf, const uint8_t size);
 
 /** calculate envelopes etc (all 16 samples */
 void Snare_calcAsync();

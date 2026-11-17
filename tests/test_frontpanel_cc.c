@@ -41,7 +41,11 @@ void menu_kitLoaded(uint8_t kitNr)
 	kitLoadedCalls++;
 	kitLoadedNr = kitNr;
 }
-
+void preset_touchTimer(PresetTimer type)
+{
+	if (type == PRESET_KIT_TIMER)
+		kitTimerTouched++;
+}
 void menu_repaint() { repaints++; }
 
 uint8_t buttonHandler_getMode() { return (uint8_t)mode; }
@@ -85,7 +89,7 @@ static void test_bank_select_loads_the_kit_and_updates_the_menu(void)
 	CHECK_EQ(loadedKit, 5);
 	CHECK_EQ(kitLoadedCalls, 1);
 	CHECK_EQ(kitLoadedNr, 5);
-	CHECK_EQ(kitTimerTouched, 0);
+	CHECK_EQ(kitTimerTouched, 1);
 	CHECK(repaints > 0);
 }
 

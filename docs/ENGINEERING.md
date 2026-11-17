@@ -138,43 +138,14 @@ are examples. Bulk Shift+knob follows **same menu slot**, not semantic remapping
 with per-engine bounds/shared-hat deduplication and no step-lock writing.
 
 Shift+Reload resets morph and master filters and restores the selected kit from RAM,
-not directly from disk; compressor settings remain. It cancels Looping but does not
-request pattern activation, reset position or replace a queued pattern. Normal pattern
-activation retains outgoing edits in RAM and snapshots the incoming slot; save-as
-copies edits without reverting the source. Project save provides disk persistence.
-Do not describe this as an atomic all-state reset or assume it discards every project change.
-
-Each pattern owns a sticky `used` byte (also copied by the backup buffer). New
-slots and explicit `seq_clearPattern` reset it; individual/track erasure does not.
-`seq_patternIsUsed` returns immediately for used slots, otherwise scans at most
-28 `uint16_t` main-hit words with early exit and latches used on any enabled hit.
-Edit paths observe before destructive hit replacement and after insertion (including
-recording, bar/track copy and Euclidean generation). Whole-pattern copy transfers
-source occupancy, including silent-used history. No per-tick or audio-sample scan
-is added. The scan stays out of line to avoid replicating its unrolled ARM code.
-Activation preserves the destination `kitNr` regardless of occupancy and applies
-the normal `PAR_PATTERN_MODE` rules: auto loads the linked RAM kit, manual/off
-does not; `SKIP_NEXT_KIT_AUTOLOAD` skips once and returns to auto. Occupancy
-queries still latch imported hits before the incoming backup snapshot. Whole-pattern
-copy and Save As carry the source kit link unchanged, even for empty patterns.
-
-`ProjectCodec` explicitly stores the per-pattern occupancy byte in the single
-project payload, alongside all steps, timing, hit words, shuffle, lengths and kit
-association. No raw structs, tmp overlay, individual slot-file saves or dirty
-timers remain in the runtime. Kit/pattern/song/global Save actions affect RAM;
-Kit Save selects the saved RAM kit and assigns it to the active pattern only;
-Save Morph leaves those assignments unchanged. Project Save captures the edited
-kit and serializes the full RAM project, including kit links. Boot
-uses the last successfully saved selection, with RAM-only initialization when
-missing. See [PROJECT-STORAGE](PROJECT-STORAGE.md) for format, entry points,
-publication, compatibility and verification limits.
-
+not directly from disk; compressor settings remain. Pattern activation and linked-kit
+behavior still follow their own timing. Do not describe this as an atomic all-state
+reset or assume it discards every project change.
 
 Project loads/saves currently coexist with playback. Storage work therefore interacts
 with audio servicing and interrupt latency, not only file correctness. The save path
 uses staged writes; the load path does not provide full rollback on partial failure.
-Read `Core/Src/Preset/SafeStorage.c`, `ProjectStream.c`, `ProjectCodec.c` and
-`presetManager.c` together
+Read `Core/Src/Preset/SafeStorage.c`, `SlotFiles.c` and `presetManager.c` together
 before changing ownership, commit order or error recovery.
 
 The card layer distinguishes terminal errors from BUSY; persistent BUSY can wait
@@ -266,16 +237,3 @@ Include source/compiler/image identity for hardware results and relevant memory
 changes for firmware work. Explicitly separate host checks, static fit, measured
 timing and listening tests. Test modifier order, clock/storage traffic and save/load
 when relevant rather than treating isolated DSP math as full-system coverage.
-
-## Audio representation
-
-The production audio path is normalized float32 (original signed16 / 32768),
-including float32 delay history with its separate original /32767 convention, with
-padded 24-bit encoding on both output pairs. Mixer routing and FX-return saturation
-retain the clipped-float baseline's per-operation bounds and fractional values.
-This is not a blanket clip on every voice-internal addition.
-Original int16 waveform tables, uint32 phase arithmetic and deliberate nonlinear
-effects remain. There are no legacy16, transport-only, main-only or unclipped
-build variants. See [BUILD](BUILD.md) and [tests](../tests/README.md).
-
-See [AUDIO-NORMALIZED](AUDIO-NORMALIZED.md) for conversion boundaries and verification.

@@ -16,12 +16,9 @@
 #include "stm32f7xx_hal.h"
 #include "config.h"
 
-/* HAL Size is channel samples, not halfwords. Two stereo blocks per ring. */
-#define AUDIO_HAL_CHANNEL_SAMPLES (OUTPUT_DMA_SIZE*4)
-#define AUDIO_DMA_HALFWORDS (AUDIO_HAL_CHANNEL_SAMPLES*2)
-#define AUDIO_DMA_HALF_OFFSET (AUDIO_DMA_HALFWORDS/2)
-extern INDTCMZ int16_t dma_buffer[AUDIO_DMA_HALFWORDS];
-extern INDTCMZ int16_t dma_buffer2[AUDIO_DMA_HALFWORDS];
+extern INDTCMZ int16_t dma_buffer[OUTPUT_DMA_SIZE*4]; 		// *4 because we need 16 stereo samples = *2
+extern INDTCMZ int16_t dma_buffer2[OUTPUT_DMA_SIZE*4]; 	// *4 because we need 16 stereo samples = *2
+
 /* Mask for the bit EN of the I2S CFGR register */
 #define I2S_ENABLE_MASK                	 	0x0400
 #define I2S_STANDARD                   		I2S_Standard_Phillips

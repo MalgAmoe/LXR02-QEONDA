@@ -1,5 +1,0 @@
-{
-  "version": "@PROJECT_VERSION@",
-  "image": "LXR_QEONDA_V@PROJECT_VERSION@.img",
-  "payload": "@PROJECT_NAME@.bin"
-}

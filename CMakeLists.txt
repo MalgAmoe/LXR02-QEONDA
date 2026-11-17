@@ -34,7 +34,7 @@ if(NOT CMAKE_TOOLCHAIN_FILE)
 endif()
 
 project(LXR_V2_STM32F765
-    VERSION 0.2
+    VERSION 0.1
     DESCRIPTION "LXR QEONDA custom drum machine firmware"
     LANGUAGES C ASM
 )
@@ -100,7 +100,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 # Linked at 0x08008000, behind the 32 KB bootloader.
 lxr_firmware_executable(${PROJECT_NAME} LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/STM32F765VGTX_FLASH.ld)
 lxr_add_firmware_outputs(${PROJECT_NAME} IMAGE_MAGIC LXRV2IMG IMAGE_NAME LXR_QEONDA_V${PROJECT_VERSION})
-configure_file(cmake/release-metadata.json.in release-metadata.json @ONLY)
 
 # "flash": application only, the bootloader on the device is left alone.
 lxr_add_openocd_flash_target(flash
@@ -166,7 +165,7 @@ if(NOT bootloader)
 endif()
 
 if(bootloader)
-    # LXR_QEONDA_V0.2_full.hex/.bin: bootloader at 0x08000000 + firmware at 0x08008000.
+    # LXR_QEONDA_V0.1_full.hex/.bin: bootloader at 0x08000000 + firmware at 0x08008000.
     lxr_add_combined_image(full_image
         OUTPUT_NAME LXR_QEONDA_V${PROJECT_VERSION}_full
         BOOTLOADER ${bootloader}

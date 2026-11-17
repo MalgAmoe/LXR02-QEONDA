@@ -11,10 +11,6 @@
  * Public License version 3, with the additional permission and terms in
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
-
-#include "Soundengine/AudioSample.h"
-#include "Soundengine/AudioOutput24.h"
-#include "Soundengine/DSPAudio/MainDjFilter.h"
 #include "Soundengine/Soundengine.h"
 #include "Soundengine/AudioCodecManager.h"
 #include "Preset/PresetManager.h"
@@ -32,13 +28,11 @@ uint8_t soundengine_calcNextSampleBlock()
 	__set_PRIMASK(mask);
 	if(half != SAMPLE_VALID)
 	{
-        /* Static scratch avoids audio-stack growth; renderer ownership is unchanged. */
-        static INDTCMZ AudioSample render1[OUTPUT_DMA_SIZE*2];
-        static INDTCMZ AudioSample render2[OUTPUT_DMA_SIZE*2];
-        mixer_calcNextSampleBlock(render1, render2);
-        for(unsigned i=0;i<OUTPUT_DMA_SIZE*2;++i)
-            audio_output24_store(&dma_buffer[half*AUDIO_DMA_HALF_OFFSET+2*i], render1[i]);
-        MainDjFilter_process24(render2, &dma_buffer2[half*AUDIO_DMA_HALF_OFFSET], OUTPUT_DMA_SIZE);
+	#if USE_DAC2
+		mixer_calcNextSampleBlock((int16_t*)&dma_buffer[half*(OUTPUT_DMA_SIZE*2)],(int16_t*)&dma_buffer2[half*(OUTPUT_DMA_SIZE*2)]);
+	#else
+		mixer_calcNextSampleBlock(&dma_buffer[half*(OUTPUT_DMA_SIZE*2)],&dma_buffer2[(1-half)*(OUTPUT_DMA_SIZE*2)]);
+	#endif
 		mask = __get_PRIMASK();
 		__disable_irq();
 		// Do not erase a newer request if rendering missed a deadline.

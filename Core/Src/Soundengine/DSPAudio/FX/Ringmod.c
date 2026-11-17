@@ -12,8 +12,6 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
-#include "Soundengine/AudioSample.h"
-
 
 #include "Soundengine/DSPAudio/FX/Ringmod.h"
 
@@ -30,19 +28,53 @@ void Ringmod_init(Ringmod *rm)
 	rm->osc.pitchMod = 1.0f;
 	osc_setFreq(&rm->osc);
 }
-void Ringmod_process(Ringmod *rm, AudioSample*fxBuffer, AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet)
+void Ringmod_process(Ringmod *rm, int16_t *fxBuffer, int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet)
 {
-    AudioSample mod[size];
-    calcNextOscSampleBlock(&rm->osc, mod, size, 1.f, 0.3f);
-    for(unsigned i=0;i<size;++i) {
-        float wet = fxBuffer[2*i]*mod[i]*0.5f;
-        if(channels==1) wet = audio_mix_add(wet, outL[2*i]);
-        outL[2*i] = audio_mix_add(outL[2*i], fxBuffer[2*i] + audio_mix_bound((wet-fxBuffer[2*i])*dryWet));
-        if(channels==2) {
-            wet = fxBuffer[2*i+1]*mod[i]*0.5f;
-            outR[2*i] = audio_mix_add(outR[2*i], fxBuffer[2*i+1] + audio_mix_bound((wet-fxBuffer[2*i+1])*dryWet));
-        }
-    }
+	int16_t buf[size];
+	int32_t x;
+	int32_t* stereoOut = (int32_t*)outL;
+
+	calcNextOscSampleBlock(&rm->osc, buf, size, 1.f, 0.3f);
+
+	if(channels==2)
+	{
+		for(uint8_t i=0;i<size;i++)
+		{
+			const uint8_t idx1 = i*2;
+			const uint8_t idx2 = i*2+1;
+
+			//TODO could probably be simd optimized
+			int32_t val1 = ((int32_t)fxBuffer[idx1]) * buf[i];
+			int32_t val2 = ((int32_t)fxBuffer[idx2]) * buf[i];
+			//int32_t val2 = *outR * buf[i];
+
+
+			int16_t wet =  val1>>16;
+			int16_t wet2 =  val2>>16;
+			//int16_t dw = fxBuffer[i] + __SSAT((wet - fxBuffer[i]) * dryWet,16);
+
+			x = __PKHBT(fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16), fxBuffer[idx2] + __SSAT((wet2 - fxBuffer[idx2]) * dryWet,16), 16);
+			//LERP dryWet
+			*stereoOut = __QADD16(*stereoOut, x);
+			stereoOut++;
+		}
+	}
+	else
+	{
+		for(uint8_t i=0;i<size;i++)
+		{
+			const uint8_t idx1 = i*2;
+			int32_t val1 = ((int32_t)fxBuffer[idx1]) * buf[i];
+
+			//*outL = val1>>16;
+			//*outR = val2>>16;
+
+			const int16_t wet = __QADD16(*outL, val1>>16);
+			const int16_t dw = fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16);
+			*outL = __QADD16(*outL, dw);
+			outL += 2;
+		}
+	}
 }
 void Ringmod_setFreq(Ringmod *rm, float f)
 {

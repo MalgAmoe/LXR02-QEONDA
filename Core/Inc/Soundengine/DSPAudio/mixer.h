@@ -11,8 +11,6 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
-#include "Soundengine/AudioSample.h"
-
 
 #ifndef MIXER_H_
 #define MIXER_H_
@@ -41,6 +39,6 @@ enum
 };
 
 void mixer_init();
-void  mixer_calcNextSampleBlock(AudioSample* output,AudioSample* output2);
+void  mixer_calcNextSampleBlock(int16_t* output,int16_t* output2);
 
 #endif /* MIXER_H_ */

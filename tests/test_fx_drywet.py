@@ -44,6 +44,13 @@ if((msg.status&0xf0)==MIDI_CC){switch(msg.data1){
 '''+cc+'''default:break;}}else{
 '''+cache.lstrip().removeprefix('{')+'switch(msg.data1){'+amount+'default:break;}}}\n'
 c+='''
+typedef int FRESULT;
+typedef int FIL;
+#define FR_OK 0
+static FIL SDFile;
+static uint8_t disk[END_OF_SOUND_PARAMETERS];
+static unsigned fileSize;
+static FRESULT f_read(FIL*f,void*p,unsigned n,unsigned*got){*got=fileSize<n?fileSize:n;memcpy(p,disk,*got);return FR_OK;}
 static uint8_t getNumModTargets(void){return 1;}
 uint8_t parameterOrder[END_OF_SOUND_PARAMETERS];
 static struct {uint8_t param;} modTargets[1];
@@ -52,7 +59,7 @@ static void frontPanel_sendData(unsigned a,unsigned b,unsigned d){}
 static void soundengine_process(void){}
 static uint8_t morph_state,morph_index;
 '''
-c+=extract(preset,'preset_normalizeKit')+extract(preset,'preset_sendDrumsetParametersImmediate')+extract(preset,'interpolate')+extract(preset,'preset_morph_tick')
+c+=extract(preset,'preset_readDrumsetData')+extract(preset,'preset_sendDrumsetParametersImmediate')+extract(preset,'interpolate')+extract(preset,'preset_morph_tick')
 c+='''
 static uint16_t frontParser_nrpnNr;
 static uint8_t paramToModTarget[256];
@@ -89,9 +96,8 @@ int main(void){
   frontParser_nrpnNr=CC2_FX_AMOUNT;frontParser_parseNrpn(raw);
   assert(activeParameters[PAR_FX_DRY_WET]==expected);
   for(unsigned morph=0;morph<2;morph++){
-   uint8_t *kit = morph ? morphParameters : mainParameters[0];
-   memset(kit,0,END_OF_SOUND_PARAMETERS);kit[PAR_FX_DRY_WET]=raw;
-   preset_normalizeKit(kit);
+   memset(disk,0,sizeof disk);disk[PAR_FX_DRY_WET]=raw;fileSize=sizeof disk;
+   assert(preset_readDrumsetData(0,morph)==FR_OK);
    assert((morph?morphParameters:mainParameters[0])[PAR_FX_DRY_WET]==expected);
   }
   memcpy(activeParameters,mainParameters[0],END_OF_SOUND_PARAMETERS);
@@ -114,8 +120,9 @@ int main(void){
   MidiMsg msg={0};msg.status=MIDI_CC2;msg.data1=CC2_FX_AMOUNT;
   midiParser_ccHandler(msg,0,1,high[i]);assert(fxBus.dryWet==1.f);
  }
-
- puts("PASS: 256 bytes (including 0/99/100/101/127/255), cache flags, NRPN/UI, kit caches, immediate/morph dispatch, float units/overflow; project ingress normalization");
+ fileSize=0;assert(preset_readDrumsetData(0,0)==FR_OK);
+ assert(mainParameters[0][PAR_FX_DRY_WET]==0);
+ puts("PASS: 256 bytes (including 0/99/100/101/127/255), cache flags, NRPN/UI, kit caches, immediate/morph dispatch, float units/overflow, short read");
 }
 '''
 run(c)

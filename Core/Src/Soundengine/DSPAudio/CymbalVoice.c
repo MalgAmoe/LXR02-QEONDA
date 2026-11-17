@@ -11,8 +11,6 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
-#include "Soundengine/AudioSample.h"
-
 
 #include "Soundengine/DSPAudio/CymbalVoice.h"
 #include "Soundengine/DSPAudio/squareRootLut.h"
@@ -156,10 +154,10 @@ IN_ITCM_RAM void Cymbal_calcAsync()
 
 }
 //---------------------------------------------------
-void Cymbal_calcSyncBlock(AudioSample* buf, const uint8_t size)
+void Cymbal_calcSyncBlock(int16_t* buf, const uint8_t size)
 {
-		AudioSample mod[size];
-		AudioSample mod2[size];
+		int16_t mod[size];
+		int16_t mod2[size];
 		//calc next mod osc sample
 		calcNextOscSampleBlock(&cymbalVoice.modOsc,mod,size,cymbalVoice.fmModAmount1, cymbalVoice.pwm);
 		calcNextOscSampleBlock(&cymbalVoice.modOsc2,mod2,size,cymbalVoice.fmModAmount2, cymbalVoice.pwm);
@@ -194,7 +192,14 @@ void Cymbal_calcSyncBlock(AudioSample* buf, const uint8_t size)
 			//const float vol = ;
 
 #if 1
-            for(unsigned i=0;i<size;++i) buf[i] += mod[i];
+			int32_t* x = (int32_t*)buf;
+			int32_t* y = (int32_t*)mod;
+
+			//add filter to buffer
+			for(uint8_t i=0;i<size/2;i++)
+			{
+				x[i] = __QADD16(x[i],y[i]);
+			}
 
 			for(j=0;j<size;j++)
 			{
@@ -216,7 +221,14 @@ void Cymbal_calcSyncBlock(AudioSample* buf, const uint8_t size)
 			//const float vol = cymbalVoice.combinedVolume ;
 
 #if 1
-            for(unsigned i=0;i<size;++i) buf[i] += mod[i];
+			int32_t* x = (int32_t*)buf;
+			int32_t* y = (int32_t*)mod;
+
+			//add filter to buffer
+			for(uint8_t i=0;i<size/2;i++)
+			{
+				x[i] = __QADD16(x[i],y[i]);
+			}
 
 			for(j=0;j<size;j++)
 			{

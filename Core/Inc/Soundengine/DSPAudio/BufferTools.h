@@ -11,8 +11,6 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
-#include "Soundengine/AudioSample.h"
-
 
 #ifndef BUFFERTOOLS_H_
 #define BUFFERTOOLS_H_
@@ -22,7 +20,7 @@
 #include "Soundengine/config.h"
 #include <string.h>
 //---------------------------------------------------
-static inline void bufferTool_addBuffers(AudioSample* buf1, AudioSample* buf2, const uint8_t size)
+static inline void bufferTool_addBuffers(int16_t* buf1, int16_t* buf2, const uint8_t size)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
@@ -31,30 +29,47 @@ static inline void bufferTool_addBuffers(AudioSample* buf1, AudioSample* buf2, c
 	}
 }
 //---------------------------------------------------
-IN_ITCM_RAM static inline void bufferTool_addBuffersSaturating(AudioSample* buf1, AudioSample* buf2, const uint8_t size)
+IN_ITCM_RAM static inline void bufferTool_addBuffersSaturating(int16_t* buf1, int16_t* buf2, const uint8_t size)
 {
-    for(unsigned i=0;i<size;++i) buf1[i] = audio_mix_add(buf1[i], buf2[i]);
+#if 1
+	int32_t* x = (int32_t*)buf1;
+	int32_t* y = (int32_t*)buf2;
+
+	for(uint8_t i=0;i<size/2;i++)
+	{
+		x[i] = (__QADD16(x[i],y[i]));
+	}
+
+#else
+		uint8_t i;
+		for(i=0;i<size;i++)
+
+		for(uint8_t i=0;i<size;i++)
+	 	{
+			buf1[i] = (__QADD16(buf1[i],buf2[i]));
+	 	}
+#endif
 }
 //---------------------------------------------------
-static inline void bufferTool_addBuffersSaturatingWithGain(AudioSample* buf1, AudioSample* buf2, const float gain, const uint8_t size)
+static inline void bufferTool_addBuffersSaturatingWithGain(int16_t* buf1, int16_t* buf2, const float gain, const uint8_t size)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
-        buf1[i] = audio_mix_add(buf1[i],buf2[i]) * gain;
+		buf1[i] = (__QADD16(buf1[i],buf2[i])) * gain;
 	}
 }
 //---------------------------------------------------
-static inline void bufferTool_subBuffersSaturating(AudioSample* buf1, AudioSample* buf2, const uint8_t size)
+static inline void bufferTool_subBuffersSaturating(int16_t* buf1, int16_t* buf2, const uint8_t size)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
-        buf1[i] = audio_mix_bound(buf1[i]-buf2[i]);
+		buf1[i] = (__QSUB16(buf1[i],buf2[i])) ;
 	}
 }
 //---------------------------------------------------
-static inline void bufferTool_copyWithGain(AudioSample* buf1, AudioSample* buf2, float gain, const uint8_t size)
+static inline void bufferTool_copyWithGain(int16_t* buf1, int16_t* buf2, float gain, const uint8_t size)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
@@ -63,7 +78,7 @@ static inline void bufferTool_copyWithGain(AudioSample* buf1, AudioSample* buf2,
 	}
 }
 //---------------------------------------------------
-IN_ITCM_RAM static inline void bufferTool_clearBuffer(AudioSample* buf, const uint8_t size)
+IN_ITCM_RAM static inline void bufferTool_clearBuffer(int16_t* buf, const uint8_t size)
 {
 #if 0
 	uint8_t i;
@@ -80,12 +95,12 @@ IN_ITCM_RAM static inline void bufferTool_clearBuffer(AudioSample* buf, const ui
 		buffer[i] = 0;
 	}
 	*/
-memset(buf, 0, size*sizeof(*buf));
+	memset((int32_t*)buf, 0 ,size/2*sizeof(int32_t));
 
 #endif
 }
 //---------------------------------------------------
-static inline void bufferTool_addGain(AudioSample* buf, const float gain, const uint8_t size)
+static inline void bufferTool_addGain(int16_t* buf, const float gain, const uint8_t size)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
@@ -94,16 +109,16 @@ static inline void bufferTool_addGain(AudioSample* buf, const float gain, const 
 	}
 }
 //---------------------------------------------------
-static inline void bufferTool_addGainDithered(Dither* dither, AudioSample* buf, const float gain, const uint8_t size)
+static inline void bufferTool_addGainDithered(Dither* dither, int16_t* buf, const float gain, const uint8_t size)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
-buf[i] *= gain;
+		buf[i] = dither_process(dither,(buf[i]/32768.0f) * gain);
 	}
 }
 //---------------------------------------------------
-static inline void bufferTool_addGainInterpolated(AudioSample* buf, const float gain, const float lastGain, const uint8_t size)
+static inline void bufferTool_addGainInterpolated(int16_t* buf, const float gain, const float lastGain, const uint8_t size)
 {
 
 
@@ -147,45 +162,45 @@ static inline void bufferTool_addGainInterpolated(AudioSample* buf, const float 
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
-		const AudioReal frac = i/(size-1.f);
-		const AudioReal currentGain = lastGain + frac*(gain - lastGain);
+		const double frac = i/(size-1.f);
+		const double currentGain = lastGain + frac*(gain - lastGain);
 		buf[i] = buf[i] * currentGain;
 	}
 #endif
 #endif
 }
 //---------------------------------------------------
-static inline void bufferTool_addGainInterpolatedDouble(AudioSample* buf, const AudioReal gain, const AudioReal lastGain, const uint8_t size)
+static inline void bufferTool_addGainInterpolatedDouble(int16_t* buf, const double gain, const double lastGain, const uint8_t size)
 {
 
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
-		const AudioReal frac = i/(size-1.0);
-		const AudioReal currentGain = lastGain + frac*(gain - lastGain);
+		const double frac = i/(size-1.0);
+		const double currentGain = lastGain + frac*(gain - lastGain);
 		buf[i] = buf[i] * currentGain;
 	}
 
 }
 //---------------------------------------------------
-static inline void bufferTool_addGainInterpolatedDoubleDithered(Dither* dither, AudioSample* buf, const AudioReal gain, const AudioReal lastGain, const uint8_t size)
+static inline void bufferTool_addGainInterpolatedDoubleDithered(Dither* dither, int16_t* buf, const double gain, const double lastGain, const uint8_t size)
 {
 
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
-		AudioReal in = (buf[i]);
+		double in = (buf[i]/32768.0f);
 		if(in>1.0)in=1.0;
 		else if( in < -1.0)in=-1.0;
-		const AudioReal frac = i/(size-1.0);
-		const AudioReal currentGain = lastGain + frac*(gain - lastGain);
-buf[i] *= currentGain;
+		const double frac = i/(size-1.0);
+		const double currentGain = lastGain + frac*(gain - lastGain);
+		buf[i] = dither_process(dither,in* currentGain);
 //		buf[i] = buf[i] * currentGain;
 	}
 
 }
 //---------------------------------------------------
-static inline void bufferTool_mulInt(AudioSample* buf, const int16_t gain, const uint8_t size)
+static inline void bufferTool_mulInt(int16_t* buf, const int16_t gain, const uint8_t size)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
@@ -194,7 +209,7 @@ static inline void bufferTool_mulInt(AudioSample* buf, const int16_t gain, const
 	}
 }
 //---------------------------------------------------
-static inline void bufferTool_multiplyWithFloatBuffer(AudioSample* buf, float* fltBuf, const uint8_t size)
+static inline void bufferTool_multiplyWithFloatBuffer(int16_t* buf, float* fltBuf, const uint8_t size)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
@@ -203,17 +218,17 @@ static inline void bufferTool_multiplyWithFloatBuffer(AudioSample* buf, float* f
 	}
 }
 //---------------------------------------------------
-static inline void bufferTool_multiplyWithFloatBufferDithered(Dither* dither, AudioSample* buf, float* fltBuf, const uint8_t size)
+static inline void bufferTool_multiplyWithFloatBufferDithered(Dither* dither, int16_t* buf, float* fltBuf, const uint8_t size)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
 	{
-buf[i] *= fltBuf[i];
+		buf[i] = dither_process(dither,(buf[i]/32768.0f) * fltBuf[i]);
 
 	}
 }
 //---------------------------------------------------
-static inline void bufferTool_moveBuffer(AudioSample* dst, AudioSample* src, const uint8_t size)
+static inline void bufferTool_moveBuffer(int16_t* dst, int16_t* src, const uint8_t size)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)

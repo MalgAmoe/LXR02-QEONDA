@@ -11,8 +11,6 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
-#include "Soundengine/AudioSample.h"
-
 //-------------------------------------------------------------
 #include "Soundengine/globals.h"
 #include "Soundengine/config.h"
@@ -26,7 +24,7 @@ void initOnePole(OnePoleFilter* filter)
 	filter->r = 0.01f;
 }
 //-------------------------------------------------------------
-IN_ITCM_RAM float calcOnePole(OnePoleFilter* filter, AudioReal input)
+IN_ITCM_RAM float calcOnePole(OnePoleFilter* filter, double input)
 {
 	//result = a × b + c
 	filter->b = fmaf(filter->r, input - filter->b, filter->b);
@@ -34,10 +32,10 @@ IN_ITCM_RAM float calcOnePole(OnePoleFilter* filter, AudioReal input)
 	return filter->b;
 }
 //-------------------------------------------------------------
-float calcOnePoleAdaptiveVolume(OnePoleFilter* filter, AudioReal input)
+float calcOnePoleAdaptiveVolume(OnePoleFilter* filter, double input)
 {
 
-	const AudioReal diff = fabs(input-filter->b);
+	const double diff = fabs(input-filter->b);
 	if(diff >0.5 || (input < 0.01))
 	{
 		filter->b += 0.5f * (input - filter->b);
@@ -51,7 +49,7 @@ float calcOnePoleAdaptiveVolume(OnePoleFilter* filter, AudioReal input)
 	return filter->b;
 }
 //-------------------------------------------------------------
-void calcOnePoleBlock(OnePoleFilter* filter, AudioSample* buf, const uint8_t size)
+void calcOnePoleBlock(OnePoleFilter* filter, int16_t* buf, const uint8_t size)
 {
 	uint8_t i;
 	for(i=0;i<size;i++)
@@ -71,17 +69,17 @@ void calcOnePoleBlockFixedInput(OnePoleFilter* filter, float input,float* output
 	}
 }
 //-------------------------------------------------------------
-void setOnePoleCoef(OnePoleFilter* filter,AudioReal val)
+void setOnePoleCoef(OnePoleFilter* filter,double val)
 {
 	filter->r = val;
 }
 //-------------------------------------------------------------
-void setOnePoleValue(OnePoleFilter* filter,AudioReal val)
+void setOnePoleValue(OnePoleFilter* filter,double val)
 {
 	filter->b = val;
 }
 //-------------------------------------------------------------
-void setOnePoleFreq(OnePoleFilter* filter,AudioReal f)
+void setOnePoleFreq(OnePoleFilter* filter,double f)
 {
 	filter->r = CALC_FILTER_FREQ(f);
 }

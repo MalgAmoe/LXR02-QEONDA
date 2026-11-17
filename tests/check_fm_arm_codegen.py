@@ -21,23 +21,8 @@ for name in ('calcFmSineBlock', 'calcFmBlock', 'calcPwmFmBlock'):
     conversions = 2 if name == 'calcPwmFmBlock' else 1  # PWM offset plus FM
     assert len(re.findall(r'\bvcvt\.u32\.f32\b', text)) == conversions, text
     assert re.search(r'vmul\.f32[^\n]*\n[^\n]*vcvt\.u32\.f32', text), text
-    # Reference GCC14.3: phase modulation is restored by 32768 before the
-    # float multiply/uint32 quantizer; waveform endpoints use 1/32768.
-    # Power-of-two scaling may commute across the multiply in fast-math.
-    assert '.word\t0x47000000' in text, text  # 32768.f
-    assert '.word\t0x38000000' in text, text  # 1.f/32768.f
-    float_pwm = name == 'calcPwmFmBlock'
-    if float_pwm:
-        # Original QSUB16 PWM waveform saturation becomes float min/max.
-        # It must follow the FM conversion, never guard its negative input.
-        last_conversion = list(re.finditer(r'\bvcvt\.u32\.f32\b', text))[-1].end()
-        assert not re.search(r'\bvmax(?:nm)?\.f32\b', text[:last_conversion]), text
-        assert len(re.findall(r'\bvmaxnm\.f32\b', text)) == 1, text
-        assert len(re.findall(r'\bvminnm\.f32\b', text)) == 1, text
-    else:
-        assert not re.search(r'\bvmax(?:nm)?\.f32\b', text), text
-    print(f'{name}: {conversions} vcvt.u32.f32; direct FM multiply/conversion; '
-          + ('one downstream PWM waveform bound' if float_pwm else 'no vmax/vmaxnm.f32'))
+    assert not re.search(r'\bvmax(?:nm)?\.f32\b', text), text
+    print(f'{name}: {conversions} vcvt.u32.f32; FM multiply directly followed by conversion; no vmax/vmaxnm.f32')
     if args.baseline:
         old = subprocess.check_output([objdump, '-d', '--disassemble='+name, str(args.baseline)], text=True)
         assert len(re.findall(r'\bvmaxnm\.f32\b', old)) == 1, old

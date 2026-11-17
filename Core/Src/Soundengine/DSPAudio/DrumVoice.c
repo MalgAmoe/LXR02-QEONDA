@@ -11,8 +11,6 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
-#include "Soundengine/AudioSample.h"
-
 
 #include "Soundengine/DSPAudio/DrumVoice.h"
 #include "Soundengine/DSPAudio/Oscillator.h"
@@ -238,11 +236,11 @@ IN_ITCM_RAM void calcDrumVoiceAsync(const uint8_t voiceNr)
 }
 
 //---------------------------------------------------
-IN_ITCM_RAM void calcDrumVoiceSyncBlock(const uint8_t voiceNr, AudioSample* buf, const uint8_t size)
+IN_ITCM_RAM void calcDrumVoiceSyncBlock(const uint8_t voiceNr, int16_t* buf, const uint8_t size)
 {
 
 
-	AudioSample modBuf[size];
+	int16_t modBuf[size];
 
 	//calc vol EG
 #ifdef USE_AMP_FILTER

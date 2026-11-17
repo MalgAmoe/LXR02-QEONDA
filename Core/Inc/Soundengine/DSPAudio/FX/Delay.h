@@ -12,8 +12,6 @@
  * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
  */
 
-#include "Soundengine/AudioSample.h"
-
 #ifndef SIMPLEDELAY_H_
 #define SIMPLEDELAY_H_
 
@@ -55,8 +53,8 @@ typedef struct DelayStruct
 	float fracReadNew,fracReadOld;
 	float interpValue;
 	float interpStep;
-	AudioSample tmpBuffer[2];
-	AudioSample tmpBuffer2[2]; //used for stereo or pingpong delay
+	int16_t tmpBuffer[2];
+	int16_t tmpBuffer2[2]; //used for stereo or pingpong delay
 	float feedback;
 	float range;
 
@@ -74,8 +72,8 @@ typedef struct DelayStruct
 
 void Delay_init(Delay* d);
 void Delay_calcBuffer(Delay* d, uint8_t bufferIdx);
-void Delay_process(Delay *d, AudioSample*fxBuffer,AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet);
-void Delay_processPingPong(Delay *d, AudioSample*fxBuffer,AudioSample* outL, AudioSample* outR, uint16_t size,  uint8_t channels, float dryWet);
+void Delay_process(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet);
+void Delay_processPingPong(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet);
 void Delay_setDelayTime(Delay* d, float t);
 void Delay_setFeedback(Delay* d, float fb);
 void Delay_setRange(Delay* d, float r);
