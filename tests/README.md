@@ -181,13 +181,33 @@ without an alternate int16 API. See the historical
 
 ### Normalized audio differential
 
-`test_audio_normalized.py` compiles `audio_normalized_probe.c` against production
-sources at O1 and O3/fast-math with ASan/UBSan/float-cast-overflow. Frozen normalized
-observations in `fixtures/audio_baseline_20e6e6b.txt.gz` came from the unchanged
-20e6e6b tree using AppleClang 17, not from the normalized implementation. The same
-probe runs against either tree; `--source ROOT --scale 1.f --record FILE.gz` is an
-explicit baseline capture, not part of normal testing. Ordinary runs need no Git
-history. Do not refresh the fixture to accommodate regressions.
+`test_audio_normalized.py` builds the original signed16-unit source and current
+normalized production source with the **same compiler and flags**, at O1 and
+O3/fast-math with ASan/UBSan/float-cast-overflow. It retains the strict `< 0.02`
+old-unit ceiling, reports every category/mode failure, and checks nonfinite values
+in Python (C `isfinite` is not reliable under fast-math). Run the parser regression
+checks separately with `python3 tests/test_audio_normalized_harness.py`.
+
+The self-contained `fixtures/audio_source_20e6e6b.tar.gz` contains 80 original
+files (about 201 KiB compressed), not a regenerated current-code baseline. Its
+adjacent JSON records full commit, repository, translation units and per-file
+SHA-256 hashes, checked before compilation. See the [fixture provenance](fixtures/audio_source_20e6e6b.md).
+No Git history, network or baseline build system is needed, including in shallow CI.
+The current probe, integration harness and host shims are intentionally shared;
+textual production includes in the harness are redirected into each selected tree.
+Thus this tests production DSP differences, not independent harness correctness.
+
+The unchanged `fixtures/audio_baseline_20e6e6b.txt.gz` observations remain historical
+AppleClang 17 evidence, **not a portable oracle**: AppleClang x86_64 produces RAT
+errors of 0.1220608 old units against those ARM64 observations even for the original
+source. Same-toolchain original/current comparison avoids that platform difference
+without relaxing the ceiling. Do not refresh either frozen fixture to pass a test.
+
+`--source ROOT --scale 1.f --record FILE.gz` explicitly captures a supplied source
+tree without comparing it. The first comment is JSON metadata: actual compiler
+version/target, host architecture, full commands/flags, scale, source file hashes
+and shared test input hashes. Captures are not automatically labeled as the old
+commit and do not overwrite the historical observations during ordinary testing.
 
 The probe covers six voice paths, positive FM quantization, nonlinear voice/FX
 processing, normal/ping-pong delay, every route and both output encoders. Negative

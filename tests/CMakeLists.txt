@@ -334,3 +334,6 @@ add_test(NAME test_screensaver_wake
 
 add_test(NAME test_release_metadata
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_release_metadata.py)
+
+add_test(NAME test_audio_normalized_harness
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_audio_normalized_harness.py)
